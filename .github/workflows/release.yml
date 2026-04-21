@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }
 
     steps:
       - uses: actions/checkout@v4

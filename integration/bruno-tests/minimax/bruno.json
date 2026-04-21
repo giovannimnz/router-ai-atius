@@ -1,0 +1,11 @@
+{
+  "name": "minimax-tests",
+  "version": "1",
+  "items": {
+    "type": "collection",
+    "seq": 3
+  },
+  "meta": {
+    "id": "minimax-new-api-tests"
+  }
+}

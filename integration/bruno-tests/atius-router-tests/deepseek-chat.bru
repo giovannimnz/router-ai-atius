@@ -1,0 +1,36 @@
+meta {
+  name: DeepSeek Chat
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+}
+
+headers {
+  Authorization: Bearer {{apiToken}}
+}
+
+body:json {
+  {
+    "model": "{{deepseekChat}}",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello in exactly 3 words."
+      }
+    ],
+    "max_tokens": 20
+  }
+}
+
+tests {
+  const status = res.getStatus();
+  expect(status).to.equal(200);
+  const body = res.getBody();
+  expect(body.choices.length).to.be.above(0);
+  expect(body.model).to.contain("deepseek-chat");
+  expect(body.usage).to.be.an('object');
+}

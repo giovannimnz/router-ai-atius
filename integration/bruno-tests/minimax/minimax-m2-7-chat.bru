@@ -1,0 +1,36 @@
+meta {
+  name: MiniMax-M2.7 Chat
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://{{baseUrl}}/v1/chat/completions
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{apiToken}}
+}
+
+body:json {
+  {
+    "model": "{{modelM27}}",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello in one sentence."
+      }
+    ],
+    "max_tokens": 50
+  }
+}
+
+tests {
+  const status = res.getStatus();
+  expect(status).to.equal(200);
+  const body = res.getBody();
+  expect(body.choices.length).to.be.above(0);
+  expect(body.model).to.contain("MiniMax-M2.7");
+}

@@ -1,0 +1,132 @@
+[
+  {
+    "iterationIndex": 0,
+    "results": [
+      {
+        "test": {
+          "filename": "minimax-m2-7-chat.bru"
+        },
+        "request": {
+          "method": "POST",
+          "url": "http://172.20.0.2:3000/v1/chat/completions",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer ********"
+          },
+          "data": "{\n  \"model\": \"MiniMax-M2.7\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in one sentence.\"\n    }\n  ],\n  \"max_tokens\": 50\n}"
+        },
+        "response": {
+          "status": 404,
+          "statusText": "Not Found",
+          "headers": {
+            "content-type": "application/json; charset=utf-8",
+            "x-new-api-version": "v0.12.7",
+            "x-oneapi-request-id": "202604210131449395121958268d9d6xeZnHPyh",
+            "date": "Tue, 21 Apr 2026 01:31:47 GMT",
+            "content-length": "115"
+          },
+          "data": {
+            "error": {
+              "message": "openai_error",
+              "type": "bad_response_status_code",
+              "param": "",
+              "code": "bad_response_status_code"
+            }
+          },
+          "url": "http://172.20.0.2/v1/chat/completions",
+          "responseTime": 2203
+        },
+        "error": null,
+        "status": "pass",
+        "assertionResults": [],
+        "testResults": [
+          {
+            "status": "fail",
+            "description": "Test Script Error",
+            "error": "expecting ';'",
+            "isScriptError": true
+          }
+        ],
+        "preRequestTestResults": [],
+        "postResponseTestResults": [],
+        "shouldStopRunnerExecution": false,
+        "runDuration": 2.433630609,
+        "name": "MiniMax-M2.7 Chat",
+        "path": "minimax-m2-7-chat",
+        "iterationIndex": 0
+      },
+      {
+        "test": {
+          "filename": "minimax-m2-5-chat.bru"
+        },
+        "request": {
+          "method": "POST",
+          "url": "http://172.20.0.2:3000/v1/chat/completions",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer ********"
+          },
+          "data": "{\n  \"model\": \"MiniMax-M2.5\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in one sentence.\"\n    }\n  ],\n  \"max_tokens\": 50\n}"
+        },
+        "response": {
+          "status": 404,
+          "statusText": "Not Found",
+          "headers": {
+            "content-type": "application/json; charset=utf-8",
+            "x-new-api-version": "v0.12.7",
+            "x-oneapi-request-id": "202604210131472860581538268d9d6KdK8LUOK",
+            "date": "Tue, 21 Apr 2026 01:31:47 GMT",
+            "content-length": "115"
+          },
+          "data": {
+            "error": {
+              "message": "openai_error",
+              "type": "bad_response_status_code",
+              "param": "",
+              "code": "bad_response_status_code"
+            }
+          },
+          "url": "http://172.20.0.2/v1/chat/completions",
+          "responseTime": 482
+        },
+        "error": null,
+        "status": "pass",
+        "assertionResults": [],
+        "testResults": [
+          {
+            "status": "fail",
+            "description": "Test Script Error",
+            "error": "expecting ';'",
+            "isScriptError": true
+          }
+        ],
+        "preRequestTestResults": [],
+        "postResponseTestResults": [],
+        "shouldStopRunnerExecution": false,
+        "runDuration": 0.585329433,
+        "name": "MiniMax-M2.5 Chat",
+        "path": "minimax-m2-5-chat",
+        "iterationIndex": 0
+      }
+    ],
+    "summary": {
+      "totalRequests": 2,
+      "passedRequests": 0,
+      "failedRequests": 2,
+      "errorRequests": 0,
+      "skippedRequests": 0,
+      "totalAssertions": 0,
+      "passedAssertions": 0,
+      "failedAssertions": 0,
+      "totalTests": 0,
+      "passedTests": 0,
+      "failedTests": 0,
+      "totalPreRequestTests": 0,
+      "passedPreRequestTests": 0,
+      "failedPreRequestTests": 0,
+      "totalPostResponseTests": 0,
+      "passedPostResponseTests": 0,
+      "failedPostResponseTests": 0
+    }
+  }
+]

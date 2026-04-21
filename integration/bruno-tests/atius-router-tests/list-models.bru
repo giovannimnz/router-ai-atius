@@ -1,0 +1,21 @@
+meta {
+  name: List Models
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/models
+}
+
+headers {
+  Authorization: Bearer {{apiToken}}
+}
+
+tests {
+  const status = res.getStatus();
+  expect(status).to.equal(200);
+  const body = res.getBody();
+  expect(body.data).to.be.an('array');
+  expect(body.data.length).to.be.above(0);
+}

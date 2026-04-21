@@ -1,0 +1,38 @@
+name: Weekly Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday 3:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/QuantumNous/new-api.git || \
+            git remote set-url upstream https://github.com/QuantumNous/new-api.git
+          git fetch upstream --prune
+
+      - name: Run sync script
+        run: ./scripts/sync-fork.sh --strategy theirs
+
+      - name: Create PR on manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          gh pr create --title "chore: sync with upstream" --body "Automated weekly sync with upstream" --base main || \
+            echo "PR creation skipped (no changes or auth issue)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

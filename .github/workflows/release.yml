@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read VERSION
+        id: version
+        run: echo "VERSION=$(cat VERSION 2>/dev/null || echo ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+
+      - name: Log version
+        run: echo "Releasing version ${{ steps.version.outputs.VERSION }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: VERSION
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to Docker Hub (if Dockerfile exists)
+        if: hashFiles('Dockerfile') != ''
+        run: |
+          docker build -t ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }} .
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker push ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }}

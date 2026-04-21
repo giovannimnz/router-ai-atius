@@ -1,0 +1,8 @@
+{
+  "variables": [
+    {"name": "baseUrl", "value": "172.20.0.2:3000", "enabled": true, "type": "host"},
+    {"name": "apiToken", "value": "11KzS0Kqe8FYjftKIgq49lhg3XWETTp8poGVSTqT0fXrOOsY", "enabled": true},
+    {"name": "modelM27", "value": "MiniMax-M2.7", "enabled": true},
+    {"name": "modelM25", "value": "MiniMax-M2.5", "enabled": true}
+  ]
+}

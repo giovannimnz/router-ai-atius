@@ -1,0 +1,12 @@
+setup.py
+atius_ai_router_cli.egg-info/PKG-INFO
+atius_ai_router_cli.egg-info/SOURCES.txt
+atius_ai_router_cli.egg-info/dependency_links.txt
+atius_ai_router_cli.egg-info/entry_points.txt
+atius_ai_router_cli.egg-info/requires.txt
+atius_ai_router_cli.egg-info/top_level.txt
+cli_newapi/__init__.py
+cli_newapi/channel.py
+cli_newapi/cli.py
+cli_newapi/docker.py
+cli_newapi/model.py

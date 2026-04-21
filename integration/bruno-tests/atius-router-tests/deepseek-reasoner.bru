@@ -1,0 +1,35 @@
+meta {
+  name: DeepSeek Reasoner
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/v1/chat/completions
+  body: json
+}
+
+headers {
+  Authorization: Bearer {{apiToken}}
+}
+
+body:json {
+  {
+    "model": "{{deepseekReasoner}}",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      }
+    ],
+    "max_tokens": 50
+  }
+}
+
+tests {
+  const status = res.getStatus();
+  expect(status).to.equal(200);
+  const body = res.getBody();
+  expect(body.choices.length).to.be.above(0);
+  expect(body.model).to.contain("deepseek-reasoner");
+}

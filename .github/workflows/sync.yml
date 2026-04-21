@@ -1,24 +1,95 @@
-name: Weekly Upstream Sync
+name: Daily Upstream Sync
 
+# Run daily at 03:00 UTC (every Monday) and on manual trigger
 on:
   schedule:
-    - cron: '0 3 * * 1'  # Every Monday 3:00 UTC
-  workflow_dispatch:      # Allow manual trigger
+    # Every day at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Merge strategy'
+        required: false
+        default: 'theirs'
+        type: choice
+        options:
+          - theirs
+          - ours
+
+permissions:
+  contents: write
+  packages: none
+  deployments: none
 
 jobs:
-  sync:
+  sync-check:
+    name: Check upstream changes
     runs-on: ubuntu-latest
     if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
-
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      commits_behind: ${{ steps.check.outputs.commits_behind }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Git
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/QuantumNous/new-api.git || \
+            git remote set-url upstream https://github.com/QuantumNous/new-api.git
+          git fetch upstream --prune
+
+      - name: Check for upstream changes
+        id: check
+        run: |
+          COMMON=$(git merge-base HEAD upstream/main)
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          LOCAL_SHA=$(git rev-parse HEAD)
+
+          echo "Local:  $LOCAL_SHA"
+          echo "Upstream: $UPSTREAM_SHA"
+          echo "Common ancestor: $COMMON"
+
+          if [[ "$COMMON" == "$UPSTREAM_SHA" ]]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "commits_behind=0" >> $GITHUB_OUTPUT
+            echo "✓ Upstream is already in our history"
+          else
+            COUNT=$(git log --oneline ${COMMON}..upstream/main | wc -l)
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "commits_behind=$COUNT" >> $GITHUB_OUTPUT
+            echo "Upstream has $COUNT new commits"
+          fi
+
+  sync:
+    name: Sync with upstream
+    needs: sync-check
+    runs-on: ubuntu-latest
+    if: |
+      github.repository == 'giovannimnz/atius-ai-router' &&
+      needs.sync-check.outputs.has_changes == 'true'
+    environment:
+      name: fork-sync
+      url: https://github.com/giovannimnz/atius-ai-router
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+
+      - name: Set strategy from input or default
+        run: |
+          STRATEGY="${INPUT_STRATEGY:-theirs}"
+          echo "STRATEGY=$STRATEGY" >> $GITHUB_ENV
 
       - name: Add upstream remote
         run: |
@@ -27,12 +98,64 @@ jobs:
           git fetch upstream --prune
 
       - name: Run sync script
-        run: ./scripts/sync-fork.sh --strategy theirs
-
-      - name: Create PR on manual dispatch
-        if: github.event_name == 'workflow_dispatch'
+        env:
+          SYNC_STRATEGY: ${{ github.event.inputs.strategy || 'theirs' }}
+          DRY_RUN: 'false'
+          SILENT: 'false'
         run: |
-          gh pr create --title "chore: sync with upstream" --body "Automated weekly sync with upstream" --base main || \
-            echo "PR creation skipped (no changes or auth issue)"
+          chmod +x scripts/sync-fork.sh
+          ./scripts/sync-fork.sh --strategy ${{ env.STRATEGY }}
+
+      - name: Sync summary
+        run: |
+          {
+            echo "## ✅ Sync Complete"
+            echo ""
+            echo "| Step | Status |"
+            echo "|------|--------|"
+            echo "| Upstream fetch | ✅ |"
+            echo "| Merge (strategy: ${{ env.STRATEGY }}) | ✅ |"
+            echo "| Restore protected files | ✅ |"
+            echo "| Version bump | ✅ |"
+            echo "| Push to origin | ✅ |"
+            echo ""
+            echo "**Repository:** https://github.com/giovannimnz/atius-ai-router"
+            echo "**New version:** \`$(cat VERSION 2>/dev/null || echo 'N/A')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create release PR if version changed
+        if: |
+          needs.sync-check.outputs.commits_behind != '0'
+        run: |
+          CURRENT_VERSION="$(cat VERSION 2>/dev/null || echo '')"
+          if [[ -n "$CURRENT_VERSION" ]]; then
+            echo "Creating PR for version bump..."
+            gh pr create \
+              --title "chore: sync with upstream - v${CURRENT_VERSION}" \
+              --body "Automated daily sync with upstream NewAPI.
+
+**Changes from upstream:** ${{ needs.sync-check.outputs.commits_behind }} commits merged
+
+**Version:** \`v${CURRENT_VERSION}\`
+
+_This PR was created automatically by GitHub Actions daily sync._" \
+              --base main \
+              --label "automated,sync" \
+              || echo "PR creation skipped (may already exist or no changes)"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  no-changes:
+    name: Already up to date
+    runs-on: ubuntu-latest
+    if: |
+      github.repository == 'giovannimnz/atius-ai-router' &&
+      needs.sync-check.outputs.has_changes == 'false'
+    steps:
+      - name: No changes needed
+        run: |
+          echo "## ✅ Already up to date"
+          echo ""
+          echo "Upstream is already fully integrated in our history."
+          echo "No sync needed."

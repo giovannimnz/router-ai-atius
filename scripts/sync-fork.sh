@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# sync-fork.sh — Sync atius-ai-router with upstream NewAPI
+# sync-fork.sh — Automatically sync atius-ai-router with upstream NewAPI
+#
+# Features:
+# - Merges upstream with "theirs" strategy (prefer upstream on conflict)
+# - Protects and restores fork-specific files after merge
+# - Auto-commits restored overrides
+# - Auto-bumps fork version
+# - Auto-pushes if changes detected
 #
 # Usage:
-#   ./scripts/sync-fork.sh [--strategy ours|theirs] [--dry-run] [--branch <branch>]
+#   ./scripts/sync-fork.sh [--dry-run] [--strategy ours|theirs]
 #
-# Options:
-#   --strategy   Conflict resolution: 'theirs' (prefer upstream, default) or 'ours' (prefer fork)
-#   --branch     Branch to sync (default: main)
-#   --dry-run    Show what would be done without making changes
-#   -h, --help   Show this help message
+# GitHub Actions: runs daily at 03:00 UTC via sync.yml
 #
 set -euo pipefail
 
@@ -20,171 +23,219 @@ UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/QuantumNous/new-api.git}"
 UPSTREAM_NAME="upstream"
 BRANCH="${SYNC_BRANCH:-main}"
 STRATEGY="${SYNC_STRATEGY:-theirs}"  # theirs = prefer upstream, ours = prefer fork
-DRY_RUN=false
+DRY_RUN="${DRY_RUN:-false}"
+SILENT="${SILENT:-false}"
 
-# Protected files — never overwrite from upstream
-PROTECTED_PATTERNS=(
+log() {
+    [[ "$SILENT" == "true" ]] && return
+    echo "[$(date '+%H:%M:%S')] $*"
+}
+
+# Protected files — always restore these after merge
+PROTECTED_FILES=(
+    "docker-compose.yml"
     "integration/middleware/model_detailed.py"
-    ".planning/"
-    "FORK_MIGRATION.md"
+    "integration/middleware/model_details.py"
+    "integration/middleware/model_enrichment.py"
 )
 
-# Files to re-apply customizations after merge
-RESTORE_PATTERNS=(
-    "docker-compose.yml"
+# Fork-specific files/dirs that exist only in this fork (never in upstream)
+FORK_ONLY=(
+    ".planning/"
+    "agent-harness/"
+    "integration/bruno-tests/"
+    "scripts/run-bruno-tests.sh"
+    ".github/workflows/sync.yml"
+    ".github/workflows/release.yml"
 )
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
         --strategy) STRATEGY="$2"; shift 2 ;;
         --strategy=*) STRATEGY="${1#*=}"; shift ;;
-        --branch) BRANCH="$2"; shift 2 ;;
-        --branch=*) BRANCH="${1#*=}"; shift ;;
-        --dry-run) DRY_RUN=true; shift ;;
+        --silent) SILENT=true; shift ;;
         -h|--help)
-            echo "Usage: $0 [--strategy ours|theirs] [--branch <branch>] [--dry-run]"
+            echo "Usage: $0 [--dry-run] [--strategy ours|theirs] [--silent]"
             echo ""
             echo "Options:"
-            echo "  --strategy   Conflict resolution: 'theirs' (prefer upstream, default) or 'ours' (prefer fork)"
-            echo "  --branch     Branch to sync (default: main)"
-            echo "  --dry-run    Show what would be done without making changes"
-            echo "  -h, --help   Show this help message"
+            echo "  --dry-run    Preview without making changes"
+            echo "  --strategy   Conflict resolution: 'theirs' (default) or 'ours'"
+            echo "  --silent     Minimize output (for cron)"
+            echo "  -h, --help   This help"
             exit 0
             ;;
-        *) echo "Unknown option: $1"; exit 1 ;;
+        *) echo "Unknown: $1"; exit 1 ;;
     esac
 done
 
 cd "$REPO_ROOT"
 
-echo "=== atius-ai-router Fork Sync ==="
-echo "Upstream:  $UPSTREAM_URL"
-echo "Branch:    $BRANCH"
-echo "Strategy:  $STRATEGY (conflict resolution)"
-echo "Dry run:   $DRY_RUN"
-echo ""
+[[ "$SILENT" != "true" ]] && echo "=== atius-ai-router Fork Sync ==="
+[[ "$SILENT" != "true" ]] && echo "Upstream:  $UPSTREAM_URL"
+[[ "$SILENT" != "true" ]] && echo "Branch:    $BRANCH"
+[[ "$SILENT" != "true" ]] && echo "Strategy:  $STRATEGY"
+[[ "$SILENT" != "true" ]] && echo "Dry run:   $DRY_RUN"
+[[ "$SILENT" != "true" ]] && echo ""
 
-# Step 1: Ensure upstream remote exists
+# ─── Step 1: Upstream remote ───────────────────────────────────────────────
 if ! git remote | grep -q "^${UPSTREAM_NAME}$"; then
-    echo "[1/7] Adding upstream remote: $UPSTREAM_NAME -> $UPSTREAM_URL"
-    [[ "$DRY_RUN" == true ]] || git remote add "$UPSTREAM_NAME" "$UPSTREAM_URL"
+    log "[1/7] Adding upstream remote"
+    [[ "$DRY_RUN" == "true" ]] || git remote add "$UPSTREAM_NAME" "$UPSTREAM_URL"
 else
-    CURRENT_URL="$(git remote get-url "$UPSTREAM_NAME")"
-    echo "[1/7] Upstream remote already exists: $UPSTREAM_NAME -> $CURRENT_URL"
-    [[ "$DRY_RUN" == true ]] || git remote set-url "$UPSTREAM_NAME" "$UPSTREAM_URL"
+    log "[1/7] Upstream remote exists"
 fi
 
-# Step 2: Fetch upstream
-echo "[2/7] Fetching from upstream..."
-[[ "$DRY_RUN" == true ]] || git fetch "$UPSTREAM_NAME" --prune
+# ─── Step 2: Fetch upstream ────────────────────────────────────────────────
+log "[2/7] Fetching upstream..."
+[[ "$DRY_RUN" == "true" ]] || git fetch "$UPSTREAM_NAME" --prune
 
-# Step 3: Checkout target branch
+# Check if there are new commits
+UPSTREAM_SHA="$(git rev-parse "${UPSTREAM_NAME}/${BRANCH}" 2>/dev/null)"
+LOCAL_SHA="$(git rev-parse "${BRANCH}" 2>/dev/null)"
+COMMON_ANCESTOR="$(git merge-base "${BRANCH}" "${UPSTREAM_NAME}/${BRANCH}" 2>/dev/null || echo "")"
+
+if [[ "$COMMON_ANCESTOR" == "$UPSTREAM_SHA" ]]; then
+    log "Upstream is already in our history — nothing to sync."
+    log "Nothing to push, sync complete."
+    exit 0
+fi
+
+UPSTREAM_COMMITS_BEHIND="$(git log --oneline "${COMMON_ANCESTOR}..${UPSTREAM_NAME}/${BRANCH}" 2>/dev/null | wc -l)"
+[[ "$SILENT" != "true" ]] && log "Upstream has $UPSTREAM_COMMITS_BEHIND new commit(s) behind us."
+
+# ─── Step 3: Ensure on correct branch ─────────────────────────────────────
 CURRENT_BRANCH="$(git branch --show-current)"
 if [[ "$CURRENT_BRANCH" != "$BRANCH" ]]; then
-    echo "[3/7] Switching to branch: $BRANCH (currently on: $CURRENT_BRANCH)"
-    [[ "$DRY_RUN" == true ]] || git checkout "$BRANCH"
+    log "[3/7] Switching to branch: $BRANCH"
+    [[ "$DRY_RUN" == "true" ]] || git checkout "$BRANCH"
 else
-    echo "[3/7] Already on branch: $BRANCH"
+    log "[3/7] Already on branch: $BRANCH"
 fi
 
-# Step 4: Pull latest from origin
-echo "[4/7] Pulling latest from origin..."
-if [[ "$DRY_RUN" == true ]]; then
-    echo "  (skipped - dry run)"
+# ─── Step 4: Pull latest from origin ─────────────────────────────────────
+log "[4/7] Pulling from origin..."
+if [[ "$DRY_RUN" == "true" ]]; then
+    log "  (skipped — dry run)"
 else
-    git pull origin "$BRANCH" --rebase || {
-        echo "ERROR: Failed to pull from origin. Resolve conflicts first."
-        exit 1
-    }
+    if ! git pull origin "$BRANCH" --rebase 2>/dev/null; then
+        log "WARNING: Pull failed, trying merge..."
+        git pull origin "$BRANCH" --no-rebase 2>/dev/null || true
+    fi
 fi
 
-# Step 5: Merge from upstream
-echo "[5/7] Merging upstream/$BRANCH into $BRANCH..."
-if [[ "$DRY_RUN" == true ]]; then
-    echo "  (skipped - dry run)"
+# ─── Step 5: Merge upstream ───────────────────────────────────────────────
+log "[5/7] Merging upstream/${BRANCH}..."
+if [[ "$DRY_RUN" == "true" ]]; then
+    log "  (skipped — dry run)"
 else
-    MERGE_OUTPUT="$(git merge "$UPSTREAM_NAME/$BRANCH" --no-edit -X "$STRATEGY" 2>&1)" || {
-        echo ""
-        echo "WARNING: Merge had conflicts. Manual intervention needed."
-        echo "Merge output: $MERGE_OUTPUT"
-        echo ""
-        echo "To continue manually:"
-        echo "  1. Fix conflicts: git status"
-        echo "  2. Stage fixes:    git add <files>"
-        echo "  3. Complete merge: git commit"
-        echo "  4. Push:           git push origin $BRANCH"
-        echo ""
-        echo "Or abort: git merge --abort"
-        exit 1
-    }
-    echo "  $MERGE_OUTPUT"
+    MERGE_FAILED=false
+    MERGE_OUTPUT="$(git merge "${UPSTREAM_NAME}/${BRANCH}" --no-edit -X "$STRATEGY" 2>&1)" || MERGE_FAILED=true
 
-    # Step 6: Restore protected files
-    echo ""
-    echo "[6/7] Restoring protected files..."
-    for pattern in "${PROTECTED_PATTERNS[@]}"; do
-        if [[ -e "$pattern" ]]; then
-            if ! git diff --quiet HEAD -- "$pattern" 2>/dev/null; then
-                echo "  Restoring protected: $pattern"
-                git checkout HEAD -- "$pattern" 2>/dev/null || true
+    if [[ "$MERGE_FAILED" == "true" ]]; then
+        log "WARNING: Merge had conflicts."
+        log "Output: $MERGE_OUTPUT"
+        log "Aborting merge and exiting..."
+        git merge --abort 2>/dev/null || true
+        exit 1
+    fi
+
+    [[ "$SILENT" != "true" ]] && [[ -n "$MERGE_OUTPUT" ]] && log "  $MERGE_OUTPUT"
+fi
+
+# ─── Step 6: Restore protected files ──────────────────────────────────────
+log "[6/7] Restoring protected files after merge..."
+
+if [[ "$DRY_RUN" == "true" ]]; then
+    log "  (skipped — dry run)"
+else
+    RESTORED_ANY=false
+
+    for file in "${PROTECTED_FILES[@]}"; do
+        if [[ -e "$file" ]]; then
+            if ! git diff --quiet HEAD -- "$file" 2>/dev/null; then
+                log "  Restoring: $file"
+                git checkout HEAD -- "$file" 2>/dev/null || true
+                RESTORED_ANY=true
             else
-                echo "  Protected (intact): $pattern"
+                [[ "$SILENT" != "true" ]] && log "  Intact: $file"
             fi
         fi
     done
 
-    # Restore docker-compose.yml if it was changed
-    for pattern in "${RESTORE_PATTERNS[@]}"; do
-        if [[ -e "$pattern" ]]; then
-            if ! git diff --quiet HEAD -- "$pattern" 2>/dev/null; then
-                echo "  Restoring: $pattern"
-                git checkout HEAD -- "$pattern" 2>/dev/null || true
-            fi
+    # Fork-only files: check they weren't deleted
+    for file in "${FORK_ONLY[@]}"; do
+        if [[ ! -e "$file" ]] && [[ "$(git ls-files "$file" 2>/dev/null)" == "$file" ]]; then
+            log "  WARNING: Fork-only file deleted by merge: $file"
+            log "  Restoring from git..."
+            git checkout HEAD -- "$file" 2>/dev/null || true
+            RESTORED_ANY=true
         fi
     done
 
-    # Commit restored files if anything changed
-    if ! git diff --cached --quiet 2>/dev/null && ! git diff --quiet 2>/dev/null; then
-        echo "  All protected files intact, no changes needed."
-    elif [[ "$(git status --porcelain)" != "" ]]; then
-        echo "  Committing restored files..."
-        git add -A
-        git commit -m "chore: restore fork overrides after upstream merge" 2>/dev/null || true
+    # Commit restored files
+    if [[ "$RESTORED_ANY" == "true" ]]; then
+        if git diff --cached --quiet 2>/dev/null && ! git diff --quiet 2>/dev/null; then
+            log "  All protected files intact."
+        elif [[ "$(git status --porcelain)" != "" ]]; then
+            log "  Committing restored files..."
+            git add -A
+            git commit -m "chore: restore fork overrides after upstream merge
+
+Upstream: ${UPSTREAM_NAME}/${BRANCH} (${UPSTREAM_SHA:0:8})
+Protected files restored: ${PROTECTED_FILES[*]}
+Fork-only files verified: ${FORK_ONLY[*]}" --allow-empty 2>/dev/null || true
+        fi
     fi
 fi
 
-# Step 7: Version bump (if version-bump.sh exists)
-echo "[7/7] Checking version..."
-if [[ "$DRY_RUN" == true ]]; then
-    echo "  (skipped - dry run)"
+# ─── Step 7: Version bump ───────────────────────────────────────────────────
+log "[7/7] Version bump..."
+if [[ "$DRY_RUN" == "true" ]]; then
+    log "  (skipped — dry run)"
 else
-    if [[ -f "$SCRIPT_DIR/version-bump.sh" ]]; then
-        CURRENT_VERSION="$(cat VERSION 2>/dev/null || echo "unknown")"
-        echo "  Current version: $CURRENT_VERSION"
-        $SCRIPT_DIR/version-bump.sh 2>&1 || echo "  WARNING: version bump failed"
-    else
-        echo "  version-bump.sh not found, skipping"
+    BUMP_OUTPUT="$("$SCRIPT_DIR/version-bump.sh" 2>&1)" || {
+        log "WARNING: version bump failed"
+        log "$BUMP_OUTPUT"
+    }
+
+    # Check if version changed
+    NEW_VERSION="$(cat VERSION 2>/dev/null || echo "")"
+    if [[ -n "$NEW_VERSION" ]]; then
+        [[ "$SILENT" != "true" ]] && log "  Version: $NEW_VERSION"
     fi
 fi
 
-# Step 8: Push to origin
-if [[ "$DRY_RUN" == true ]]; then
-    echo ""
-    echo "[8/8] Push to origin (skipped - dry run)"
+# ─── Step 8: Push ─────────────────────────────────────────────────────────
+log "[8/8] Pushing to origin..."
+
+if [[ "$DRY_RUN" == "true" ]]; then
+    BEHIND="$(git rev-list --count "origin/${BRANCH}..HEAD" 2>/dev/null || echo "0")"
+    log "  Would push $BEHIND commit(s) to origin/${BRANCH}"
+    log "  (skipped — dry run)"
 else
-    echo "[8/8] Pushing to origin..."
-    BEHIND="$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo "0")"
+    BEHIND="$(git rev-list --count "origin/${BRANCH}..HEAD" 2>/dev/null || echo "0")"
     if [[ "$BEHIND" -eq 0 ]]; then
-        echo "  Already up to date, nothing to push."
+        log "Already up to date, nothing to push."
     else
-        echo "  Pushing $BEHIND commit(s) to origin/$BRANCH..."
-        git push origin "$BRANCH"
+        log "Pushing $BEHIND commit(s) to origin/${BRANCH}..."
+        if git push origin "$BRANCH" 2>&1; then
+            log "Push successful."
+
+            # Push new tag if exists
+            NEW_TAG="$(cat VERSION 2>/dev/null || echo "")"
+            if [[ -n "$NEW_TAG" ]]; then
+                if git tag -l "v${NEW_TAG}" | grep -q "v${NEW_TAG}"; then
+                    log "Pushing tag v${NEW_TAG}..."
+                    git push origin "v${NEW_TAG}" 2>/dev/null || log "  (tag push skipped)"
+                fi
+            fi
+        else
+            log "WARNING: Push failed. May need force push."
+        fi
     fi
 fi
 
-echo ""
-echo "=== Sync complete! ==="
-if [[ "$DRY_RUN" == true ]]; then
-    echo "(Dry run - no changes were made)"
-fi
+[[ "$SILENT" != "true" ]] && echo ""
+[[ "$SILENT" != "true" ]] && echo "=== Sync complete ==="

@@ -130,15 +130,10 @@ jobs:
           CURRENT_VERSION="$(cat VERSION 2>/dev/null || echo '')"
           if [[ -n "$CURRENT_VERSION" ]]; then
             echo "Creating PR for version bump..."
+            BODY="Automated daily sync with upstream NewAPI."
             gh pr create \
               --title "chore: sync with upstream - v${CURRENT_VERSION}" \
-              --body "Automated daily sync with upstream NewAPI.
-
-**Changes from upstream:** ${{ needs.sync-check.outputs.commits_behind }} commits merged
-
-**Version:** \`v${CURRENT_VERSION}\`
-
-_This PR was created automatically by GitHub Actions daily sync._" \
+              --body "$BODY" \
               --base main \
               --label "automated,sync" \
               || echo "PR creation skipped (may already exist or no changes)"

@@ -1,10 +1,13 @@
 name: Daily Upstream Sync
 
-# Run daily at 03:00 UTC (every Monday) and on manual trigger
+# Run daily at 03:00 UTC, on PR, and on manual trigger
 on:
   schedule:
     # Every day at 03:00 UTC
     - cron: '0 3 * * *'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       strategy:

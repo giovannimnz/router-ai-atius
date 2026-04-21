@@ -50,10 +50,11 @@ else
     CURRENT_VERSION="0.0.0.0"
 fi
 
-# Parse fork version: X.Y.Z.N format
+# Parse fork version: X.Y.Z.N format (strips 'v' prefix)
 # If no suffix yet, treat as X.Y.Z.0
 parse_fork_version() {
     local version="$1"
+    version="${version#v}"  # Strip 'v' prefix if present
     if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
         echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
     else
@@ -81,7 +82,8 @@ get_upstream_version() {
                        tr -d '[:space:]')"
     fi
 
-    echo "${upstream_tag:-unknown}"
+    # Strip 'v' prefix and refs/tags/ from tag name
+    echo "${upstream_tag:-unknown}" | sed 's/^v//'
 }
 
 # Main logic

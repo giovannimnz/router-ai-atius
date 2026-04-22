@@ -246,9 +246,17 @@ var defaultModelRatio = map[string]float64{
 	"command-r-plus":         1.5,
 	"command-r-08-2024":      0.075,
 	"command-r-plus-08-2024": 1.25,
-	"deepseek-chat":          0.27 / 2,
-	"deepseek-coder":         0.27 / 2,
-	"deepseek-reasoner":      0.55 / 2, // 0.55 / 1k tokens
+	"deepseek-chat":          0.14, // $0.28 / 1M input tokens
+	"deepseek-coder":         0.14, // $0.28 / 1M input tokens
+	"deepseek-reasoner":      0.14, // $0.28 / 1M input tokens
+	"deepseek-r1":            0.14, // $0.28 / 1M input tokens
+	"deepseek-v3.2":          0.14, // $0.28 / 1M input tokens
+	// MiniMax: $0.30 / 1M input, $1.20 / 1M output
+	"minimax-*":              0.15, // $0.30 / 1M input tokens
+	// Kimi: ~$0.40 / 1M input, ~$2.00 / 1M output
+	"kimi-*":                 0.20, // ~$0.40 / 1M input tokens
+	// Qwen3: $0.325 / 1M input, $1.95 / 1M output
+	"qwen3-*":                0.1625, // $0.325 / 1M input tokens
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat":   0.2 / 1000 * USD,
 	"llama-3-sonar-small-32k-online": 0.2 / 1000 * USD,
@@ -619,6 +627,22 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 		return 2, true
 	case "llama3-70b-8192":
 		return 0.79 / 0.59, true
+	}
+	// DeepSeek: $0.28/M input, $0.42/M output → ratio = 1.5
+	if strings.HasPrefix(name, "deepseek-") || strings.Contains(name, "deepseek") {
+		return 1.5, true
+	}
+	// MiniMax: $0.30/M input, $1.20/M output → ratio = 4.0
+	if strings.HasPrefix(name, "minimax-") || strings.Contains(name, "minimax") {
+		return 4.0, true
+	}
+	// Kimi: ~$0.40/M input, ~$2.00/M output → ratio = 5.0
+	if strings.HasPrefix(name, "kimi-") || strings.Contains(name, "kimi") {
+		return 5.0, true
+	}
+	// Qwen3: $0.325/M input, $1.95/M output → ratio = 6.0
+	if strings.HasPrefix(name, "qwen3-") || strings.Contains(name, "qwen3") {
+		return 6.0, true
 	}
 	return 1, false
 }

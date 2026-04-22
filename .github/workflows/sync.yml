@@ -1,17 +1,18 @@
 name: Daily Upstream Sync
 
-# Run daily at 03:00 UTC, on PR, and on manual trigger
 on:
   schedule:
-    # Every day at 03:00 UTC
     - cron: '0 3 * * *'
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
   workflow_dispatch:
     inputs:
       strategy:
-        description: 'Merge strategy'
+        description: 'Merge strategy (theirs=upstream wins, ours=fork wins)'
         required: false
         default: 'theirs'
         type: choice
@@ -24,59 +25,20 @@ permissions:
   packages: none
   deployments: none
 
+env:
+  STRATEGY: ${{ github.event.inputs.strategy || 'theirs' }}
+
 jobs:
-  sync-check:
-    name: Check upstream changes
-    runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
-    outputs:
-      has_changes: ${{ steps.check.outputs.has_changes }}
-      commits_behind: ${{ steps.check.outputs.commits_behind }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add upstream remote
-        run: |
-          git remote add upstream https://github.com/QuantumNous/new-api.git || \
-            git remote set-url upstream https://github.com/QuantumNous/new-api.git
-          git fetch upstream --prune
-
-      - name: Check for upstream changes
-        id: check
-        run: |
-          COMMON=$(git merge-base HEAD upstream/main)
-          UPSTREAM_SHA=$(git rev-parse upstream/main)
-          LOCAL_SHA=$(git rev-parse HEAD)
-
-          echo "Local:  $LOCAL_SHA"
-          echo "Upstream: $UPSTREAM_SHA"
-          echo "Common ancestor: $COMMON"
-
-          if [[ "$COMMON" == "$UPSTREAM_SHA" ]]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "commits_behind=0" >> $GITHUB_OUTPUT
-            echo "✓ Upstream is already in our history"
-          else
-            COUNT=$(git log --oneline ${COMMON}..upstream/main | wc -l)
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "commits_behind=$COUNT" >> $GITHUB_OUTPUT
-            echo "Upstream has $COUNT new commits"
-          fi
-
   sync:
     name: Sync with upstream
-    needs: sync-check
     runs-on: ubuntu-latest
-    if: |
-      github.repository == 'giovannimnz/atius-ai-router' &&
-      needs.sync-check.outputs.has_changes == 'true'
+    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
     environment:
       name: fork-sync
       url: https://github.com/giovannimnz/atius-ai-router
+    outputs:
+      merged: ${{ steps.sync.outputs.merged }}
+      new_version: ${{ steps.sync.outputs.new_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,72 +50,140 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-
-      - name: Set strategy from input or default
-        run: |
-          STRATEGY="${INPUT_STRATEGY:-theirs}"
-          echo "STRATEGY=$STRATEGY" >> $GITHUB_ENV
+          git config merge.conflictstyle merge
+          git config push.default simple
 
       - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/QuantumNous/new-api.git || \
+          git remote add upstream https://github.com/QuantumNous/new-api.git 2>/dev/null || \
             git remote set-url upstream https://github.com/QuantumNous/new-api.git
-          git fetch upstream --prune
+          git fetch upstream --prune --tags
 
-      - name: Run sync script
+      - name: Sync with upstream
+        id: sync
         env:
-          SYNC_STRATEGY: ${{ github.event.inputs.strategy || 'theirs' }}
-          DRY_RUN: 'false'
-          SILENT: 'false'
+          SYNC_STRATEGY: ${{ env.STRATEGY }}
         run: |
-          chmod +x scripts/sync-fork.sh
-          ./scripts/sync-fork.sh --strategy ${{ env.STRATEGY }}
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          LOCAL_SHA=$(git rev-parse HEAD)
+          COMMON=$(git merge-base HEAD upstream/main)
+
+          echo "Local:      $LOCAL_SHA"
+          echo "Upstream:   $UPSTREAM_SHA"
+          echo "Common:     $COMMON"
+          echo "Strategy:   $SYNC_STRATEGY"
+          echo ""
+
+          MERGED=false
+          NEW_VERSION=""
+
+          # Check if upstream has new commits
+          if [[ "$COMMON" != "$UPSTREAM_SHA" ]]; then
+            echo "🔄 Upstream has new commits, syncing..."
+            
+            # Merge upstream
+            git merge upstream/main -m "Merge upstream/main into fork" || {
+              echo "Merge conflict detected, using strategy: $SYNC_STRATEGY"
+              if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
+                git checkout --ours .
+                git add -A
+                git commit -m "Resolve conflicts: prefer upstream"
+              else
+                git checkout --theirs .
+                git add -A
+                git commit -m "Resolve conflicts: prefer fork (ours)"
+              fi
+            }
+
+            # Restore protected fork files
+            echo "📁 Restoring fork-specific files..."
+            for file in docker-compose.yml integration/middleware/model_detailed.py integration/middleware/model_details.py integration/middleware/model_enrichment.py; do
+              if git show upstream/main:"$file" &>/dev/null; then
+                git checkout HEAD -- "$file" 2>/dev/null || true
+              fi
+            done
+
+            # Restore fork-only files (might not exist in upstream)
+            for file in .github/workflows/sync.yml .github/workflows/release.yml .github/workflows/pr-check.yml; do
+              if [[ -f "$file" ]] && ! git ls-files --error-unmatch "$file" &>/dev/null; then
+                git checkout HEAD -- "$file" 2>/dev/null || true
+              fi
+            done
+
+            MERGED=true
+
+            # Auto-bump version if significant changes
+            if [[ -f VERSION ]]; then
+              CURRENT=$(cat VERSION)
+              MAJOR=$(echo $CURRENT | cut -d. -f1)
+              MINOR=$(echo $CURRENT | cut -d. -f2)
+              PATCH=$(echo $CURRENT | cut -d. -f3)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              echo "$NEW_VERSION" > VERSION
+              echo "📦 Version bumped: $CURRENT → $NEW_VERSION"
+            fi
+
+            # Commit changes
+            git add -A
+            git diff --cached --quiet || git commit -m "chore: sync with upstream (auto-bump)"
+            
+            echo "merged=true" >> $GITHUB_OUTPUT
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "✅ Sync completed successfully"
+          else
+            echo "✅ Already up to date with upstream"
+            echo "merged=false" >> $GITHUB_OUTPUT
+            echo "new_version=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push changes
+        if: steps.sync.outputs.merged == 'true'
+        run: |
+          git push origin main --force-with-lease
+          echo "🚀 Pushed to origin"
 
       - name: Sync summary
+        if: always()
         run: |
+          MERGED=${{ steps.sync.outputs.merged }}
+          VERSION=${{ steps.sync.outputs.new_version }}
+          
           {
-            echo "## ✅ Sync Complete"
+            echo "## ✅ Upstream Sync Complete"
             echo ""
-            echo "| Step | Status |"
+            echo "| Item | Status |"
             echo "|------|--------|"
-            echo "| Upstream fetch | ✅ |"
-            echo "| Merge (strategy: ${{ env.STRATEGY }}) | ✅ |"
-            echo "| Restore protected files | ✅ |"
-            echo "| Version bump | ✅ |"
-            echo "| Push to origin | ✅ |"
+            echo "| Fetch upstream | ✅ |"
+            echo "| Merge | ${{ steps.sync.outputs.merged == 'true' && '✅ Merged' || '⏭️ Skipped (up to date)' }} |"
+            echo "| Restore fork files | ✅ |"
+            if [[ -n "$VERSION" ]]; then
+              echo "| Version bump | ✅ → \`$VERSION\` |"
+            fi
+            echo "| Push | ${{ steps.sync.outputs.merged == 'true' && '✅ Pushed' || '⏭️ Skipped' }} |"
             echo ""
-            echo "**Repository:** https://github.com/giovannimnz/atius-ai-router"
-            echo "**New version:** \`$(cat VERSION 2>/dev/null || echo 'N/A')\`"
+            echo "**Repository:** https://github.com/${{ github.repository }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Create release PR if version changed
-        if: |
-          needs.sync-check.outputs.commits_behind != '0'
-        run: |
-          CURRENT_VERSION="$(cat VERSION 2>/dev/null || echo '')"
-          if [[ -n "$CURRENT_VERSION" ]]; then
-            echo "Creating PR for version bump..."
-            BODY="Automated daily sync with upstream NewAPI."
-            gh pr create \
-              --title "chore: sync with upstream - v${CURRENT_VERSION}" \
-              --body "$BODY" \
-              --base main \
-              --label "automated,sync" \
-              || echo "PR creation skipped (may already exist or no changes)"
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  no-changes:
-    name: Already up to date
+  release:
+    name: Create Release
+    needs: sync
     runs-on: ubuntu-latest
     if: |
-      github.repository == 'giovannimnz/atius-ai-router' &&
-      needs.sync-check.outputs.has_changes == 'false'
+      needs.sync.outputs.merged == 'true' && 
+      needs.sync.outputs.new_version != ''
+    environment:
+      name: fork-sync
     steps:
-      - name: No changes needed
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release tag
+        env:
+          VERSION: ${{ needs.sync.outputs.new_version }}
         run: |
-          echo "## ✅ Already up to date"
-          echo ""
-          echo "Upstream is already fully integrated in our history."
-          echo "No sync needed."
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
+          echo "🏷️ Created and pushed tag v${VERSION}"

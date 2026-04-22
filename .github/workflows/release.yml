@@ -5,32 +5,93 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }
-
+    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+    environment: release
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read VERSION
         id: version
-        run: echo "VERSION=$(cat VERSION 2>/dev/null || echo ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+        run: |
+          VERSION_CONTENT=$(cat VERSION 2>/dev/null || echo "${GITHUB_REF_NAME#v}")
+          echo "VERSION=$VERSION_CONTENT" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      - name: Log version
-        run: echo "Releasing version ${{ steps.version.outputs.VERSION }}"
+      - name: Log version info
+        run: |
+          echo "Tag: ${{ github.ref_name }}"
+          echo "VERSION file: ${{ steps.version.outputs.VERSION }}"
+          echo "Tag version: ${{ steps.version.outputs.TAG_VERSION }}"
+
+      - name: Validate version match
+        run: |
+          FILE_VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_VERSION="${{ steps.version.outputs.TAG_VERSION }}"
+          if [[ "$FILE_VERSION" != "$TAG_VERSION" ]]; then
+            echo "⚠️ Version mismatch: VERSION file is '$FILE_VERSION' but tag is '$TAG_VERSION'"
+            echo "Updating VERSION file to match tag..."
+            echo "$TAG_VERSION" > VERSION
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: VERSION
+          version: ${{ steps.version.outputs.TAG_VERSION }}
           generate_release_notes: true
+          files: VERSION
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push to Docker Hub (if Dockerfile exists)
-        if: hashFiles('Dockerfile') != ''
+      - name: Release summary
         run: |
-          docker build -t ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }} .
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }}
+          echo "## ✅ Release Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ steps.version.outputs.TAG_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`ghcr.io/${{ github.repository }}:${{ steps.version.outputs.TAG_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY

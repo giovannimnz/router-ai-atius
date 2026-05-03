@@ -37,6 +37,9 @@ type textQuotaSummary struct {
 	ModelRatio               float64
 	GroupRatio               float64
 	ModelPrice               float64
+	InputPrice               float64 // $ per 1M input tokens (dollar-cost mode)
+	OutputPrice              float64 // $ per 1M output tokens (dollar-cost mode)
+	UseDollarCost            bool    // true when using InputPrice+OutputPrice mode
 	CacheCreationRatio       float64
 	CacheCreationRatio5m     float64
 	CacheCreationRatio1h     float64
@@ -88,6 +91,9 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		ModelRatio:           relayInfo.PriceData.ModelRatio,
 		GroupRatio:           relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 		ModelPrice:           relayInfo.PriceData.ModelPrice,
+		InputPrice:          relayInfo.PriceData.InputPrice,
+		OutputPrice:         relayInfo.PriceData.OutputPrice,
+		UseDollarCost:       relayInfo.PriceData.UseDollarCost,
 		CacheCreationRatio:   relayInfo.PriceData.CacheCreationRatio,
 		CacheCreationRatio5m: relayInfo.PriceData.CacheCreation5mRatio,
 		CacheCreationRatio1h: relayInfo.PriceData.CacheCreation1hRatio,
@@ -195,7 +201,48 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	}
 
 	var audioInputQuota decimal.Decimal
-	if !relayInfo.PriceData.UsePrice {
+	// Dollar-cost mode: quota = (prompt_tokens × InputPrice + completion_tokens × OutputPrice) × QuotaPerUnit × GroupRatio
+	if relayInfo.PriceData.UseDollarCost {
+		dInputPrice := decimal.NewFromFloat(summary.InputPrice)
+		dOutputPrice := decimal.NewFromFloat(summary.OutputPrice)
+
+		// Handle cached tokens: non-cached charge at InputPrice, cached charge at InputPrice × CacheRatio
+		nonCachedTokens := dPromptTokens
+		if !dCacheTokens.IsZero() {
+			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+				nonCachedTokens = nonCachedTokens.Sub(dCacheTokens)
+			}
+		}
+
+		// Input quota: non-cached + cached (at cache ratio)
+		inputQuotaDecimal := nonCachedTokens.Mul(dInputPrice)
+		if !dCacheTokens.IsZero() {
+			cachedQuota := dCacheTokens.Mul(dCacheRatio).Mul(dInputPrice)
+			inputQuotaDecimal = inputQuotaDecimal.Add(cachedQuota)
+		}
+
+		// Output quota
+		outputQuotaDecimal := dCompletionTokens.Mul(dOutputPrice)
+
+		quotaCalculateDecimal := inputQuotaDecimal.Add(outputQuotaDecimal).
+			Mul(dQuotaPerUnit).Mul(dGroupRatio)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(dWebSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(dClaudeWebSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
+
+		if len(relayInfo.PriceData.OtherRatios) > 0 {
+			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
+				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
+			}
+		}
+
+		if quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
+			quotaCalculateDecimal = decimal.NewFromInt(1)
+		}
+		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
+	} else if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
 
 		var cachedTokensWithRatio decimal.Decimal
@@ -274,7 +321,11 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 	if summary.TotalTokens == 0 {
 		summary.Quota = 0
-	} else if !ratio.IsZero() && summary.Quota == 0 {
+	} else if !relayInfo.PriceData.UseDollarCost && !ratio.IsZero() && summary.Quota == 0 {
+		// Ratio/price mode: ensure minimum quota of 1
+		summary.Quota = 1
+	} else if relayInfo.PriceData.UseDollarCost && summary.Quota == 0 {
+		// Dollar-cost mode: ensure minimum quota of 1
 		summary.Quota = 1
 	}
 
@@ -354,6 +405,12 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other["usage_semantic"] = "anthropic"
 	} else {
 		other = GenerateTextOtherInfo(ctx, relayInfo, summary.ModelRatio, summary.GroupRatio, summary.CompletionRatio, summary.CacheTokens, summary.CacheRatio, summary.ModelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
+	}
+	// Log dollar-cost pricing info
+	if summary.UseDollarCost {
+		other["use_dollar_cost"] = true
+		other["input_price"] = summary.InputPrice
+		other["output_price"] = summary.OutputPrice
 	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason

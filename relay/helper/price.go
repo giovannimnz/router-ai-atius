@@ -63,6 +63,7 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
+	inputPrice, outputPrice, useDollarCost := ratio_setting.GetInputOutputPrice(info.OriginModelName)
 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
@@ -77,7 +78,24 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	var audioRatio float64
 	var audioCompletionRatio float64
 	var freeModel bool
-	if !usePrice {
+
+	// Dollar-cost mode: use InputPrice + OutputPrice (true cost per token)
+	if useDollarCost {
+		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
+		if meta.MaxTokens != 0 {
+			preConsumedTokens += meta.MaxTokens
+		}
+		// Pre-consume based on input price only (output tokens unknown at this point)
+		preConsumedQuota = int(float64(preConsumedTokens) * inputPrice * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		completionRatio = 0 // not used in dollar-cost mode
+		cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
+		cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
+		cacheCreationRatio5m = cacheCreationRatio
+		cacheCreationRatio1h = cacheCreationRatio * claudeCacheCreation1hMultiplier
+		imageRatio, _ = ratio_setting.GetImageRatio(info.OriginModelName)
+		audioRatio = ratio_setting.GetAudioRatio(info.OriginModelName)
+		audioCompletionRatio = ratio_setting.GetAudioCompletionRatio(info.OriginModelName)
+	} else if !usePrice {
 		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
 		if meta.MaxTokens != 0 {
 			preConsumedTokens += meta.MaxTokens
@@ -118,6 +136,11 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		if groupRatioInfo.GroupRatio == 0 {
 			preConsumedQuota = 0
 			freeModel = true
+		} else if useDollarCost {
+			if inputPrice == 0 {
+				preConsumedQuota = 0
+				freeModel = true
+			}
 		} else if usePrice {
 			if modelPrice == 0 {
 				preConsumedQuota = 0
@@ -134,6 +157,9 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	priceData := types.PriceData{
 		FreeModel:            freeModel,
 		ModelPrice:           modelPrice,
+		InputPrice:          inputPrice,
+		OutputPrice:         outputPrice,
+		UseDollarCost:       useDollarCost,
 		ModelRatio:           modelRatio,
 		CompletionRatio:      completionRatio,
 		GroupRatioInfo:       groupRatioInfo,

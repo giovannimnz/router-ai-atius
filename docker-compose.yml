@@ -1,92 +1,61 @@
 services:
   new-api:
-    # Imagem Docker da aplicação NewAPI (baseada no OneAPI)
-    # Os arquivos da aplicação estão embutidos nesta imagem
     image: calciumion/new-api:latest
     container_name: new-api
     restart: always
-    # No internal port - only accessible via middleware on the same network
-    expose:
-      - "3000"
-    volumes:
-      # Monta o diretório local ./data para persistência de dados
-      # - Logs da aplicação
-      # - Configurações (se aplicável)
-      # Monta o diretório local ./data para persistência de dados
-      # - Logs da aplicação ficam em ./data/logs/
-      # - Dados do banco de dados podem ser persistidos aqui se configurado
-      - ./data:/data
+    ports:
+      - "3301:3000"
     environment:
-      - TZ=$TZ
-      - LANG=$LANG
-      - LANGUAGE=$LANGUAGE
-      - LC_ALL=$LC_ALL
-      # String de conexão para o banco de dados PostgreSQL
-      # Formato: postgres://usuario:senha@host:porta/banco?sslmode=disable
-      - SQL_DSN=$SQL_DSN
-    depends_on:
-      - db-newapi
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
+      - SQL_DSN=postgres://admin:Bkfigt!546@db-newapi:5432/newapi?sslmode=disable
+      - TZ=America/Sao_Paulo
+      - LANG=pt_BR.UTF-8
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
     networks:
       - newapi-internal
       - atius-shared
+    healthcheck:
+      test: ["CMD", "wget", "-O-", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   model-detailed:
-    # Middleware proxy que enriquece GET /v1/models com metadata DeepSeek
-    # Escuta na porta 3300 (pública), faz proxy para new-api:3000 (interna)
-    image: python:3.12-slim
+    build:
+      context: ./integration/middleware
+      dockerfile: Dockerfile.fastapi
     container_name: model-detailed
     restart: always
     ports:
       - "3300:3001"
-    volumes:
-      - ./integration/middleware:/app:ro
-    working_dir: /app
-    command: python3 model_detailed.py
     environment:
       - MIDDLEWARE_PORT=3001
       - NEWAPI_BACKEND_URL=http://new-api:3000
-    depends_on:
-      - new-api
-    deploy:
-      resources:
-        limits:
-          cpus: "0.1"
+      - BACKEND_TIMEOUT=60
     networks:
       - newapi-internal
       - atius-shared
+    depends_on:
+      - new-api
 
   db-newapi:
-    # Banco de dados PostgreSQL para a aplicação NewAPI
     image: postgres:15-alpine
     container_name: db-newapi
     restart: always
-    ports:
-      - "8746:5432"
     environment:
-      - POSTGRES_USER=$POSTGRES_USER
-      - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-      - POSTGRES_DB=$POSTGRES_DB
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=Bkfigt!546
+      - POSTGRES_DB=newapi
     volumes:
-      # Persiste os dados do banco de dados no diretório local
-      # Persiste os dados do banco de dados no diretório local
-      # Dados do PostgreSQL ficam em ./data/postgres_data/
-      - ./data/postgres_data:/var/lib/postgresql/data
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
+      - ./db-data:/var/lib/postgresql/data
     networks:
       - newapi-internal
-      - atius-shared
 
 networks:
   newapi-internal:
-    name: newapi-internal
-    external: true
+    internal: true
   atius-shared:
-    name: atius-shared
     external: true

@@ -336,7 +336,7 @@ git commit -m "chore: restore overrides" && git push
 ### Containers não sobem
 
 ```bash
-cd ~/docker/ai-apps/atius-ai-router
+cd /home/ubuntu/docker/Atius/router-ai-atius
 docker compose down && docker compose up -d
 docker compose ps
 ```

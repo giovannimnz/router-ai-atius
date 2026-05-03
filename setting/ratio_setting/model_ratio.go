@@ -339,6 +339,8 @@ var defaultAudioCompletionRatio = map[string]float64{
 var modelPriceMap = types.NewRWMap[string, float64]()
 var modelRatioMap = types.NewRWMap[string, float64]()
 var completionRatioMap = types.NewRWMap[string, float64]()
+var inputPriceMap = types.NewRWMap[string, float64]()  // $ per 1M input tokens (dollar-cost)
+var outputPriceMap = types.NewRWMap[string, float64]() // $ per 1M output tokens (dollar-cost)
 
 var defaultCompletionRatio = map[string]float64{
 	"gpt-4-gizmo-*":  2,
@@ -394,6 +396,53 @@ func GetModelPrice(name string, printErr bool) (float64, bool) {
 		common.SysError("model price not found: " + name)
 	}
 	return -1, false
+}
+
+// GetInputPrice returns the input price in $ per 1M tokens for dollar-cost mode
+func GetInputPrice(name string) (float64, bool) {
+	name = FormatMatchingModelName(name)
+	if price, ok := inputPriceMap.Get(name); ok {
+		return price, true
+	}
+	if strings.HasSuffix(name, CompactModelSuffix) {
+		if price, ok := inputPriceMap.Get(CompactWildcardModelKey); ok {
+			return price, true
+		}
+	}
+	return 0, false
+}
+
+// GetOutputPrice returns the output price in $ per 1M tokens for dollar-cost mode
+func GetOutputPrice(name string) (float64, bool) {
+	name = FormatMatchingModelName(name)
+	if price, ok := outputPriceMap.Get(name); ok {
+		return price, true
+	}
+	if strings.HasSuffix(name, CompactModelSuffix) {
+		if price, ok := outputPriceMap.Get(CompactWildcardModelKey); ok {
+			return price, true
+		}
+	}
+	return 0, false
+}
+
+// GetInputOutputPrice returns both input and output prices; useDollarCost is true when both are configured
+func GetInputOutputPrice(name string) (inputPrice, outputPrice float64, useDollarCost bool) {
+	inputPrice, hasInput := GetInputPrice(name)
+	outputPrice, hasOutput := GetOutputPrice(name)
+	useDollarCost = hasInput && hasOutput
+	if !useDollarCost {
+		inputPrice, outputPrice = 0, 0
+	}
+	return
+}
+
+func UpdateInputPriceByJSONString(jsonStr string) error {
+	return types.LoadFromJsonStringWithCallback(inputPriceMap, jsonStr, InvalidateExposedDataCache)
+}
+
+func UpdateOutputPriceByJSONString(jsonStr string) error {
+	return types.LoadFromJsonStringWithCallback(outputPriceMap, jsonStr, InvalidateExposedDataCache)
 }
 
 func UpdateModelRatioByJSONString(jsonStr string) error {

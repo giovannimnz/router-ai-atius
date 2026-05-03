@@ -62,14 +62,16 @@ parse_fork_version() {
     fi
 }
 
-# Get upstream version from git tag
+# Get upstream version from git tag (stable only — no pre-release)
 get_upstream_version() {
-    # Try to get latest tag from upstream using git for-each-ref
+    # Try to get latest STABLE tag from upstream (no -rc, -alpha, -beta, -patch)
     local upstream_tag
     upstream_tag="$(git ls-remote --tags "$UPSTREAM_NAME" 2>/dev/null | \
                     grep -v '\^{}' | \
+                    grep -v 'alpha\|beta\|rc\|patch' | \
                     awk '{print $2}' | \
                     sed 's|refs/tags/||' | \
+                    grep -v '^$' | \
                     sort -V | \
                     tail -1)"
 

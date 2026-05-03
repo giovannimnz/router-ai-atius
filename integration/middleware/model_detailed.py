@@ -7,8 +7,8 @@ for DeepSeek and MiniMax models, while transparently proxying all other
 requests to the NewAPI backend.
 
 Enriched Models:
-  - deepseek-chat, deepseek-reasoner (DeepSeek)
-  - MiniMax-M2.7, MiniMax-M2.5 (MiniMax Token Plan)
+  - deepseek-v4-flash, deepseek-v4-pro (DeepSeek V4)
+  - MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.7-highspeed, MiniMax-M2.5-highspeed (MiniMax Token Plan)
 
 Usage:
     python3 model_detailed.py [--port PORT] [--backend BACKEND_URL]
@@ -21,7 +21,7 @@ Pricing Logic:
     per_token_price = price_per_1M / 1_000_000
 
   ModelRatio (new-api quota multiplier):
-    ratio = input_price_per_1M / 2   (same formula as DeepSeek: $0.28 -> 0.14)
+    ratio = input_price_per_1M / 2   (same formula as DeepSeek: /usr/bin/bash.28 -> 0.14)
 
   CompletionRatio (new-api output multiplier):
     ratio = output_price_per_1M / input_price_per_1M
@@ -40,26 +40,26 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 PORT = int(os.environ.get("MIDDLEWARE_PORT", 3001))
 BACKEND_URL = os.environ.get("NEWAPI_BACKEND_URL", "http://localhost:3000")
 
-# DeepSeek model metadata
+# DeepSeek V4 model metadata (updated after DB migration)
 DEEPSEEK_METADATA = {
-    "deepseek-chat": {
-        "name": "DeepSeek V3.2",
+    "deepseek-v4-flash": {
+        "name": "DeepSeek V4 Flash",
         "context_length": 131072,
         "max_completion_tokens": 8192,
         "pricing": {
-            "prompt": "0.00000028",       # $0.28 / 1M (cache miss)
-            "completion": "0.00000042",   # $0.42 / 1M
-            "prompt_cache_hit": "0.000000028",  # $0.028 / 1M
+            "prompt": "0.00000014",       # $0.14 / 1M input
+            "completion": "0.00000028",   # $0.28 / 1M output (CompletionRatio=2.0)
+            "prompt_cache_hit": "0.000000014",  # $0.014 / 1M cache read
         },
     },
-    "deepseek-reasoner": {
-        "name": "DeepSeek V3.2 Reasoner",
+    "deepseek-v4-pro": {
+        "name": "DeepSeek V4 Pro",
         "context_length": 131072,
-        "max_completion_tokens": 65536,
+        "max_completion_tokens": 8192,
         "pricing": {
-            "prompt": "0.00000028",
-            "completion": "0.00000042",
-            "prompt_cache_hit": "0.000000028",
+            "prompt": "0.000000435",       # $0.435 / 1M input
+            "completion": "0.00000087",   # $0.87 / 1M output (CompletionRatio=2.0)
+            "prompt_cache_hit": "0.0000000435",  # $0.0435 / 1M
         },
     },
 }
@@ -71,10 +71,21 @@ MINIMAX_METADATA = {
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # $0.30 / 1M
-            "completion": "0.0000012",    # $1.20 / 1M
-            "prompt_cache_hit": "0.00000006",   # $0.06 / 1M
-            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
+            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M
+            "completion": "0.0000012",    # .20 / 1M
+            "prompt_cache_hit": "0.00000006",   # /usr/bin/bash.06 / 1M
+            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+        },
+    },
+    "MiniMax-M2.7-highspeed": {
+        "name": "MiniMax M2.7 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M (same as M2.7)
+            "completion": "0.0000012",    # .20 / 1M (same as M2.7)
+            "prompt_cache_hit": "0.00000006",   # /usr/bin/bash.06 / 1M
+            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
         },
     },
     "MiniMax-M2.5": {
@@ -82,10 +93,21 @@ MINIMAX_METADATA = {
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # $0.30 / 1M
-            "completion": "0.0000012",    # $1.20 / 1M
-            "prompt_cache_hit": "0.00000003",   # $0.03 / 1M
-            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
+            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M
+            "completion": "0.0000012",    # .20 / 1M
+            "prompt_cache_hit": "0.00000003",   # /usr/bin/bash.03 / 1M
+            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+        },
+    },
+    "MiniMax-M2.5-highspeed": {
+        "name": "MiniMax M2.5 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M (same as M2.5)
+            "completion": "0.0000012",    # .20 / 1M (same as M2.5)
+            "prompt_cache_hit": "0.00000003",   # /usr/bin/bash.03 / 1M
+            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
         },
     },
 }

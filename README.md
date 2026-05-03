@@ -1,6 +1,6 @@
 # atius-ai-router
 
-Fork de [QuantumNous/new-api](https://github.com/QuantumNous/new-api) adaptado para o ecossistema Atius.
+![new-api](/web/default/public/logo.png)
 
 ## O que é
 

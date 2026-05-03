@@ -1,50 +1,37 @@
-# Runtime data
-data/
-logs/
-
-# Whisper.cpp build artifacts
-integration/whisper.cpp/build/
-integration/whisper.cpp/build-main/
-integration/whisper.cpp/*.so
-integration/whisper.cpp/models/*.bin
-integration/whisper.cpp/models/for-tests-*.bin
-
-# Search-engine (not part of router)
-integration/search-engine/
-
-# IDE settings
-.claude/
-.openclaude/
-.openclaude-profile.json
-.bg-shell/
-
-# GSD planning artifacts
-.gsd/
-
-# Environment (secrets)
+.idea
+.vscode
+.zed
+.history
+upload
+*.exe
+*.db
+build
+*.db-journal
+logs
+web/default/dist
+web/classic/dist
+web/node_modules
+web/dist
 .env
-.env.*
-!.env.example
-
-# OS files
+one-api
+new-api
+/__debug_bin*
 .DS_Store
-Thumbs.db
+tiktoken_cache
+.eslintcache
+.gocache
+.gomodcache/
+.cache
+plans
+.claude
+.cursor
 
-# Logs
-*.log
-
-# Docker
-.dockerignore
-
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# npm
-node_modules/
-package-lock.json
-
-# Backup files
-*.bak
-*~
+electron/node_modules
+electron/dist
+data/
+.gomodcache/
+.gocache-temp
+.gopath
+.test
+token_estimator_test.go
+skills-lock.json

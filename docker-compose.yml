@@ -1,6 +1,6 @@
 services:
   new-api:
-    image: calciumion/new-api:latest
+    image: ghcr.io/giovannimnz/atius-ai-router:latest
     container_name: new-api
     restart: always
     ports:

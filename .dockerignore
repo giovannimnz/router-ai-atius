@@ -8,5 +8,6 @@ docs
 .eslintcache
 .gocache
 /web/node_modules
+db-data
 data/postgres_data
 data/logs

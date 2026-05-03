@@ -258,11 +258,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 		quotaCalculateDecimal := inputQuotaDecimal.Add(outputQuotaDecimal).
 			Mul(dQuotaPerUnit).Mul(dGroupRatio)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dClaudeWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
 
 		if len(relayInfo.PriceData.OtherRatios) > 0 {
 			for _, otherRatio := range relayInfo.PriceData.OtherRatios {

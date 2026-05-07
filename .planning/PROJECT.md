@@ -44,16 +44,16 @@ upstream → https://github.com/QuantumNous/new-api.git (fetch only)
 
 ## Active Milestones
 
-### v1.3 — Testing Infrastructure & CLI (current)
-Estabelecer infraestrutura de testes com Bruno CLI e documentação.
+### v1.4 — Model Aliases & Token Management (current)
+Aliases `-hs` para modelos highspeed e nova API key para Giovanni.
 
-**Goal:** Suite de testes de API automatizados e skill para agentes.
+**Goal:** Migracao gradual de `-highspeed` para `-hs` sem impacto nos clientes.
 
 **Target deliverables:**
-1. Bruno CLI instalado e configurado
-2. Collection `atius-router-tests/` com 5 requests
-3. Skill `bruno-cli` criada em `~/.agents/skills/`
-4. Script `run-bruno-tests.sh` funcional
+1. Modelos `MiniMax-M2.7-hs` e `MiniMax-M2.5-hs` adicionados ao catalog
+2. `model_mapping` no canal MiniMax redirecionando `-hs` → `-highspeed`
+3. Pricing configurado para ambos aliases
+4. API key `Giovanni-Acc` criada com quota ilimitada
 
 ## Technical Decisions
 
@@ -64,6 +64,7 @@ Estabelecer infraestrutura de testes com Bruno CLI e documentação.
 | Bruno CLI para testing | Formato texto legível, versionável com Git | 2026-04-21 |
 | Delay 500ms entre requests | NewAPI tem rate limiting | 2026-04-21 |
 | IP 192.168.0.2 para new-api | IP na rede atius-shared (não usar 172.20.0.x) | 2026-04-21 |
+| Model aliases via `model_mapping` DB | Substitui necessidade de customizar relay Go code | 2026-05-07 |
 
 ## API Endpoints
 
@@ -72,20 +73,41 @@ Estabelecer infraestrutura de testes com Bruno CLI e documentação.
 | `/v1/models` | GET | Lista modelos (enriquecidos) | ✅ OK |
 | `/v1/chat/completions` | POST | Chat completion | ✅ OK |
 
-### Modelos Disponíveis
+## Modelos Disponíveis
 
-| Modelo | Provider | Context | Max Output | Status |
-|--------|----------|---------|------------|--------|
-| deepseek-chat | DeepSeek | 131072 | 8192 | ✅ OK |
-| deepseek-reasoner | DeepSeek | 131072 | 65536 | ✅ OK |
-| MiniMax-M2.7 | MiniMax | 245760 | 50000 | ✅ OK |
-| MiniMax-M2.5 | MiniMax | 245760 | 50000 | ✅ OK |
+### MiniMax (Canal 1 — Token Plan)
+| Modelo (Router ID) | Upstream Alias | Provider | Context | Max Output | Input $/1M | Output $/1M | Status |
+|--------------------|----------------|----------|---------|------------|------------|-------------|--------|
+| MiniMax-M2.7 | MiniMax-M2.7 | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+| MiniMax-M2.7-highspeed | MiniMax-M2.7-highspeed | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+| MiniMax-M2.7-hs | → MiniMax-M2.7-highspeed | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+| MiniMax-M2.5 | MiniMax-M2.5 | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+| MiniMax-M2.5-highspeed | MiniMax-M2.5-highspeed | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+| MiniMax-M2.5-hs | → MiniMax-M2.5-highspeed | MiniMax | 245760 | 50000 | $0.30 | $1.20 | ✅ OK |
+
+### DeepSeek (Canal 2)
+| Modelo | Provider | Context | Max Output | Input $/1M | Output $/1M | Status |
+|--------|----------|---------|------------|------------|-------------|--------|
+| deepseek-v4-flash | DeepSeek | 131072 | 8192 | $0.14 | $0.28 | ✅ OK |
+| deepseek-v4-pro | DeepSeek | 131072 | 65536 | $0.435 | $0.87 | ✅ OK |
+
+**Nota:** Modelos `-hs` usam `model_mapping` no DB para redirecionar ao upstream `-highspeed`. O cliente envia `MiniMax-M2.7-hs`, o router converte para `MiniMax-M2.7-highspeed` antes de enviar ao provider. Logs e listagem mostram o ID do router (`-hs`).
+
+## API Keys (Tokens)
+
+| ID | Nome | Quota | Expiração | Modelos | Status |
+|----|------|-------|-----------|---------|--------|
+| 1 | Giovanni Hermes | Ilimitada | Nunca | Todos | ✅ Ativo |
+| 3 | Alfred Router Key | Ilimitada | Nunca | Todos | ✅ Ativo |
+| 4 | Gomes | Ilimitada | Nunca | Todos | ✅ Ativo |
+| 5 | Giovanni-Acc | Ilimitada | Nunca | Todos | ✅ Ativo |
 
 ## Constraints
 
 - NewAPI é closed-source (imagem Docker pré-construída) — customização via API admin e DB
 - Customizações locais não existem no upstream — nunca serão sobrescritas exceto `docker-compose.yml`
 - GitHub MCP sem credentials — `gh` CLI não autenticado
+- Model aliases via `model_mapping` — implementado no DB, não requer código Go customizado
 
 ## Last Updated
-2026-04-21
+2026-05-07

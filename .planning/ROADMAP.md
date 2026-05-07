@@ -1,5 +1,27 @@
 # ROADMAP.md - atius-ai-router
 
+## v1.4 — Model Aliases & Token Management ✓
+**Status:** COMPLETE
+
+### Phase 1: Model Aliases Setup ✓
+**slug:** `model-aliases-hs`
+
+- Adicionados `MiniMax-M2.7-hs` e `MiniMax-M2.5-hs` na tabela `models`
+- Configurado `model_mapping` no canal 1: `MiniMax-M2.7-hs` → `MiniMax-M2.7-highspeed` (e M2.5)
+- Adicionados ao `ModelRatio` (0.15), `CompletionRatio` (4.0), `InputPrice` (0.3), `OutputPrice` (1.2)
+- Abilities criadas para ambos os aliases no canal MiniMax
+- Router reiniciado e validado: GET /v1/models lista os aliases, POST funciona
+
+### Phase 2: API Key Giovanni-Acc ✓
+**slug:** `api-key-giovanni-acc`
+
+- Token criado: `9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92`
+- Nome: Giovanni-Acc, user_id: giovanni (id=2)
+- Quota ilimitada, sem expiracao
+- Testado com GET /v1/models e POST MiniMax-M2.7-hs — OK
+
+---
+
 ## v1.3 — Testing Infrastructure & CLI ✓
 **Status:** COMPLETE
 
@@ -124,10 +146,11 @@
 
 ---
 
-## v1.4 — Planning
+## v1.5 — Planning
 
 Next milestone TBD. Possible directions:
-- v1.4: Monitoring & Health Checks (logs centralizados, métricas, alerting)
-- v1.4: Additional Providers (Gemini, Claude via Anthropic API)
-- v1.4: Rate Limiting & Quota Management (monitoramento de uso por token)
-- v1.4: Failover & HA (múltiplas instâncias, load balancing)
+- v1.5: Monitoring & Health Checks (logs centralizados, métricas, alerting)
+- v1.5: Additional Providers (Gemini, Claude via Anthropic API)
+- v1.5: Rate Limiting & Quota Management (monitoramento de uso por token)
+- v1.5: Failover & HA (múltiplas instâncias, load balancing)
+- v1.5: Bruno Collection com modelos -hs (atualizar testes para cobrir aliases)

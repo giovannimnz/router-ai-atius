@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -97,10 +98,41 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	return nil
 }
 
+// maxTokensLimit is the maximum output tokens for MiniMax highspeed models.
+// Upstream MiniMax API rejects max_tokens > 196608 for highspeed variants (both -hs and -highspeed).
+const maxTokensLimit = 196608
+
+// isHighspeedModel returns true if the model name indicates a highspeed variant.
+// Matches both "-hs" suffix and "-highspeed" suffix (case-insensitive).
+func isHighspeedModel(modelName string) bool {
+	modelLower := strings.ToLower(modelName)
+	return strings.HasSuffix(modelLower, "-hs") || strings.HasSuffix(modelLower, "-highspeed")
+}
+
 func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
+
+	// Clamp max_tokens / max_completion_tokens to maxTokensLimit for highspeed models.
+	// Upstream rejects > 196608 for MiniMax highspeed variants (both -hs and -highspeed).
+	if isHighspeedModel(info.UpstreamModelName) {
+		maxTokens := lo.FromPtrOr(request.MaxTokens, uint(0))
+		maxCompletionTokens := lo.FromPtrOr(request.MaxCompletionTokens, uint(0))
+		effectiveMax := maxTokens
+		if maxCompletionTokens > 0 {
+			effectiveMax = maxCompletionTokens
+		}
+		if effectiveMax > maxTokensLimit {
+			clamped := maxTokensLimit
+			if maxCompletionTokens > 0 {
+				request.MaxCompletionTokens = &clamped
+			} else {
+				request.MaxTokens = &clamped
+			}
+		}
+	}
+
 	return request, nil
 }
 

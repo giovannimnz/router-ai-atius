@@ -326,14 +326,17 @@ func ListClaudeModels(c *gin.Context) {
 	}
 
 	// Query all abilities for channels with type=14 (Anthropic)
+	// Use a subquery to avoid referencing "type" column (reserved keyword) in WHERE clause
 	var abilities []model.AbilityWithChannel
+	subQuery := model.DB.Table("channels").Select("id").Where("status = ? AND type = ?", common.ChannelStatusEnabled, constant.ChannelTypeAnthropic)
+
 	err := model.DB.Table("abilities").
 		Select("abilities.*, channels.type as channel_type").
-		Joins("left join channels on abilities.channel_id = channels.id").
-		Where("channels.status = ? AND channels.type = ? AND abilities.enabled = ?",
-			common.ChannelStatusEnabled, constant.ChannelTypeAnthropic, true).
+		Joins("LEFT JOIN channels ON abilities.channel_id = channels.id").
+		Where("abilities.channel_id IN (?) AND abilities.enabled = ?", subQuery, true).
 		Where("abilities.group IN ?", groups).
 		Find(&abilities).Error
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "query abilities failed"})
 		return
@@ -344,9 +347,8 @@ func ListClaudeModels(c *gin.Context) {
 	for _, a := range abilities {
 		modelSet[a.Model] = true
 	}
-
-	// Apply token model limits if set
 	modelLimitEnabled := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
+
 	if modelLimitEnabled {
 		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
 		if ok {
@@ -361,6 +363,7 @@ func ListClaudeModels(c *gin.Context) {
 		}
 	}
 
+
 	// Build Anthropic format response
 	var models []dto.AnthropicModel
 	for modelName := range modelSet {
@@ -371,6 +374,7 @@ func ListClaudeModels(c *gin.Context) {
 			Type:        "model",
 		})
 	}
+
 
 	hasMore := false
 	firstID := ""

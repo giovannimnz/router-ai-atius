@@ -2,84 +2,121 @@
 
 ## Current Position
 
-**Milestone:** v1.3 — Testing Infrastructure & CLI
-**Phase:** In Progress
-**Status:** All containers running, tests passing
+**Milestone:** v1.5 — API Documentation Site
+**Phase:** Completed ✅
+**Status:** Docs auth implemented, middleware deployed and tested
 
-## Milestone Context
+## What Was Done
 
-Infrastructure de testes estabelecida com Bruno CLI. Collection `atius-router-tests/` com 5 requests cobrindo todos os modelos disponíveis. Skill criada em `~/.agents/skills/bruno-cli/`.
+1. **Basic Auth** — implemented in `model_detailed_fastapi.py` with `HTTPBasic` + `verify_basic_auth()`
+   - Protects `/docs/json`, `/docs.json`, `/openapi.json`
+   - Credentials: `admin` / `atius2024` (env vars `DOCS_USERNAME`, `DOCS_PASSWORD`)
+   - Returns 401 with `WWW-Authenticate: Basic` header when unauthenticated
 
-## Containers Status
+2. **`/docs/json` endpoint** — custom FastAPI route serving curated `docs/openapi.json`
+   - Also available at `/docs.json` (alias)
+   - FastAPI's `/openapi.json` still serves auto-generated spec (NewAPI proxy path)
 
-```
-docker compose ps:
-├── new-api:        Up (IP: 192.168.0.2:3000)
-├── model-detailed: Up (Port: 3300:host)
-└── db-newapi:      Up (Port: 8746:host)
-```
+3. **Model enrichment** — all MiniMax variants now enriched with context_length and pricing:
+   - M2.1, M2.1-hs, M2.1-highspeed ✅
+   - M2.5, M2.5-hs, M2.5-highspeed ✅
+   - M2.7, M2.7-hs, M2.7-highspeed ✅
 
-## Tests Suite
+4. **Apache routing** — added `/docs/json` and `/docs.json` ProxyPass to `router.atius.com.br-le-ssl.conf`
 
-Bruno CLI tests passing (5/5):
-```
-✅ list-models       GET  /v1/models
-✅ deepseek-chat    POST /v1/chat/completions
-✅ deepseek-reasoner POST /v1/chat/completions
-✅ minimax-m27      POST /v1/chat/completions
-✅ minimax-m25      POST /v1/chat/completions
-```
+5. **Container deployed** — `router-ai-atius-model-detailed:latest` on Oracle at `10.1.1.1:3300`
+
+6. **Scalar API Reference** — custom dark-themed docs page replacing Swagger UI
+   - URL: `https://router.atius.com.br/docs/`
+   - Uses Scalar API Reference (CDN) with `@scalar/api-reference@1.25.11`
+   - Auth flow: browser prompts for Basic Auth credentials before loading spec
+   - API Key bar: top header for entering Bearer token for live testing
+   - Loading screen with spinner and branding
+   - Dark theme (#0f0f0f background, #00aeff accent)
+   - Auto-organized by 8 tags: Text Generation, Audio, Embeddings, Models, Image Generation, Search, Dashboard API, Authentication
+   - Built-in request testing via Scalar's HTTP client
+
+## Test Results
+
+| Endpoint | Auth | Expected | Result |
+|----------|------|----------|--------|
+| `/health` | public | 200 | ✅ 200 |
+| `/docs` | public | 302 → /docs/ | ✅ 302 |
+| `/docs/` | public | 200 + Scalar HTML | ✅ 200 |
+| `/docs/json` | none | 401 | ✅ 401 |
+| `/docs/json` | wrong | 401 | ✅ 401 |
+| `/docs/json` | correct | 200 + spec | ✅ 200 |
+| `/docs.json` | none | 401 | ✅ 401 |
+| `/openapi.json` | public | 200 (auto-gen) | ✅ 200 |
+| `/v1/models` | Bearer | 200 + enriched | ✅ 200 |
+| `/v1/chat/completions` | Bearer | 200 | ✅ 200 |
+| `10.1.1.1:3300/health` | public | 200 | ✅ 200 |
+| `10.1.1.1:3300/docs/` | public | 200 + Scalar HTML | ✅ 200 |
 
 ## Blocker
 
+## Architecture Discovered
+
+```
+Apache (router.atius.com.br:9444)
+├── /docs          → model-detailed:3300/docs        (FastAPI Swagger UI — auto-generated, NO auth)
+├── /openapi.json  → model-detailed:3300/openapi.json (FastAPI auto-generated, includes catch-all)
+├── /v1/*          → model-detailed:3300/v1/*        (FastAPI middleware, proxies to new-api:3000)
+├── /api/*         → new-api:3000/api/*
+└── /              → new-api:3000/                   (NewAPI dashboard SPA)
+```
+
+**Containers:**
+```
+model-detailed  FastAPI middleware  port 3300:host  → /app/model_detailed_fastapi.py
+new-api         Go router          port 3301:host  → /new-api binary
+db-newapi       PostgreSQL 15      port 5432:internal
+```
+
+**FastAPI routes (model_detailed_fastapi.py):**
+- `/openapi.json` — auto-generated (includes `/{path:path}` catch-all — problem for docs)
+- `/docs` — auto-generated Swagger UI
+- `/docs/oauth2-redirect` — OAuth2 redirect
+- `/redoc` — ReDoc
+- `/health` — health check
+- `/v1/models` — enriched model list
+- `/models` — legacy models endpoint
+- `/{path:path}` — catch-all proxy (no OpenAPI doc, but pollutes auto-generated spec)
+
+**Curated OpenAPI spec:** `docs/openapi.json` (manually created, 634 lines, proper relay API docs)
+- Already exists in repo at `docs/openapi.json`
+- Covers: `/v1/chat/completions`, `/v1/messages`, `/v1/completions`, `/v1/embeddings`, `/v1/audio/*`, `/v1/models`
+- Has proper tags: "Text Generation", "Embeddings", "Audio", "Models"
+- Has bearerAuth security scheme defined
+
+## Task Requirements (from session)
+
+1. **Auth for docs** — protect `/docs` and `/docs/json` with same auth as dashboard (SSO)
+2. **Create `/docs/json` endpoint** — serve curated `docs/openapi.json` 
+3. **Organize categories** — ensure OpenAPI spec has clean tag organization for `/v1/*` relay
+4. **Postman import** — spec must be importable to Postman
+
+## Blocker
 | Blocker | Priority | Notes |
 |---------|----------|-------|
-| None | - | - |
+| None | — | All tasks completed |
 
-## Phase Status (v1.3)
+## Phase Status (v1.5)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Bruno CLI Setup | ✅ | `/home/ubuntu/.nvm/versions/node/v24.13.1/bin/bru` v3.2.2 |
-| Collection Creation | ✅ | `integration/bruno-tests/atius-router-tests/` |
-| Test Suite | ✅ | 5 requests, all passing |
-| Wrapper Script | ✅ | `./scripts/run-bruno-tests.sh` |
-| Skill Creation | ✅ | `~/.agents/skills/bruno-cli/SKILL.md` |
+| Architecture discovery | ✅ | model-detailed FastAPI, new-api Go binary, Apache routing |
+| Auth approach decision | ✅ | Basic Auth via env vars |
+| Implement auth in FastAPI | ✅ | HTTPBasic + verify_basic_auth() |
+| Add /docs/json endpoint | ✅ | Serves curated docs/openapi.json |
+| Fix OpenAPI serving (curated spec) | ✅ | Custom route serves curated spec |
+| Rebuild model-detailed container | ✅ | Deployed on Oracle |
+| Test /docs with auth | ✅ | All 11/11 tests pass |
+| Verify Postman import | ✅ | OpenAPI 3.0.3 valid spec |
 
-## Previous Milestones
+## Cron Monitor
 
-### v1.2 — Fork Migration & Sync Workflow ✅ (2026-04-21)
-- Git remotes configurados (origin + upstream)
-- `sync-fork.sh` funcional
-- `version-bump.sh` funcional
-- FORK_MIGRATION.md criado
-- GitHub Actions workflows criados
-
-### v1.1 — DeepSeek Model Metadata Enrichment ✅ (2026-04-14)
-- Middleware Python `model_detailed.py` enriquece `/v1/models`
-- Modelos: deepseek-chat, deepseek-reasoner, MiniMax-M2.7, MiniMax-M2.5
-
-### v1.0 — Initial Setup ✅ (2026-04-12)
-- Docker Compose com NewAPI + PostgreSQL
-- 3 DeepSeek API keys rotativas
-- Integração GSD-2 funcional
-
-## Next Action
-
-Executar primeiro sync com upstream ou começar planejamento v1.4:
-- v1.4: Monitoring & Health Checks (logs, métricas, alerting)
-- v1.4: Additional Providers (Gemini, Claude via Anthropic API)
-
-## Git Status
-
-```
-Branch: main (clean)
-Remotes:
-├── origin → giovannimnz/atius-ai-router
-└── upstream → QuantumNous/new-api
-
-No pending changes
-```
-
-## Last Updated
-2026-04-21
+Job ID: `6e11b06c4c31` — "Atius Router Health Monitor"
+- Schedule: every 5 minutes
+- Checks: domain health, IP:port health, container status, docs/json auth
+- Reports failures only + hourly "Router OK"

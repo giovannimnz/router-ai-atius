@@ -418,7 +418,7 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	if !token.UnlimitedQuota {
 		c.Set("token_quota", token.RemainQuota)
 	}
-	if token.ModelLimitsEnabled {
+	if token.IsModelLimitsEnabled() {
 		c.Set("token_model_limit_enabled", true)
 		c.Set("token_model_limit", token.GetModelLimitsMap())
 	} else {

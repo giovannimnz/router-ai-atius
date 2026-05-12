@@ -330,7 +330,15 @@ func (token *Token) Delete() (err error) {
 }
 
 func (token *Token) IsModelLimitsEnabled() bool {
-	return token.ModelLimitsEnabled
+	if !token.ModelLimitsEnabled {
+		return false
+	}
+	// If model_limits is empty JSON or empty string, limits are not actually enforced
+	trimmed := strings.TrimSpace(token.ModelLimits)
+	if trimmed == "" || trimmed == "{}" || trimmed == "[]" {
+		return false
+	}
+	return true
 }
 
 func (token *Token) GetModelLimits() []string {

@@ -124,7 +124,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 			effectiveMax = maxCompletionTokens
 		}
 		if effectiveMax > maxTokensLimit {
-			clamped := maxTokensLimit
+			clamped := uint(maxTokensLimit)
 			if maxCompletionTokens > 0 {
 				request.MaxCompletionTokens = &clamped
 			} else {

@@ -13,7 +13,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+    if: ${{ github.repository == 'giovannimnz/router-ai-atius' }}
     environment: release
     steps:
       - name: Checkout

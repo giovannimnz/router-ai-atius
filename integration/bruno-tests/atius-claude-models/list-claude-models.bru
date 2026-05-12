@@ -1,0 +1,40 @@
+meta {
+  name: List Anthropic-Compatible Models
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/claude/models
+}
+
+headers {
+  Authorization: Bearer {{apiToken}}
+}
+
+tests {
+  const status = res.getStatus();
+  expect(status).to.equal(200);
+
+  const body = res.getBody();
+  expect(body.data).to.be.an('array');
+  expect(body.data.length).to.be.above(0);
+
+  // Should contain MiniMax models
+  const modelIds = body.data.map(m => m.id);
+  expect(modelIds).to.include('MiniMax-M2.7');
+  expect(modelIds).to.include('MiniMax-M2.5');
+
+  // Should have correct Anthropic format
+  expect(body.data[0]).to.have.property('id');
+  expect(body.data[0]).to.have.property('created_at');
+  expect(body.data[0]).to.have.property('display_name');
+  expect(body.data[0]).to.have.property('type', 'model');
+
+  // has_more should be boolean
+  expect(body.has_more).to.be.a('boolean');
+
+  // No error fields
+  expect(body).to.not.have.property('error');
+  expect(body).to.not.have.property('message');
+}

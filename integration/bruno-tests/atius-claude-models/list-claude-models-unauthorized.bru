@@ -1,0 +1,15 @@
+meta {
+  name: List Claude Models - Unauthorized
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/v1/claude/models
+}
+
+tests {
+  const status = res.getStatus();
+  // Should return 401 without token
+  expect(status).to.equal(401);
+}

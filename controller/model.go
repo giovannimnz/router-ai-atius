@@ -384,6 +384,11 @@ func ListClaudeModels(c *gin.Context) {
 		lastID = models[len(models)-1].ID
 	}
 
+	// Add deprecation headers
+	c.Header("Deprecation", "true")
+	c.Header("Sunset", "Sat, 01 Jan 2027 00:00:00 GMT")
+	c.Header("Link", `</v1/models?api_format=anthropic>; rel="successor-version"`)
+
 	c.JSON(http.StatusOK, dto.AnthropicModelsListResponse{
 		Data:    models,
 		HasMore: hasMore,

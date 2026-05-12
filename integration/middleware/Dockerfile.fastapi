@@ -11,6 +11,22 @@ RUN pip install --no-cache-dir \
 # Copy middleware code
 COPY model_detailed_fastapi.py /app/model_detailed_fastapi.py
 
+# Copy curated docs (OpenAPI spec)
+COPY docs/ /app/docs/
+
+# Copy static files (Scalar HTML page)
+COPY static/ /app/static/
+
+# Environment variables
+ENV OPENAPI_SPEC_PATH=/app/docs/openapi.json
+ENV STATIC_FILES_PATH=/app/static
+ENV DOCS_USERNAME=admin
+ENV DOCS_PASSWORD=atius2024
+ENV NEW_API_INTERNAL_URL=http://new-api:3000
+ENV NEWAPI_BACKEND_URL=http://new-api:3000
+ENV MIDDLEWARE_PORT=3001
+ENV BACKEND_TIMEOUT=60
+
 # Expose port
 EXPOSE 3001
 

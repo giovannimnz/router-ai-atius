@@ -34,6 +34,7 @@ services:
     environment:
       - MIDDLEWARE_PORT=3001
       - NEWAPI_BACKEND_URL=http://new-api:3000
+      - NEW_API_INTERNAL_URL=http://new-api:3000
       - BACKEND_TIMEOUT=60
     networks:
       - newapi-internal

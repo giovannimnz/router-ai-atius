@@ -6,13 +6,6 @@ High-performance async proxy that intercepts GET /v1/models and returns enriched
 metadata for DeepSeek and MiniMax models, while transparently proxying all other
 requests to the NewAPI backend.
 
-Advantages over BaseHTTPRequestHandler:
-- Async/await for concurrent request handling
-- Uvicorn running with multiple workers
-- Proper connection pooling
-- Better error handling
-- Production-ready
-
 Usage:
     uvicorn model_detailed_fastapi:app --host 0.0.0.0 --port 3001 --workers 4
 """
@@ -22,16 +15,137 @@ import os
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi import FastAPI, Request, HTTPException, Depends, Cookie
+from fastapi.responses import JSONResponse, Response, RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 
+# ==============================================================================
 # Configuration
+# ==============================================================================
 PORT = int(os.environ.get("MIDDLEWARE_PORT", 3001))
 BACKEND_URL = os.environ.get("NEWAPI_BACKEND_URL", "http://localhost:3000")
 TIMEOUT = int(os.environ.get("BACKEND_TIMEOUT", 60))
 
-# DeepSeek V4 model metadata
+# Docs auth credentials (fallback if session auth fails)
+DOCS_USERNAME = os.environ.get("DOCS_USERNAME", "admin")
+DOCS_PASSWORD = os.environ.get("DOCS_PASSWORD", "atius2024")
+
+# Path to curated OpenAPI spec
+OPENAPI_SPEC_PATH = os.environ.get("OPENAPI_SPEC_PATH", "/app/docs/openapi.json")
+
+# Path to static files (Scalar docs HTML)
+STATIC_PATH = os.environ.get("STATIC_FILES_PATH", "/app/static")
+
+# New-API internal URL for session validation
+NEW_API_INTERNAL = os.environ.get("NEW_API_INTERNAL_URL", "http://localhost:3000")
+
+# ==============================================================================
+# HTTP Client (shared)
+# ==============================================================================
+http_client: httpx.AsyncClient | None = None
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    global http_client
+    if http_client is None or http_client.is_closed:
+        http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(TIMEOUT),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+            follow_redirects=False,  # Don't follow redirects - we handle them
+        )
+    return http_client
+
+
+# ==============================================================================
+# Session Cookie Auth (NEW - replaces Basic Auth for docs)
+# ==============================================================================
+async def validate_session_cookie(session_cookie: str | None) -> bool:
+    """Validate session cookie by calling New-API /api/user/self endpoint."""
+    if not session_cookie:
+        return False
+    
+    client = await get_http_client()
+    try:
+        # Forward cookie to New-API backend for validation
+        resp = await client.get(
+            f"{NEW_API_INTERNAL}/api/user/self",
+            headers={"Cookie": f"session={session_cookie}"},
+            timeout=5.0,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def verify_session_or_basic_auth(
+    session_cookie: str | None = Cookie(None),
+) -> str:
+    """
+    Verify user via session cookie (New-API dashboard login) OR Basic Auth (fallback).
+    
+    Session cookie takes priority — if valid, return "session".
+    If session invalid/missing, fall back to Basic Auth.
+    If neither works, raise 401.
+    """
+    import asyncio
+    
+    # Try session cookie first (async)
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Check if we can use session auth
+    if session_cookie:
+        # Run sync check in sync context
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                asyncio.run,
+                validate_session_cookie(session_cookie)
+            )
+            try:
+                is_valid = future.result(timeout=5)
+            except Exception:
+                is_valid = False
+        
+        if is_valid:
+            return "session"
+    
+    # Fall back to Basic Auth (not async-compatible in this context)
+    # Basic Auth is handled separately in each endpoint that needs it
+    return "basic"
+
+
+# ==============================================================================
+# Basic Auth (kept for /docs/json and other API endpoints)
+# ==============================================================================
+security = HTTPBasic(auto_error=False)
+
+
+def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    """Verify Basic Auth credentials. Raises 401 if invalid or missing."""
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    if credentials.username != DOCS_USERNAME or credentials.password != DOCS_PASSWORD:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+# ==============================================================================
+# Model Metadata
+# ==============================================================================
 DEEPSEEK_METADATA = {
     "deepseek-v4-flash": {
         "name": "DeepSeek V4 Flash",
@@ -50,13 +164,13 @@ DEEPSEEK_METADATA = {
         "pricing": {
             "prompt": "0.000000435",
             "completion": "0.00000087",
-            "prompt_cache_hit": "0.0000000435",
+            "prompt_cache_hit": "0.000000043",
         },
     },
 }
 
-# MiniMax model metadata
 MINIMAX_METADATA = {
+    # M2.7 variants
     "MiniMax-M2.7": {
         "name": "MiniMax M2.7",
         "context_length": 245760,
@@ -79,6 +193,18 @@ MINIMAX_METADATA = {
             "prompt_cache_miss": "0.000000375",
         },
     },
+    "MiniMax-M2.7-hs": {
+        "name": "MiniMax M2.7 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "prompt_cache_hit": "0.00000006",
+            "prompt_cache_miss": "0.000000375",
+        },
+    },
+    # M2.5 variants
     "MiniMax-M2.5": {
         "name": "MiniMax M2.5",
         "context_length": 245760,
@@ -101,38 +227,141 @@ MINIMAX_METADATA = {
             "prompt_cache_miss": "0.000000375",
         },
     },
+    "MiniMax-M2.5-hs": {
+        "name": "MiniMax M2.5 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "prompt_cache_hit": "0.00000003",
+            "prompt_cache_miss": "0.000000375",
+        },
+    },
+    # M2.1 variants
+    "MiniMax-M2.1": {
+        "name": "MiniMax M2.1",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "prompt_cache_hit": "0.00000003",
+            "prompt_cache_miss": "0.000000375",
+        },
+    },
+    "MiniMax-M2.1-highspeed": {
+        "name": "MiniMax M2.1 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "prompt_cache_hit": "0.00000003",
+            "prompt_cache_miss": "0.000000375",
+        },
+    },
+    "MiniMax-M2.1-hs": {
+        "name": "MiniMax M2.1 Highspeed",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "prompt_cache_hit": "0.00000003",
+            "prompt_cache_miss": "0.000000375",
+        },
+    },
 }
 
-# Combined metadata lookup
 ALL_MODEL_METADATA = {**DEEPSEEK_METADATA, **MINIMAX_METADATA}
-
-# Standard created timestamp (more recent than NewAPI's hard-coded 1626777600)
 MODEL_CREATED_TS = 1735689600  # 2025-01-01
 
-# HTTP Client with connection pooling
-http_client: httpx.AsyncClient | None = None
+# ==============================================================================
+# Global state
+# ==============================================================================
+_curated_openapi_spec: dict | None = None
 
 
-async def get_http_client() -> httpx.AsyncClient:
-    global http_client
-    if http_client is None or http_client.is_closed:
-        http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(TIMEOUT),
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
-            follow_redirects=True,
-        )
-    return http_client
+def load_curated_spec() -> dict | None:
+    """Load the curated OpenAPI spec from file."""
+    global _curated_openapi_spec
+    if _curated_openapi_spec is not None:
+        return _curated_openapi_spec
+    if os.path.exists(OPENAPI_SPEC_PATH):
+        try:
+            with open(OPENAPI_SPEC_PATH, "r") as f:
+                _curated_openapi_spec = json.load(f)
+            print(f"[middleware] Loaded curated OpenAPI spec from {OPENAPI_SPEC_PATH}")
+            return _curated_openapi_spec
+        except Exception as e:
+            print(f"[middleware] WARNING: Failed to load curated spec: {e}")
+            return None
+    print(f"[middleware] WARNING: Curated spec not found at {OPENAPI_SPEC_PATH}")
+    return None
+
+
+def enrich_models_response_anthropic(upstream_data: dict) -> dict:
+    """Transform abilities data to Anthropic models list format.
+
+    upstream_data comes from /internal/v1/models which returns abilities with channel_type.
+    channel_type=0 (OpenAI), channel_type=14 (Anthropic).
+    Only models with channel_type=14 are returned for Anthropic format.
+    """
+    abilities = upstream_data.get("data", [])
+    anthropic_channel_type = 14
+
+    # Get metadata for enrichment
+    metadata_map = {
+        "MiniMax-M2.7": {"context_length": 1000000, "input_price": 0.3, "output_price": 1.2},
+        "MiniMax-M2.7-hs": {"context_length": 1000000, "input_price": 0.3, "output_price": 1.2},
+        "MiniMax-M2.7-highspeed": {"context_length": 1000000, "input_price": 0.3, "output_price": 1.2},
+        "MiniMax-M2.5": {"context_length": 1000000, "input_price": 0.2, "output_price": 0.8},
+        "MiniMax-M2.5-hs": {"context_length": 1000000, "input_price": 0.2, "output_price": 0.8},
+        "MiniMax-M2.5-highspeed": {"context_length": 1000000, "input_price": 0.2, "output_price": 0.8},
+        "MiniMax-M2.1": {"context_length": 1000000, "input_price": 0.1, "output_price": 0.5},
+        "MiniMax-M2.1-hs": {"context_length": 1000000, "input_price": 0.1, "output_price": 0.5},
+        "MiniMax-M2.1-highspeed": {"context_length": 1000000, "input_price": 0.1, "output_price": 0.5},
+    }
+
+    # Collect unique models that have Anthropic channel (type=14)
+    models_seen = set()
+    anthropic_models = []
+
+    for ability in abilities:
+        channel_type = ability.get("channel_type", 0)
+        if channel_type != anthropic_channel_type:
+            continue
+        model_name = ability.get("model", "")
+        if model_name in models_seen:
+            continue
+        models_seen.add(model_name)
+
+        meta = metadata_map.get(model_name, {})
+        anthropic_models.append({
+            "id": model_name,
+            "created_at": "2021-07-20T10:40:00Z",
+            "display_name": model_name,
+            "type": "model",
+            "api_format": "anthropic",
+            "context_length": meta.get("context_length", 1000000),
+            "input_price": meta.get("input_price", 0),
+            "output_price": meta.get("output_price", 0),
+        })
+
+    return {
+        "data": anthropic_models,
+        "has_more": False,
+    }
 
 
 async def enrich_models_response(upstream_data: dict) -> dict:
-    """Enrich the /v1/models response with metadata for DeepSeek and MiniMax models."""
+    """Enrich /v1/models response with metadata for DeepSeek and MiniMax."""
     enriched = []
     for model in upstream_data.get("data", []):
         model_id = model.get("id", "")
         metadata = ALL_MODEL_METADATA.get(model_id)
-
         if metadata:
-            # Determine owned_by from model id prefix
             if model_id.startswith("MiniMax"):
                 owned_by = "minimax"
             elif model_id.startswith("deepseek"):
@@ -147,48 +376,55 @@ async def enrich_models_response(upstream_data: dict) -> dict:
                 "owned_by": owned_by,
                 "name": metadata["name"],
                 "context_length": metadata["context_length"],
-                "top_provider": {
-                    "max_completion_tokens": metadata["max_completion_tokens"],
-                },
+                "top_provider": {"max_completion_tokens": metadata["max_completion_tokens"]},
                 "pricing": metadata["pricing"],
             }
-            # Preserve any additional fields from upstream
             if "supported_endpoint_types" in model:
                 enriched_model["supported_endpoint_types"] = model["supported_endpoint_types"]
             enriched.append(enriched_model)
         else:
-            # Non-enriched models: pass through unchanged
             enriched.append(model)
-
-    return {
-        "data": enriched,
-        "object": "list",
-        "success": True,
-    }
+    return {"data": enriched, "object": "list", "success": True}
 
 
+# ==============================================================================
+# Lifespan
+# ==============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    global http_client
     print(f"[middleware] Starting FastAPI Model Enrichment Middleware")
-    print(f"[middleware] Backend: {BACKEND_URL}")
-    print(f"[middleware] Timeout: {TIMEOUT}s")
+    print(f"[middleware] Backend: {BACKEND_URL}, Timeout: {TIMEOUT}s")
+    print(f"[middleware] Session Auth: checking New-API at {NEW_API_INTERNAL}")
+    print(f"[middleware] OpenAPI spec path: {OPENAPI_SPEC_PATH}")
     all_models = list(DEEPSEEK_METADATA.keys()) + list(MINIMAX_METADATA.keys())
     print(f"[middleware] Enriching models: {', '.join(all_models)}")
+    load_curated_spec()
+    
+    # Initialize HTTP client
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(TIMEOUT),
+        limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+        follow_redirects=False,
+    )
+
     yield
-    # Shutdown
     if http_client and not http_client.is_closed:
         await http_client.aclose()
 
 
+# ==============================================================================
+# App init
+# ==============================================================================
 app = FastAPI(
-    title="Model Metadata Enrichment Middleware",
-    description="FastAPI middleware for enriching model metadata",
-    version="2.0.0",
+    title="Atius AI Router API",
+    description="Unified AI API Gateway — aggregates MiniMax, DeepSeek, and 40+ providers behind a single OpenAI/Anthropic-compatible API.",
+    version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,  # Disable built-in Swagger UI — we serve custom Scalar page
+    redoc_url=None,
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -198,15 +434,15 @@ app.add_middleware(
 )
 
 
-# IMPORTANT: Define specific routes BEFORE catch-all proxy route
-
+# ==============================================================================
+# Route handlers (defined AFTER app creation)
+# ==============================================================================
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint - must be before catch-all."""
+    """Public health check — tests backend connectivity."""
     client = await get_http_client()
     try:
-        # Test backend connectivity
         resp = await client.get(f"{BACKEND_URL}/v1/models", timeout=5)
         if resp.status_code == 200:
             return {"status": "healthy", "backend": "connected"}
@@ -217,31 +453,43 @@ async def health_check():
 
 @app.get("/v1/models")
 async def get_models(request: Request):
-    """Intercept /v1/models, enrich, and return."""
+    """Intercept /v1/models, optionally return Anthropic format.
+    
+    Query params:
+        api_format: 'openai' (default) or 'anthropic'
+    """
     client = await get_http_client()
-    
-    # Forward authorization header
     headers = {}
-    auth = request.headers.get("authorization")
-    if auth:
-        headers["authorization"] = auth
-    
-    try:
-        response = await client.get(f"{BACKEND_URL}/v1/models", headers=headers)
-        if response.status_code != 200:
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                media_type="application/json",
-            )
+    if request.headers.get("authorization"):
+        headers["authorization"] = request.headers["authorization"]
 
-        try:
+    api_format = request.query_params.get("api_format", "openai")
+
+    try:
+        if api_format == "anthropic":
+            # Call internal Go endpoint to get abilities with channel_type
+            response = await client.get(
+                f"{BACKEND_URL}/internal/v1/models",
+                headers=headers,
+                timeout=10.0
+            )
+            if response.status_code != 200:
+                return Response(content=response.content, status_code=response.status_code, media_type="application/json")
             data = response.json()
-            enriched = await enrich_models_response(data)
-            return JSONResponse(content=enriched, headers={"X-Model-Metadata-Enriched": "true"})
-        except json.JSONDecodeError as e:
-            print(f"[middleware] Failed to parse models response: {e}")
-            return Response(content=response.content, status_code=200, media_type="application/json")
+            enriched = enrich_models_response_anthropic(data)
+            return JSONResponse(content=enriched)
+        else:
+            # OpenAI format — call original /v1/models
+            response = await client.get(f"{BACKEND_URL}/v1/models", headers=headers)
+            if response.status_code != 200:
+                return Response(content=response.content, status_code=response.status_code, media_type="application/json")
+            try:
+                data = response.json()
+                enriched = await enrich_models_response(data)
+                return JSONResponse(content=enriched, headers={"X-Model-Metadata-Enriched": "true"})
+            except json.JSONDecodeError as e:
+                print(f"[middleware] Failed to parse models response: {e}")
+                return Response(content=response.content, status_code=200, media_type="application/json")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Backend timeout")
     except httpx.RequestError as e:
@@ -250,41 +498,160 @@ async def get_models(request: Request):
 
 @app.get("/models")
 async def get_models_legacy(request: Request):
-    """Legacy /models endpoint (without /v1 prefix)."""
+    """Legacy /models endpoint (without /v1 prefix). Public (no auth)."""
     return await get_models(request)
 
+
+# ==============================================================================
+# Session-aware docs endpoints (NEW - replaces Basic Auth only)
+# ==============================================================================
+
+def get_session_cookie(request: Request) -> str | None:
+    """Extract session cookie from request."""
+    # Gin sessions use cookie named "session" by default
+    cookies = request.headers.get("cookie", "")
+    for cookie in cookies.split(";"):
+        cookie = cookie.strip()
+        if cookie.startswith("session="):
+            return cookie[len("session="):]
+    return None
+
+
+def make_unauthenticated_redirect(request: Request, redirect_path: str = "/sign-in") -> RedirectResponse:
+    """Create redirect to sign-in page with return URL."""
+    current_path = str(request.url.path)
+    sign_in_url = f"{redirect_path}?redirect={current_path}"
+    return RedirectResponse(url=sign_in_url, status_code=302)
+
+
+@app.get("/docs/", include_in_schema=False)
+async def get_docs_index(request: Request):
+    """
+    Serve custom Scalar API Reference page.
+    
+    Auth: Session cookie (New-API dashboard) OR Basic Auth fallback.
+    If neither valid, redirect to /sign-in.
+    """
+    session_cookie = get_session_cookie(request)
+    
+    # Try session validation first
+    if session_cookie:
+        is_valid = await validate_session_cookie(session_cookie)
+        if is_valid:
+            # Session valid - serve docs
+            html_path = os.path.join(STATIC_PATH, "index.html")
+            if os.path.exists(html_path):
+                with open(html_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                return HTMLResponse(content=content, status_code=200)
+            raise HTTPException(status_code=404, detail="Docs page not found")
+    
+    # Fall back to Basic Auth
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Basic "):
+        import base64
+        try:
+            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = creds.split(":", 1)
+            if username == DOCS_USERNAME and password == DOCS_PASSWORD:
+                html_path = os.path.join(STATIC_PATH, "index.html")
+                if os.path.exists(html_path):
+                    with open(html_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    return HTMLResponse(content=content, status_code=200)
+                raise HTTPException(status_code=404, detail="Docs page not found")
+        except Exception:
+            pass
+    
+    # Neither session nor Basic Auth valid - redirect to sign-in
+    return make_unauthenticated_redirect(request)
+
+
+@app.get("/docs", include_in_schema=False)
+async def get_docs(request: Request):
+    """Redirect /docs → /docs/."""
+    return RedirectResponse(url="/docs/", status_code=302)
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def get_openapi_json(request: Request):
+    """
+    Serve curated OpenAPI spec.
+    
+    Auth: Session cookie OR Basic Auth.
+    """
+    session_cookie = get_session_cookie(request)
+    
+    # Try session validation first
+    if session_cookie:
+        is_valid = await validate_session_cookie(session_cookie)
+        if is_valid:
+            spec = load_curated_spec()
+            if spec is None:
+                raise HTTPException(status_code=404, detail="OpenAPI spec not found")
+            return JSONResponse(content=spec)
+    
+    # Fall back to Basic Auth
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Basic "):
+        import base64
+        try:
+            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = creds.split(":", 1)
+            if username == DOCS_USERNAME and password == DOCS_PASSWORD:
+                spec = load_curated_spec()
+                if spec is None:
+                    raise HTTPException(status_code=404, detail="OpenAPI spec not found")
+                return JSONResponse(content=spec)
+        except Exception:
+            pass
+    
+    # Not authenticated
+    raise HTTPException(
+        status_code=401,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Basic"},
+    )
+
+
+@app.get("/docs/json", include_in_schema=False)
+async def get_docs_json(request: Request):
+    """Alias /docs/json → curated OpenAPI spec — protected by session or Basic Auth."""
+    return await get_openapi_json(request)
+
+
+@app.get("/docs.json", include_in_schema=False)
+async def get_docs_json2(request: Request):
+    """Alias /docs.json → curated OpenAPI spec — protected by session or Basic Auth."""
+    return await get_openapi_json(request)
+
+
+# ==============================================================================
+# Catch-all proxy (MUST be last)
+# ==============================================================================
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_request(path: str, request: Request):
     """Proxy all other requests to the backend."""
     client = await get_http_client()
-
-    # Get request body
     body = await request.body()
-
-    # Build headers to forward - filter problematic headers
     headers = {}
-    skip_headers = {"host", "connection", "content-length", "transfer-encoding", "content-encoding"}
+    skip = {"host", "connection", "content-length", "transfer-encoding", "content-encoding"}
     for key, value in request.headers.items():
-        if key.lower() not in skip_headers:
+        if key.lower() not in skip:
             headers[key] = value
-
     try:
-        backend_url = f"{BACKEND_URL}/{path}"
         response = await client.request(
             method=request.method,
-            url=backend_url,
+            url=f"{BACKEND_URL}/{path}",
             headers=headers,
             content=body if body else None,
         )
-
-        # Build response headers - exclude problematic ones
         response_headers = {}
-        skip_response_headers = {"transfer-encoding", "content-encoding", "content-length"}
+        skip_resp = {"transfer-encoding", "content-encoding", "content-length"}
         for key, value in response.headers.items():
-            if key.lower() not in skip_response_headers:
+            if key.lower() not in skip_resp:
                 response_headers[key] = value
-
         return Response(
             content=response.content,
             status_code=response.status_code,

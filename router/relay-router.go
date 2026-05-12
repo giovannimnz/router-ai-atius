@@ -92,6 +92,13 @@ func SetRelayRouter(router *gin.Engine) {
 			claudeModelsRouter.GET("/models", controller.ListClaudeModels)
 		}
 
+		// Internal API for FastAPI middleware (no auth required)
+		internalRouter := router.Group("/internal/v1")
+		internalRouter.Use(middleware.RouteTag("internal"))
+		{
+			internalRouter.GET("/models", controller.ListAllModelsWithChannel)
+		}
+
 		// claude related routes
 		httpRouter.POST("/messages", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatClaude)

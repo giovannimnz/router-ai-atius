@@ -11,11 +11,27 @@ type OpenAIModels struct {
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
 }
 
+// AnthropicModelsListResponse is the response shape for GET /v1/claude/models
+type AnthropicModelsListResponse struct {
+	Data     []AnthropicModel `json:"data"`
+	HasMore  bool             `json:"has_more"`
+	FirstID  string           `json:"first_id,omitempty"`
+	LastID   string           `json:"last_id,omitempty"`
+}
+
 type AnthropicModel struct {
-	ID          string `json:"id"`
-	CreatedAt   string `json:"created_at"`
-	DisplayName string `json:"display_name"`
-	Type        string `json:"type"`
+	ID          string                   `json:"id"`
+	CreatedAt   string                   `json:"created_at"`
+	DisplayName string                   `json:"display_name"`
+	Type        string                   `json:"type"`
+	EndOfLifeAt string                   `json:"end_of_life_at,omitempty"`
+	Information *AnthropicModelInfo      `json:"information,omitempty"`
+}
+
+type AnthropicModelInfo struct {
+	Version   string `json:"version,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Tier      string `json:"tier,omitempty"`
 }
 
 type GeminiModel struct {

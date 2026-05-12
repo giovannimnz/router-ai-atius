@@ -84,6 +84,14 @@ func SetRelayRouter(router *gin.Engine) {
 		httpRouter := relayV1Router.Group("")
 		httpRouter.Use(middleware.Distribute())
 
+		// claude compatible models listing (all channels with type=14)
+		claudeModelsRouter := router.Group("/v1/claude")
+		claudeModelsRouter.Use(middleware.RouteTag("relay"))
+		claudeModelsRouter.Use(middleware.TokenAuth())
+		{
+			claudeModelsRouter.GET("/models", controller.ListClaudeModels)
+		}
+
 		// claude related routes
 		httpRouter.POST("/messages", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatClaude)

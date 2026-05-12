@@ -337,6 +337,11 @@ func (token *Token) GetModelLimits() []string {
 	if token.ModelLimits == "" {
 		return []string{}
 	}
+	// Guard against "{}" or other JSON artifacts stored as empty limits
+	trimmed := strings.TrimSpace(token.ModelLimits)
+	if trimmed == "" || trimmed == "{}" || trimmed == "[]" {
+		return []string{}
+	}
 	return strings.Split(token.ModelLimits, ",")
 }
 

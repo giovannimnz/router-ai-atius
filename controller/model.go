@@ -285,3 +285,105 @@ func RetrieveModel(c *gin.Context, modelType int) {
 		})
 	}
 }
+
+// ListClaudeModels returns all Anthropic-compatible models (channels with type=14)
+// GET /v1/claude/models
+func ListClaudeModels(c *gin.Context) {
+	userId := c.GetInt("id")
+	userGroup := ""
+	groupSet := make(map[string]bool)
+
+	// Get user group from token
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	if tokenGroup != "" && tokenGroup != "auto" {
+		groupSet[tokenGroup] = true
+	} else {
+		// Get user's default group
+		ug, err := model.GetUserGroup(userId, false)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "get user group failed"})
+			return
+		}
+		groupSet[ug] = true
+	}
+
+	// Handle auto group
+	if tokenGroup == "auto" {
+		autoGroups := service.GetUserAutoGroup(userGroup)
+		groupSet = make(map[string]bool)
+		for _, g := range autoGroups {
+			groupSet[g] = true
+		}
+	}
+
+	// Collect all groups
+	var groups []string
+	for g := range groupSet {
+		groups = append(groups, g)
+	}
+	if len(groups) == 0 {
+		groups = []string{"default"}
+	}
+
+	// Query all abilities for channels with type=14 (Anthropic)
+	var abilities []model.AbilityWithChannel
+	err := model.DB.Table("abilities").
+		Select("abilities.*, channels.type as channel_type").
+		Joins("left join channels on abilities.channel_id = channels.id").
+		Where("channels.status = ? AND channels.type = ? AND abilities.enabled = ?",
+			common.ChannelStatusEnabled, constant.ChannelTypeAnthropic, true).
+		Where("abilities.group IN ?", groups).
+		Find(&abilities).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "query abilities failed"})
+		return
+	}
+
+	// Collect unique model names
+	modelSet := make(map[string]bool)
+	for _, a := range abilities {
+		modelSet[a.Model] = true
+	}
+
+	// Apply token model limits if set
+	modelLimitEnabled := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
+	if modelLimitEnabled {
+		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
+		if ok {
+			limits := s.(map[string]bool)
+			filtered := make(map[string]bool)
+			for m := range modelSet {
+				if limits[m] {
+					filtered[m] = true
+				}
+			}
+			modelSet = filtered
+		}
+	}
+
+	// Build Anthropic format response
+	var models []dto.AnthropicModel
+	for modelName := range modelSet {
+		models = append(models, dto.AnthropicModel{
+			ID:          modelName,
+			CreatedAt:   time.Unix(1626777600, 0).UTC().Format(time.RFC3339),
+			DisplayName: modelName,
+			Type:        "model",
+		})
+	}
+
+	hasMore := false
+	firstID := ""
+	lastID := ""
+	if len(models) > 0 {
+		firstID = models[0].ID
+		lastID = models[len(models)-1].ID
+	}
+
+	c.JSON(http.StatusOK, dto.AnthropicModelsListResponse{
+		Data:    models,
+		HasMore: hasMore,
+		FirstID: firstID,
+		LastID:  lastID,
+	})
+}

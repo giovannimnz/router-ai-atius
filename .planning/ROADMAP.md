@@ -146,11 +146,39 @@
 
 ---
 
-## v1.5 — Planning
+## v1.5 — API Unification & Model Listing ✓
 
-Next milestone TBD. Possible directions:
-- v1.5: Monitoring & Health Checks (logs centralizados, métricas, alerting)
-- v1.5: Additional Providers (Gemini, Claude via Anthropic API)
-- v1.5: Rate Limiting & Quota Management (monitoramento de uso por token)
-- v1.5: Failover & HA (múltiplas instâncias, load balancing)
-- v1.5: Bruno Collection com modelos -hs (atualizar testes para cobrir aliases)
+### Phase 1: Anthropic Channels Setup ✓
+**slug:** `router-anthropic-channels`
+
+- Session timeout 12h (MaxAge: 43200)
+- Canais type=14 (Anthropic) criados: id=3 (MiniMax), id=4 (MiniMax-Highspeed)
+- Relay /v1/messages funcionando (Claude → OpenAI conversion)
+- Abilities populadas para M2.1, M2.5, M2.7 nos canais Anthropic
+
+### Phase 2: /v1/claude/models Endpoint ✓
+**slug:** `claude-models-endpoint`
+
+- `GET /v1/claude/models` adicionado
+- Fix `IsModelLimitsEnabled()` em middleware/auth.go
+- Bruno test collection criada (3/3 passing)
+
+### Phase 3: Model Unification via Middleware [PLANNING]
+**slug:** `model-unification`
+
+- Unificar `/v1/models` com `?api_format=openai|anthropic`
+- FastAPI como entry point para listagem (Option A)
+- Go vira pure relay (downstream)
+- Deprecar `/v1/claude/models` com headers Sunset
+- Internal endpoint `/internal/v1/models` no Go
+
+**Blocked by:** Phase 2 completion
+
+---
+
+## v1.6 — Future
+
+- Monitoring & Health Checks (logs centralizados, métricas, alerting)
+- Additional Providers (Gemini, Claude via Anthropic API)
+- Rate Limiting & Quota Management
+- Failover & HA (múltiplas instâncias, load balancing)

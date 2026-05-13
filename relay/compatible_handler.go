@@ -95,6 +95,31 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 
 	var requestBody io.Reader
 
+	// Clamp max_tokens for MiniMax highspeed models BEFORE PassThrough branch.
+	// This ensures the clamp is applied even when PassThroughBodyEnabled skips ConvertOpenAIRequest.
+	// Applies to any channel when the upstream model is MiniMax highspeed (checked by model name suffix).
+	modelNameLower := strings.ToLower(info.UpstreamModelName)
+	if strings.HasSuffix(modelNameLower, "-hs") || strings.HasSuffix(modelNameLower, "-highspeed") {
+		maxTokensLimit := uint(196608)
+		maxTokens := lo.FromPtrOr(request.MaxTokens, uint(0))
+		maxCompletionTokens := lo.FromPtrOr(request.MaxCompletionTokens, uint(0))
+		effectiveMax := maxTokens
+		if maxCompletionTokens > 0 {
+			effectiveMax = maxCompletionTokens
+		}
+		if effectiveMax > maxTokensLimit {
+			clamped := maxTokensLimit
+			if maxCompletionTokens > 0 {
+				request.MaxCompletionTokens = &clamped
+			} else {
+				request.MaxTokens = &clamped
+			}
+			if common.DebugEnabled {
+				fmt.Printf("[minimax-max-tokens-clamp] clamped to %d (was %d)\n", maxTokensLimit, effectiveMax)
+			}
+		}
+	}
+
 	if passThroughGlobal || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {

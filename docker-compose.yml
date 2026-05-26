@@ -9,6 +9,8 @@ services:
       - SQL_DSN=postgres://admin:Bkfigt!546@db-newapi:5432/newapi?sslmode=disable
       - TZ=America/Sao_Paulo
       - LANG=pt_BR.UTF-8
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TRUST_PROXY=true
     env_file:
       - .env
     volumes:

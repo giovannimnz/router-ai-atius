@@ -180,8 +180,8 @@ func main() {
 		Path:     "/",
 		MaxAge:   2592000, // 30 days
 		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   true, // Set via Apache proxy (which runs HTTPS) — browser will only send on HTTPS
+		SameSite: http.SameSiteNoneMode, // Must be None to allow cookies on cross-origin API POST requests
 	})
 	server.Use(sessions.Sessions("session", store))
 

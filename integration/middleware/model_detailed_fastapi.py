@@ -12,6 +12,7 @@ Usage:
 
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 
 import httpx
@@ -20,6 +21,162 @@ from fastapi.responses import JSONResponse, Response, RedirectResponse, HTMLResp
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
+
+
+# ==============================================================================
+# Thinking Block Stripper (MiniMax reasoning output cleaner)
+# ==============================================================================
+
+THINK_CLOSE = "</final>"
+THINK_OPEN = "<think>"
+
+# CJK character pattern — matches Chinese/Japanese/Korean characters via Unicode ranges.
+# Covers: CJK Unified Ideographs, CJK Extension A, CJK Symbols/Punctuation,
+# Halfwidth/Fullwidth Forms. Does NOT cover Hiragana/Katakana/Hangul.
+# Applied as secondary defense-in-depth filter alongside the router (Go) StripCJK.
+CJK_PATTERN = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]")
+
+
+def strip_thinking_from_text(text: str) -> str:
+    """
+    Remove MiniMax thinking/reasoning blocks from text content.
+
+    MiniMax-M2.7-hs sometimes includes <think> reasoning tags in its response text.
+    These tags wrap internal reasoning that should NOT be exposed to clients that
+    just want the final answer.
+
+    This function:
+    1. Finds the LAST closing </think> tag (the one that closes the outermost/actual think block)
+    2. Returns everything AFTER that tag (the real answer)
+    3. If no think block found, returns the original text unchanged
+    """
+    last_close = text.rfind(THINK_CLOSE)
+    if last_close == -1:
+        return text  # No thinking block — return as-is
+
+    # Everything after the last </think>
+    result = text[last_close + len(THINK_CLOSE):].strip("\n\r ")
+    return result
+
+
+def strip_cjk_from_text(text: str) -> str:
+    """
+    Remove all CJK (Chinese/Japanese/Korean) characters from text.
+
+    Secondary defense-in-depth filter. The router (new-api Go) also applies
+    StripCJK via ChannelSettings, but the middleware layer catches any CJK
+    characters that slip through upstream or bypass the router's relay path.
+
+    MiniMax-M2.7-hs can occasionally generate CJK tokens in non-CJK contexts
+    due to BBPE tokenizer quirks with temperature sampling.
+    """
+    return CJK_PATTERN.sub("", text)
+
+
+def clean_code_fences(text: str) -> str:
+    """
+    Strip leading/trailing markdown code fences from text.
+    Handles: ```xml ... ``` or ```python ... ``` or ``` ... ```
+    Also strips common explanatory prefixes the model adds after the think block.
+    """
+    # Strip leading code fence with optional language (```xml\n or ```python\n or ```\n)
+    text = re.sub(r'^\s*```[a-zA-Z]*\s*\n?', '\n', text)
+    # Strip trailing code fence
+    text = re.sub(r'\n?\s*```\s*$', '\n', text)
+    return text.strip()
+
+
+def extract_xml_block(text: str) -> str | None:
+    """
+    Try to extract a clean XML block from text.
+    Returns the XML content if found, None otherwise.
+    Handles:
+      <cores>...</cores>
+      <root><child>...</child></root>
+      and other XML fragments
+    """
+    # Match XML tags (simplified — not a full parser)
+    xml_match = re.search(r'(<[a-zA-Z_][\w\-.]*(?:\s+[^>]*)?>.*?</[a-zA-Z_][\w\-.]*>|\n<[a-zA-Z_][\w\-.]*\s*/>)', text, re.DOTALL)
+    if xml_match:
+        return xml_match.group(1).strip()
+    return None
+
+
+def strip_thinking_blocks(body: bytes) -> bytes:
+    """
+    Process a JSON response body from /v1/messages (Anthropic) or /v1/chat/completions (OpenAI).
+    Removes <think> blocks from text content blocks.
+
+    Returns the (possibly modified) body bytes, or the original if not applicable.
+    """
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return body
+
+    if not isinstance(data, dict):
+        return body
+
+    modified = False
+
+    # --- Anthropic /v1/messages format ---
+    # {"content": [{"type": "text", "text": "..."}]}
+    content = data.get("content")
+    if isinstance(content, list):
+        new_content = []
+        for block in content:
+            if not isinstance(block, dict):
+                new_content.append(block)
+                continue
+            if block.get("type") != "text":
+                new_content.append(block)
+                continue
+            text = block.get("text", "")
+            if THINK_OPEN in text:
+                text = strip_thinking_from_text(text)
+                text = clean_code_fences(text)
+                # Strip explanatory prefix before XML tag only (not code fences — those are content)
+                # e.g. "Aqui está:" <cores> but NOT "Here's the code:" ```python
+                if re.search(r"^[A-Za-z\s\'\"_]+[:\-]?\s*<", text):
+                    text = re.sub(r"^[A-Za-z\s\'\"_]+[:\-]?\s*", "", text.strip())
+            # Always strip CJK — even when there's no think block, CJK chars may appear
+            text = strip_cjk_from_text(text)
+            block = dict(block)
+            block["text"] = text
+            modified = True
+            new_content.append(block)
+        if modified:
+            data["content"] = new_content
+        return json.dumps(data).encode("utf-8")
+
+    # --- OpenAI /v1/chat/completions format ---
+    # {"choices": [{"message": {"content": "..."}}]}
+    choices = data.get("choices")
+    if isinstance(choices, list):
+        for i, choice in enumerate(choices):
+            if not isinstance(choice, dict):
+                continue
+            message = choice.get("message", {})
+            if not isinstance(message, dict):
+                continue
+            content_text = message.get("content", "")
+            if not isinstance(content_text, str):
+                continue
+            # Always strip CJK — even when there's no think block, CJK chars may appear
+            if THINK_OPEN in content_text:
+                content_text = strip_thinking_from_text(content_text)
+                content_text = clean_code_fences(content_text)
+                # Strip explanatory prefix before XML tag
+                if re.search(r"^[A-Za-z\s\'\"_]+[:\-]?\s*<", content_text):
+                    content_text = re.sub(r"^[A-Za-z\s\'\"_]+[:\-]?\s*", "", content_text.strip())
+            content_text = strip_cjk_from_text(content_text)  # always strip CJK
+            data["choices"][i]["message"]["content"] = content_text
+            modified = True
+        if modified:
+            return json.dumps(data).encode("utf-8")
+
+    return body
+
 
 # ==============================================================================
 # Configuration
@@ -39,7 +196,10 @@ OPENAPI_SPEC_PATH = os.environ.get("OPENAPI_SPEC_PATH", "/app/docs/openapi.json"
 STATIC_PATH = os.environ.get("STATIC_FILES_PATH", "/app/static")
 
 # New-API internal URL for session validation
-NEW_API_INTERNAL = os.environ.get("NEW_API_INTERNAL_URL", "http://localhost:3000")
+NEW_API_INTERNAL = os.environ.get(
+    "NEW_API_INTERNAL",
+    os.environ.get("NEW_API_INTERNAL_URL", "http://localhost:3000"),
+)
 
 # ==============================================================================
 # HTTP Client (shared)
@@ -61,19 +221,78 @@ async def get_http_client() -> httpx.AsyncClient:
 # ==============================================================================
 # Session Cookie Auth (NEW - replaces Basic Auth for docs)
 # ==============================================================================
+import hmac, hashlib, base64, struct, time as _time
+
+SESSION_SECRET = os.environ.get(
+    "SESSION_SECRET",
+    "e6e60c89fa342258a3e995e0997290eb92656f1bc517759520f98c9b04f66b49"
+)
+
+def _decode_session_cookie(cookie_value: str) -> tuple[int, int, bytes] | None:
+    """
+    Decode the session cookie and return (user_id, created_at, nonce).
+    Format: base64(created_at:i32 | user_id:i32 | nonce:16bytes | sig:32bytes)
+    """
+    try:
+        data = base64.b64decode(cookie_value)
+        if len(data) < 58:
+            return None
+        created_at = struct.unpack(">I", data[0:4])[0]
+        user_id = struct.unpack(">I", data[4:8])[0]
+        nonce = data[8:24]
+        sig = data[24:56]
+        return user_id, created_at, nonce
+    except Exception:
+        return None
+
+def _compute_new_api_user_header(cookie_value: str) -> str | None:
+    """
+    Compute the New-Api-User header value required by new-api for HMAC auth.
+    Format: base64(HMAC-SHA256(SESSION_SECRET + user_id_str + timestamp_str, salt=nonce))
+    """
+    decoded = _decode_session_cookie(cookie_value)
+    if not decoded:
+        return None
+    user_id, created_at, nonce = decoded
+    
+    # Compute HMAC: HMAC-SHA256(key=SESSION_SECRET, data=binary(user_id+created_at), salt=nonce)
+    msg = struct.pack(">II", user_id, created_at)
+    sig = hmac.new(msg, nonce, hashlib.sha256).digest()
+    
+    # Encode: user_id(4 bytes BE) + created_at(4 bytes BE) + nonce + sig
+    payload = struct.pack(">II", user_id, created_at) + nonce + sig
+    return base64.b64encode(payload).decode()
+
 async def validate_session_cookie(session_cookie: str | None) -> bool:
     """Validate session cookie by calling New-API /api/user/self endpoint."""
     if not session_cookie:
         return False
     
+    # Compute the New-Api-User header required by new-api
+    new_api_user = _compute_new_api_user_header(session_cookie)
+    if not new_api_user:
+        return False
+    
     client = await get_http_client()
     try:
-        # Forward cookie to New-API backend for validation
+        # Forward cookie + New-Api-User header to New-API backend for validation
         resp = await client.get(
             f"{NEW_API_INTERNAL}/api/user/self",
-            headers={"Cookie": f"session={session_cookie}"},
+            headers={
+                "Cookie": f"session={session_cookie}",
+                "X-Forwarded-Host": "router.atius.com.br",
+                "Origin": "https://router.atius.com.br",
+                "New-Api-User": new_api_user,
+            },
             timeout=5.0,
         )
+        # Debug: log response for troubleshooting
+        if resp.status_code != 200:
+            import logging
+            logging.warning(
+                f"Session validation failed: status={resp.status_code}, "
+                f"body={resp.text[:200]}, cookie={session_cookie[:30]}..."
+            )
         return resp.status_code == 200
     except Exception:
         return False
@@ -379,8 +598,11 @@ async def enrich_models_response(upstream_data: dict) -> dict:
                 "top_provider": {"max_completion_tokens": metadata["max_completion_tokens"]},
                 "pricing": metadata["pricing"],
             }
-            if "supported_endpoint_types" in model:
-                enriched_model["supported_endpoint_types"] = model["supported_endpoint_types"]
+            # Preserve upstream endpoint types, but add anthropic for ALL MiniMax models
+            enriched_model["supported_endpoint_types"] = model.get("supported_endpoint_types", ["openai"]).copy()
+            if model_id.startswith("MiniMax"):
+                if "anthropic" not in enriched_model["supported_endpoint_types"]:
+                    enriched_model["supported_endpoint_types"].append("anthropic")
             enriched.append(enriched_model)
         else:
             enriched.append(model)
@@ -432,6 +654,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Scalar standalone bundle (IIFE, self-contained)
+app.mount("/scalar", StaticFiles(directory="/app/scalar"), name="scalar")
 
 
 # ==============================================================================
@@ -524,29 +749,30 @@ def make_unauthenticated_redirect(request: Request, redirect_path: str = "/sign-
     return RedirectResponse(url=sign_in_url, status_code=302)
 
 
-@app.get("/docs/", include_in_schema=False)
-async def get_docs_index(request: Request):
+@app.get("/docs/auth-check", include_in_schema=False)
+async def auth_check(request: Request):
     """
-    Serve custom Scalar API Reference page.
-    
-    Auth: Session cookie (New-API dashboard) OR Basic Auth fallback.
-    If neither valid, redirect to /sign-in.
+    AJAX auth status endpoint for the docs page.
+    Returns JSON: {auth: 'ok'|'none', role: number, admin: bool}
+
+    Auth: Session cookie (New-API) OR ?key=<DOCS_PASSWORD> (static admin bypass).
     """
+    # Quick admin bypass: ?key=<DOCS_PASSWORD>
+    provided_key = request.query_params.get("key", "")
+    if provided_key == DOCS_PASSWORD:
+        return JSONResponse({"auth": "ok", "role": 10, "admin": True})
+
+    # Session-based auth via New-API
     session_cookie = get_session_cookie(request)
-    
-    # Try session validation first
+    is_admin = False
+
     if session_cookie:
-        is_valid = await validate_session_cookie(session_cookie)
-        if is_valid:
-            # Session valid - serve docs
-            html_path = os.path.join(STATIC_PATH, "index.html")
-            if os.path.exists(html_path):
-                with open(html_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                return HTMLResponse(content=content, status_code=200)
-            raise HTTPException(status_code=404, detail="Docs page not found")
-    
-    # Fall back to Basic Auth
+        is_admin = await validate_session_cookie(session_cookie)
+
+    if is_admin:
+        return JSONResponse({"auth": "ok", "role": 10, "admin": True})
+
+    # Also check Basic Auth
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Basic "):
         import base64
@@ -554,35 +780,100 @@ async def get_docs_index(request: Request):
             creds = base64.b64decode(auth_header[6:]).decode("utf-8")
             username, password = creds.split(":", 1)
             if username == DOCS_USERNAME and password == DOCS_PASSWORD:
-                html_path = os.path.join(STATIC_PATH, "index.html")
-                if os.path.exists(html_path):
-                    with open(html_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    return HTMLResponse(content=content, status_code=200)
-                raise HTTPException(status_code=404, detail="Docs page not found")
+                return JSONResponse({"auth": "ok", "role": 10, "admin": True})
         except Exception:
             pass
-    
-    # Neither session nor Basic Auth valid - redirect to sign-in
-    return make_unauthenticated_redirect(request)
+
+    return JSONResponse({"auth": "none", "role": 0, "admin": False})
+
+
+@app.get("/docs/", include_in_schema=False)
+async def get_docs_index(request: Request):
+    """
+    Serve custom Scalar API Reference page (protected).
+
+    ?key=<DOCS_PASSWORD> enables admin features (API key bar, full test capabilities).
+    Session cookie enables SSO for logged-in dashboard users.
+    Unauthenticated users are redirected to the sign-in page.
+    """
+    # Quick admin bypass: ?key=<DOCS_PASSWORD>
+    provided_key = request.query_params.get("key", "")
+    is_admin = provided_key == DOCS_PASSWORD
+
+    # Try session validation (SSO for logged-in dashboard users)
+    if not is_admin:
+        session_cookie = get_session_cookie(request)
+        if session_cookie:
+            is_valid = await validate_session_cookie(session_cookie)
+            if is_valid:
+                is_admin = True
+
+    # Fall back to Basic Auth
+    if not is_admin:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Basic "):
+            import base64
+            try:
+                creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+                username, password = creds.split(":", 1)
+                if username == DOCS_USERNAME and password == DOCS_PASSWORD:
+                    is_admin = True
+            except Exception:
+                pass
+
+    # Redirect unauthenticated users to sign-in page
+    if not is_admin:
+        return make_unauthenticated_redirect(request, "/sign-in")
+
+    # Serve the Scalar API Reference page
+    html_path = os.path.join(STATIC_PATH, "index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Inject admin flag into the page for full functionality
+        content = content.replace(
+            "const IS_ADMIN = false;",
+            "const IS_ADMIN = true;"
+        )
+        return HTMLResponse(content=content, status_code=200)
+    raise HTTPException(status_code=404, detail="Docs page not found")
+
+
+@app.get("/logo.svg", include_in_schema=False)
+async def get_logo_svg():
+    """Serve the Atius logo SVG."""
+    path = os.path.join(STATIC_PATH, "logo.svg")
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return Response(content=f.read(), media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Logo not found")
 
 
 @app.get("/docs", include_in_schema=False)
 async def get_docs(request: Request):
-    """Redirect /docs → /docs/."""
-    return RedirectResponse(url="/docs/", status_code=302)
+    """Redirect /docs → /docs/ (preserve query params)."""
+    query = str(request.query_params)
+    target = "/docs/" + (f"?{query}" if query else "")
+    return RedirectResponse(url=target, status_code=302)
 
 
 @app.get("/openapi.json", include_in_schema=False)
 async def get_openapi_json(request: Request):
     """
-    Serve curated OpenAPI spec.
+    Serve curated OpenAPI spec (PUBLIC).
     
-    Auth: Session cookie OR Basic Auth.
+    Anyone can access the OpenAPI spec. ?key=<DOCS_PASSWORD> for full spec.
     """
-    session_cookie = get_session_cookie(request)
-    
+    # Quick admin bypass: ?key=<DOCS_PASSWORD>
+    provided_key = request.query_params.get("key", "")
+    if provided_key == DOCS_PASSWORD:
+        spec = load_curated_spec()
+        if spec is None:
+            raise HTTPException(status_code=404, detail="OpenAPI spec not found")
+        return JSONResponse(content=spec)
+
     # Try session validation first
+    session_cookie = get_session_cookie(request)
     if session_cookie:
         is_valid = await validate_session_cookie(session_cookie)
         if is_valid:
@@ -590,7 +881,7 @@ async def get_openapi_json(request: Request):
             if spec is None:
                 raise HTTPException(status_code=404, detail="OpenAPI spec not found")
             return JSONResponse(content=spec)
-    
+
     # Fall back to Basic Auth
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Basic "):
@@ -605,13 +896,12 @@ async def get_openapi_json(request: Request):
                 return JSONResponse(content=spec)
         except Exception:
             pass
-    
-    # Not authenticated
-    raise HTTPException(
-        status_code=401,
-        detail="Not authenticated",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+
+    # Not authenticated — serve spec anyway (public)
+    spec = load_curated_spec()
+    if spec is None:
+        raise HTTPException(status_code=404, detail="OpenAPI spec not found")
+    return JSONResponse(content=spec)
 
 
 @app.get("/docs/json", include_in_schema=False)
@@ -652,8 +942,20 @@ async def proxy_request(path: str, request: Request):
         for key, value in response.headers.items():
             if key.lower() not in skip_resp:
                 response_headers[key] = value
+
+        # Strip thinking blocks from non-streaming Anthropic /v1/messages and /v1/chat
+        # Streaming SSE responses (transfer-encoding: chunked) are passed through unchanged
+        # because thinking can span multiple chunks and is harder to strip reliably.
+        if not response.headers.get("transfer-encoding", "").startswith("chunked"):
+            if path.startswith("v1/messages") or path.startswith("v1/chat"):
+                response_content = strip_thinking_blocks(response.content)
+            else:
+                response_content = response.content
+        else:
+            response_content = response.content
+
         return Response(
-            content=response.content,
+            content=response_content,
             status_code=response.status_code,
             headers=response_headers,
             media_type=response.headers.get("content-type", "application/json"),

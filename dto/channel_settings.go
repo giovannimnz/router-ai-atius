@@ -7,6 +7,9 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	// StripCJK removes CJK (Chinese/Japanese/Korean) characters from model responses.
+	// Use for channels like MiniMax that may occasionally generate CJK tokens in non-CJK contexts.
+	StripCJK bool `json:"strip_cjk,omitempty"`
 }
 
 type VertexKeyType string

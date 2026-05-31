@@ -6,7 +6,7 @@
 set -euo pipefail
 
 REPO_DIR="/home/ubuntu/docker/Atius/router-ai-atius"
-IMAGE="ghcr.io/giovannimnz/atius-ai-router"
+IMAGE="ghcr.io/giovannimnz/router-ai-atius"
 LOG="$REPO_DIR/logs/auto-update.log"
 
 log() {

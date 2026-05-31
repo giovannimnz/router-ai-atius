@@ -1,6 +1,6 @@
 services:
   new-api:
-    image: ghcr.io/giovannimnz/atius-ai-router:latest
+    image: ghcr.io/giovannimnz/router-ai-atius:local
     container_name: new-api
     restart: always
     ports:

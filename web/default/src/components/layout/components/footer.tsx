@@ -69,7 +69,7 @@ function ProjectAttribution(props: { currentYear: number }) {
           rel='noopener noreferrer'
           className='text-foreground/70 font-medium transition-colors hover:text-foreground'
         >
-          {t('New API')}
+          Atius Router
         </a>
         . {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}
       </span>

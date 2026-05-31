@@ -33,6 +33,12 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag && format('refs/tags/{0}', github.event.inputs.tag) || 'refs/heads/main' }}
+
       - name: Determine tag to build
         id: version
         run: |
@@ -52,12 +58,6 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "Building Docker image for tag: $TAG"
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.inputs.tag && format('refs/tags/{0}', github.event.inputs.tag) || 'refs/heads/main' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

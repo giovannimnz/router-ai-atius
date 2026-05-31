@@ -1,0 +1,11 @@
+{
+  "session_id": "20260513_060756_714a3e",
+  "repo_name": "router-ai-atius",
+  "cwd": "/home/ubuntu/docker/Atius/router-ai-atius",
+  "git_remote_url": "https://github.com/giovannimnz/router-ai-atius.git",
+  "git_branch": "main",
+  "model": "MiniMax-M2.7",
+  "platform": "cli",
+  "started_at": "2026-05-13T06:07:56-0300",
+  "ended_at": "2026-05-13T06:16:19-0300"
+}

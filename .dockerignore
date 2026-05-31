@@ -11,3 +11,5 @@ docs
 db-data
 data/postgres_data
 data/logs
+web/default/dist
+web/classic/dist

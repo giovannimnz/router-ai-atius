@@ -4559,9 +4559,7 @@
       " Requires Waffo Pancake to be fully configured in Payment settings first": "Cria um produto Pancake na loja salva usando o título e o preço deste plano. Exige que o Waffo Pancake esteja totalmente configurado nas configurações de Pagamento."
     },
     "Creating": {
-      "": {
-        "": "Criando..."
-      }
+      "": "Criando..."
     },
     "Credentials verification failed — double-check Merchant ID and API private key": "Falha na verificação das credenciais — verifique o Merchant ID e a chave privada da API.",
     "Disabled lanes are omitted on save": "Faixas desabilitadas são omitidas ao salvar.",
@@ -4596,37 +4594,25 @@
       " Click \"Save Settings\" to apply": "FAQ atualizado. Clique em \"Salvar Configurações\" para aplicar."
     },
     "Fetching prefill groups": {
-      "": {
-        "": "Buscando grupos de prefill..."
-      }
+      "": "Buscando grupos de prefill..."
     },
     "Fetching upstream prices": {
-      "": {
-        "": "Buscando preços do upstream..."
-      }
+      "": "Buscando preços do upstream..."
     },
     "Fetching upstream ratios": {
-      "": {
-        "": "Buscando razões do upstream..."
-      }
+      "": "Buscando razões do upstream..."
     },
     "Fill in both Merchant ID and API Private Key before creating": "Preencha o Merchant ID e a Chave Privada da API antes de criar.",
     "Fill in the credentials above to begin": "Preencha as credenciais acima para começar.",
     "Filter by API key": {
-      "": {
-        "": "Filtrar por API key..."
-      }
+      "": "Filtrar por API key..."
     },
     "Filter by name": {
-      "": {
-        "": "Filtrar por nome..."
-      }
+      "": "Filtrar por nome..."
     },
     "Filter models by provider, group, type, endpoint, and tags": "Filtre modelos por provedor, grupo, tipo, endpoint e tags.",
     "Filter models": {
-      "": {
-        "": "Filtrar modelos..."
-      }
+      "": "Filtrar modelos..."
     },
     "Final price multiplier (0": {
       "95 = 5% discount": "Multiplicador de preço final (0,95 = 5% de desconto"
@@ -4685,9 +4671,7 @@
     "Generate tokens from the Tokens page; you can scope them to specific models, groups, IPs, and rate-limits": "Gere tokens na página Tokens; você pode escopá-los para modelos, grupos, IPs e rate-limits específicos.",
     "Generating new codes will invalidate all existing backup codes": "Gerar novos códigos invalidará todos os códigos de backup existentes.",
     "Generating": {
-      "": {
-        "": "Gerando..."
-      }
+      "": "Gerando..."
     },
     "Give the group a recognizable name and optional description": "Dê ao grupo um nome reconhecível e uma descrição opcional.",
     "Give this group a recognizable name": "Dê a este grupo um nome reconhecível.",
@@ -4768,9 +4752,7 @@
     },
     "List of origins (one per line) allowed for Passkey registration and authentication": "Lista de origens (uma por linha) permitidas para registro e autenticação Passkey.",
     "Load template": {
-      "": {
-        "": "Carregar modelo..."
-      }
+      "": "Carregar modelo..."
     },
     "Log files older than {{value}} days will be deleted": "Arquivos de log com mais de {{value}} dias serão excluídos.",
     "Make it easier for teammates to pick the right group": "Facilite para sua equipe escolher o grupo certo.",
@@ -4805,9 +4787,7 @@
     "model(s)? This action cannot be undone": "modelo(s)? Esta ação não pode ser desfeita.",
     "Models listed here will not automatically append or remove -thinking / -nothinking suffixes": "Modelos listados aqui não terão os sufixos -thinking / -nothinking adicionados ou removidos automaticamente.",
     "More templates": {
-      "": {
-        "": "Mais modelos..."
-      }
+      "": "Mais modelos..."
     },
     "Multiplier for audio inputs": "Multiplicador para entradas de áudio.",
     "Multiplier for audio outputs": "Multiplicador para saídas de áudio.",
@@ -4892,9 +4872,7 @@
     "Optional ratio used when upstream cache hits occur": "Proporção opcional usada quando ocorrem acertos de cache upstream.",
     "Optional settings for advanced container configuration": "Configurações opcionais para configuração avançada de contêiner.",
     "org-": {
-      "": {
-        "": "org-..."
-      }
+      "": "org-..."
     },
     "Output token price for generated tokens": "Preço do token de saída para tokens gerados.",
     "Override the endpoint used for testing": {
@@ -4916,9 +4894,7 @@
     "Personal settings and profile management": "Configurações pessoais e gerenciamento de perfil.",
     "Pick or create both a store and a product before saving": "Escolha ou crie uma loja e um produto antes de salvar.",
     "Planned maintenance on Friday at 22:00 UTC": {
-      "": {
-        "": "Manutenção programada na sexta-feira às 22:00 UTC..."
-      }
+      "": "Manutenção programada na sexta-feira às 22:00 UTC..."
     },
     "Playground experiments and live conversations": "Experimentos de playground e conversas ao vivo.",
     "Please sign in to view {{module}}": "Por favor, faça login para visualizar {{module}}.",
@@ -4949,14 +4925,10 @@
       " New tokens rotate through this list": "Ordem de prioridade para atribuição automática de grupo. Novos tokens percorrem esta lista rotativamente."
     },
     "Processing OAuth response": {
-      "": {
-        "": "Processando resposta OAuth..."
-      }
+      "": "Processando resposta OAuth..."
     },
     "Processing": {
-      "": {
-        "": "Processando..."
-      }
+      "": "Processando..."
     },
     "Provide a JSON object where each key maps to an endpoint definition": "Forneça um objeto JSON onde cada chave mapeia para uma definição de endpoint.",
     "Provide per-category safety overrides as JSON": {
@@ -4973,17 +4945,13 @@
     "Public rankings page based on live usage data": "Página pública de rankings baseada em dados de uso ao vivo.",
     "Published models, groups, and model remapping rules": "Modelos publicados, grupos e regras de remapeamento de modelos.",
     "Pulling": {
-      "": {
-        "": "Fazendo pull..."
-      }
+      "": "Fazendo pull..."
     },
     "QR code is not configured": {
       " Please contact support": "O QR code não está configurado. Por favor, entre em contato com o suporte."
     },
     "Querying": {
-      "": {
-        "": "Consultando..."
-      }
+      "": "Consultando..."
     },
     "Ranking data is currently simulated for preview purposes and will be replaced with live analytics once the backend integration ships": "Os dados de ranking são simulados atualmente para fins de pré-visualização e serão substituídos por análises ao vivo quando a integração com o backend for lançada.",
     "Ratio applied to audio completions for streaming models": "Razão aplicada às conclusões de áudio para modelos de streaming.",
@@ -4993,32 +4961,22 @@
     "Redemption codes are disabled until the administrator confirms compliance terms": "Os códigos de resgate estão desativados até que o administrador confirme os termos de conformidade.",
     "redemption codes": "códigos de resgate.",
     "Redirecting to chat page": {
-      "": {
-        "": "Redirecionando para a página de chat..."
-      }
+      "": "Redirecionando para a página de chat..."
     },
     "Redirecting to Creem checkout": {
-      "": {
-        "": "Redirecionando para o checkout do Creem..."
-      }
+      "": "Redirecionando para o checkout do Creem..."
     },
     "Redirecting to GitHub": {
-      "": {
-        "": "Redirecionando para o GitHub..."
-      }
+      "": "Redirecionando para o GitHub..."
     },
     "Redirecting to payment page": {
-      "": {
-        "": "Redirecionando para a página de pagamento..."
-      }
+      "": "Redirecionando para a página de pagamento..."
     },
     "Redirecting to sign in in {{seconds}} seconds": "Redirecionando para o login em {{seconds}} segundos.",
     "Referral reward transfer is disabled until the administrator confirms compliance terms": "A transferência de recompensa por indicação está desativada até que o administrador confirme os termos de conformidade.",
     "Refine models by provider, group, type, and tags": "Refine modelos por provedor, grupo, tipo e tags.",
     "Refreshing": {
-      "": {
-        "": "Atualizando..."
-      }
+      "": "Atualizando..."
     },
     "Register each URL into the matching Test Mode / Production Mode webhook slot in the Pancake dashboard": {
       " Separate endpoints prevent test traffic from accidentally crediting production accounts": "Registre cada URL no slot de webhook correspondente de Test Mode / Production Mode no painel do Pancake. Endpoints separados evitam que o tráfego de teste credite acidentalmente contas de produção."
@@ -5055,88 +5013,56 @@
       " Each code can only be used once": "Salve esses códigos em um local seguro. Cada código só pode ser usado uma vez."
     },
     "Saving": {
-      "": {
-        "": "Salvando..."
-      }
+      "": "Salvando..."
     },
     "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code": "Escaneie o QR code para seguir a conta oficial e responda com “验证码” para receber seu código de verificação.",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc": {
       ")": "Escaneie este QR code com seu aplicativo autenticador (Google Authenticator, Microsoft Authenticator, etc.)"
     },
     "Search channel type": {
-      "": {
-        "": "Buscar tipo de canal..."
-      }
+      "": "Buscar tipo de canal..."
     },
     "Search chat presets": {
-      "": {
-        "": "Buscar predefinições de chat..."
-      }
+      "": "Buscar predefinições de chat..."
     },
     "Search colors": {
-      "": {
-        "": "Buscar cores..."
-      }
+      "": "Buscar cores..."
     },
     "Search deployments": {
-      "": {
-        "": "Buscar implantações..."
-      }
+      "": "Buscar implantações..."
     },
     "Search group names": {
-      "": {
-        "": "Buscar nomes de grupos..."
-      }
+      "": "Buscar nomes de grupos..."
     },
     "Search groups": {
-      "": {
-        "": "Buscar grupos..."
-      }
+      "": "Buscar grupos..."
     },
     "Search model name, provider, endpoint, or tag": {
-      "": {
-        "": "Buscar nome do modelo, provedor, endpoint ou tag..."
-      }
+      "": "Buscar nome do modelo, provedor, endpoint ou tag..."
     },
     "Search model name": {
-      "": {
-        "": "Buscar nome do modelo..."
-      }
+      "": "Buscar nome do modelo..."
     },
     "Search models or fields": {
-      "": {
-        "": "Buscar modelos ou campos..."
-      }
+      "": "Buscar modelos ou campos..."
     },
     "Search payment methods": {
-      "": {
-        "": "Buscar métodos de pagamento..."
-      }
+      "": "Buscar métodos de pagamento..."
     },
     "Search payment types": {
-      "": {
-        "": "Buscar tipos de pagamento..."
-      }
+      "": "Buscar tipos de pagamento..."
     },
     "Search products": {
-      "": {
-        "": "Buscar produtos..."
-      }
+      "": "Buscar produtos..."
     },
     "Search rules": {
-      "": {
-        "": "Buscar regras..."
-      }
+      "": "Buscar regras..."
     },
     "Search tags": {
-      "": {
-        "": "Buscar tags..."
-      }
+      "": "Buscar tags..."
     },
     "Search vendors": {
-      "": {
-        "": "Buscar fornecedores..."
-      }
+      "": "Buscar fornecedores..."
     },
     "selected channel(s)": {
       " Leave empty to remove tag": "canal(is) selecionado(s). Deixe vazio para remover a tag."
@@ -5144,18 +5070,14 @@
     "Selected conflicts were overwritten successfully": "Os conflitos selecionados foram sobrescritos com sucesso.",
     "Selected when creating a token and used as the default billing group for API calls": "Selecionado ao criar um token e usado como o grupo de cobrança padrão para chamadas de API.",
     "Sending": {
-      "": {
-        "": "Enviando..."
-      }
+      "": "Enviando..."
     },
     "Sent the API key to FluentRead": "Chave de API enviada para o FluentRead.",
     "Separate image/audio prices are enabled": "Preços separados de imagem/áudio estão ativados.",
     "Serve multiple users or teams with billing and quota control": "Atenda vários usuários ou equipes com controle de cobrança e cotas.",
     "Set separate prices for cache reads and writes": "Defina preços separados para leituras e gravações de cache.",
     "Setting up 2FA": {
-      "": {
-        "": "Configurando 2FA..."
-      }
+      "": "Configurando 2FA..."
     },
     "Setup guide is collapsed": {
       " Expand it anytime": "O guia de configuração está recolhido. Expanda-o a qualquer momento."
@@ -5208,17 +5130,13 @@
     },
     "Sync from the public upstream metadata repository": "Sincronizar a partir do repositório público de metadados upstream.",
     "Syncing prices, please wait": {
-      "": {
-        "": "Sincronizando preços, aguarde..."
-      }
+      "": "Sincronizando preços, aguarde..."
     },
     "Testing all enabled channels started": {
       " Please refresh to see results": "Teste de todos os canais ativados iniciado. Atualize a página para ver os resultados."
     },
     "Testing": {
-      "": {
-        "": "Testando..."
-      }
+      "": "Testando..."
     },
     "The administrator account is already initialized": {
       " You can keep your existing credentials and continue to the next step": "A conta de administrador já está inicializada. Você pode manter suas credenciais atuais e prosseguir para a próxima etapa."
@@ -5323,9 +5241,7 @@
     "Tune selection priority, testing, status handling, and request overrides": "Ajuste a prioridade de seleção, testes, tratamento de status e sobrescritas de requisição.",
     "Turnstile is enabled but site key is empty": "Turnstile está habilitado, mas a site key está vazia.",
     "Type a command or search": {
-      "": {
-        "": "Digite um comando ou busque..."
-      }
+      "": "Digite um comando ou busque..."
     },
     "Unable to estimate price for this deployment": "Não foi possível estimar o preço para este deployment.",
     "Unable to generate chat link": {
@@ -5374,9 +5290,7 @@
     "Verification code updates every 30 seconds": "O código de verificação é atualizado a cada 30 segundos.",
     "Verification required to reveal the saved key": "É necessária verificação para revelar a chave salva.",
     "Verifying credentials and pulling stores from your Pancake account": {
-      "": {
-        "": "Verificando credenciais e puxando lojas da sua conta Pancake..."
-      }
+      "": "Verificando credenciais e puxando lojas da sua conta Pancake..."
     },
     "Vertex AI does not support functionResponse": {
       "id": {
@@ -5384,9 +5298,7 @@
       }
     },
     "Visit Settings → General and adjust quota options": {
-      "": {
-        "": "Acesse Configurações → Geral e ajuste as opções de cota..."
-      }
+      "": "Acesse Configurações → Geral e ajuste as opções de cota..."
     },
     "Visitors must authenticate before accessing the pricing directory": "Os visitantes precisam se autenticar antes de acessar o diretório de preços.",
     "Visitors must authenticate before accessing the rankings page": "Os visitantes precisam se autenticar antes de acessar a página de rankings.",
@@ -5394,9 +5306,7 @@
       " previous": "vs. anterior"
     },
     "Waiting for email": {
-      "": {
-        "": "Aguardando e-mail..."
-      }
+      "": "Aguardando e-mail..."
     },
     "Wallet management and personal preferences": "Gerenciamento de carteira e preferências pessoais.",
     "Warning: Base URL should not end with /v1": {
@@ -5410,9 +5320,7 @@
     "We will prompt your device to confirm using biometrics or your hardware key": "Solicitaremos ao seu dispositivo a confirmação por biometria ou chave de hardware.",
     "We'll be back online shortly": "Estaremos de volta em breve.",
     "Welcome to our New API": {
-      "": {
-        "": "Bem-vindo à nossa New API..."
-      }
+      "": "Bem-vindo à nossa New API..."
     },
     "When a token uses the auto group, the system tries groups from top to bottom until it finds an available group": "Quando um token usa o grupo automático, o sistema tenta os grupos de cima para baixo até encontrar um grupo disponível.",
     "When conditions match, the final price is multiplied by X": {

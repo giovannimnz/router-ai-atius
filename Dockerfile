@@ -55,11 +55,7 @@ RUN apt-get update \
     && update-ca-certificates
 
 COPY --from=builder2 /build/new-api /
-<<<<<<< HEAD
-
-=======
 COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
->>>>>>> upstream/main
 EXPOSE 3000
 WORKDIR /data
 ENTRYPOINT ["/new-api"]

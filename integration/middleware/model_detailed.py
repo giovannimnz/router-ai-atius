@@ -8,7 +8,7 @@ requests to the NewAPI backend.
 
 Enriched Models:
   - deepseek-v4-flash, deepseek-v4-pro (DeepSeek V4)
-  - MiniMax-M2.7, MiniMax-M2.5, MiniMax-M2.7-highspeed, MiniMax-M2.5-highspeed (MiniMax Token Plan)
+  - MiniMax-M3, MiniMax-M2.7, MiniMax-M2.7-highspeed, MiniMax-M2.7-hs, MiniMax-M2.5, MiniMax-M2.5-highspeed (MiniMax Token Plan)
 
 Usage:
     python3 model_detailed.py [--port PORT] [--backend BACKEND_URL]
@@ -66,15 +66,26 @@ DEEPSEEK_METADATA = {
 
 # MiniMax model metadata
 MINIMAX_METADATA = {
+    "MiniMax-M3": {
+        "name": "MiniMax M3",
+        "context_length": 1048576,
+        "max_completion_tokens": 64000,
+        "pricing": {
+            "prompt": "0.0000003",        # $0.30 / 1M input (same as M2.7)
+            "completion": "0.0000012",    # $1.20 / 1M output
+            "prompt_cache_hit": "0.00000006",   # $0.06 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
+        },
+    },
     "MiniMax-M2.7": {
         "name": "MiniMax M2.7",
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M
-            "completion": "0.0000012",    # .20 / 1M
-            "prompt_cache_hit": "0.00000006",   # /usr/bin/bash.06 / 1M
-            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+            "prompt": "0.0000003",        # $0.30 / 1M
+            "completion": "0.0000012",    # $1.20 / 1M
+            "prompt_cache_hit": "0.00000006",   # $0.06 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
         },
     },
     "MiniMax-M2.7-highspeed": {
@@ -82,10 +93,21 @@ MINIMAX_METADATA = {
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M (same as M2.7)
-            "completion": "0.0000012",    # .20 / 1M (same as M2.7)
-            "prompt_cache_hit": "0.00000006",   # /usr/bin/bash.06 / 1M
-            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+            "prompt": "0.0000003",        # $0.30 / 1M (same as M2.7)
+            "completion": "0.0000012",    # $1.20 / 1M
+            "prompt_cache_hit": "0.00000006",   # $0.06 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
+        },
+    },
+    "MiniMax-M2.7-hs": {
+        "name": "MiniMax M2.7 HS",
+        "context_length": 245760,
+        "max_completion_tokens": 50000,
+        "pricing": {
+            "prompt": "0.0000003",        # $0.30 / 1M (same as M2.7)
+            "completion": "0.0000012",    # $1.20 / 1M
+            "prompt_cache_hit": "0.00000006",   # $0.06 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
         },
     },
     "MiniMax-M2.5": {
@@ -93,10 +115,10 @@ MINIMAX_METADATA = {
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M
-            "completion": "0.0000012",    # .20 / 1M
-            "prompt_cache_hit": "0.00000003",   # /usr/bin/bash.03 / 1M
-            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+            "prompt": "0.0000003",        # $0.30 / 1M
+            "completion": "0.0000012",    # $1.20 / 1M
+            "prompt_cache_hit": "0.00000003",   # $0.03 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
         },
     },
     "MiniMax-M2.5-highspeed": {
@@ -104,10 +126,10 @@ MINIMAX_METADATA = {
         "context_length": 245760,
         "max_completion_tokens": 50000,
         "pricing": {
-            "prompt": "0.0000003",        # /usr/bin/bash.30 / 1M (same as M2.5)
-            "completion": "0.0000012",    # .20 / 1M (same as M2.5)
-            "prompt_cache_hit": "0.00000003",   # /usr/bin/bash.03 / 1M
-            "prompt_cache_miss": "0.000000375", # /usr/bin/bash.375 / 1M
+            "prompt": "0.0000003",        # $0.30 / 1M (same as M2.5)
+            "completion": "0.0000012",    # $1.20 / 1M
+            "prompt_cache_hit": "0.00000003",   # $0.03 / 1M
+            "prompt_cache_miss": "0.000000375", # $0.375 / 1M
         },
     },
 }

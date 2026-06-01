@@ -1,4 +1,4 @@
-# PROJECT.md - atius-ai-router
+# PROJECT.md - router-ai-atius
 
 ## Project Overview
 

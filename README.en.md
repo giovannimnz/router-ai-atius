@@ -102,7 +102,7 @@ Channel Selection (distribute middleware):
 ```bash
 # 1. Clone and enter directory
 git clone https://github.com/giovannimnz/router-ai-atius.git
-cd atius-ai-router
+cd router-ai-atius
 
 # 2. Configure environment variables
 cp .env.example .env

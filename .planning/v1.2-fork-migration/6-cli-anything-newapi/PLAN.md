@@ -188,7 +188,7 @@ import json
 @click.group()
 @click.pass_context
 def cli(ctx):
-    """atius-ai-router CLI — NewAPI management for agents"""
+    """router-ai-atius CLI — NewAPI management for agents"""
     ctx.ensure_object(dict)
     ctx.obj['base_url'] = 'http://localhost:3300'
 

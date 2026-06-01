@@ -106,7 +106,7 @@ Ver `.planning/v1.2-fork-migration/6-cli-anything-newapi/PLAN.md`
 
 ## Criteria
 
-- [ ] `git remote -v` mostra origin (atius-ai-router) e upstream (QuantumNous/new-api)
+- [ ] `git remote -v` mostra origin (router-ai-atius) e upstream (QuantumNous/new-api)
 - [ ] `git fetch upstream` funciona
 - [ ] `git fetch origin` funciona
 - [ ] `sync-fork.sh --dry-run` executa sem erro

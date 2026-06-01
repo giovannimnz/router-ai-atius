@@ -1,4 +1,4 @@
-# ROADMAP.md - atius-ai-router
+# ROADMAP.md - router-ai-atius
 
 ## v1.4 — Model Aliases & Token Management ✓
 **Status:** COMPLETE

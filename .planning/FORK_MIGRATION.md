@@ -1,4 +1,4 @@
-# FORK_MIGRATION.md — atius-ai-router
+# FORK_MIGRATION.md — router-ai-atius
 
 **Fork of:** [QuantumNous/new-api](https://github.com/QuantumNous/new-api.git)
 **Fork URL:** https://github.com/giovannimnz/router-ai-atius.git

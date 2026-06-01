@@ -27,7 +27,7 @@ Estrutura do script:
 
 ```bash
 #!/usr/bin/env bash
-# sync-fork.sh — Sync atius-ai-router with upstream NewAPI
+# sync-fork.sh — Sync router-ai-atius with upstream NewAPI
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

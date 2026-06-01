@@ -15,7 +15,7 @@
 
 ```bash
 git clone https://github.com/giovannimnz/router-ai-atius.git
-cd atius-ai-router
+cd router-ai-atius
 ```
 
 ## 2. Configurar Ambiente

@@ -16,7 +16,7 @@ Template: `/home/ubuntu/GitHub/forks/openclaude/FORK.md`
 ## Estrutura do FORK.md
 
 ```markdown
-# Fork Technical Documentation — atius-ai-router
+# Fork Technical Documentation — router-ai-atius
 
 ## Parent
 https://github.com/QuantumNous/new-api

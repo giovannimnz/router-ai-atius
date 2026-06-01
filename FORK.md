@@ -1,4 +1,4 @@
-# FORK.md — atius-ai-router Technical Documentation
+# FORK.md — router-ai-atius Technical Documentation
 
 Fork de [QuantumNous/new-api](https://github.com/QuantumNous/new-api) adaptado para o ecossistema Atius.
 

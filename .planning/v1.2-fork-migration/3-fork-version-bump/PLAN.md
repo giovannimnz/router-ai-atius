@@ -30,7 +30,7 @@ NewAPI é Go-based (usa Docker image), então não tem `package.json`. Usar:
 
 ```bash
 #!/usr/bin/env bash
-# version-bump.sh — Bump atius-ai-router version
+# version-bump.sh — Bump router-ai-atius version
 
 # 1. Parse arguments: --check (dry run)
 # 2. Fetch upstream tags

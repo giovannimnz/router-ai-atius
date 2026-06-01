@@ -50,7 +50,7 @@ uvicorn model_detailed_fastapi:app --reload --port 3001
 ## 2. Project Structure
 
 ```
-atius-ai-router/
+router-ai-atius/
 ├── controller/          # Handlers (HTTP → Service)
 ├── service/             # Business logic
 ├── model/               # GORM models

@@ -1,4 +1,4 @@
-# STATE.md - atius-ai-router
+# STATE.md - router-ai-atius
 
 ## Current Position
 

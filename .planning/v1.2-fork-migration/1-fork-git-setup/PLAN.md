@@ -6,7 +6,7 @@
 
 ## Objetivo
 
-Configurar git remotes no repo local para estabelecer workflow de fork formal conectando ao GitHub `giovannimnz/atius-ai-router` e ao upstream `QuantumNous/new-api`.
+Configurar git remotes no repo local para estabelecer workflow de fork formal conectando ao GitHub `giovannimnz/router-ai-atius` e ao upstream `QuantumNous/new-api`.
 
 ## Passos
 
@@ -16,7 +16,7 @@ Configurar git remotes no repo local para estabelecer workflow de fork formal co
 cd /home/ubuntu/docker/ai-apps
 
 # Adicionar origin (o fork GitHub)
-git remote add origin https://github.com/giovannimnz/atius-ai-router.git
+git remote add origin https://github.com/giovannimnz/router-ai-atius.git
 
 # Adicionar upstream (o repo original)
 git remote add upstream https://github.com/QuantumNous/new-api.git
@@ -86,7 +86,7 @@ git config user.email "giovannimnz@..."
 # Verificar remotes
 git remote -v
 # Deve mostrar:
-# origin   https://github.com/giovannimnz/atius-ai-router.git (fetch)
+# origin   https://github.com/giovannimnz/router-ai-atius.git (fetch)
 # upstream https://github.com/QuantumNous/new-api.git (fetch)
 
 # Verificar fetch

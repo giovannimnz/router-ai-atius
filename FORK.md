@@ -6,7 +6,7 @@ Fork de [QuantumNous/new-api](https://github.com/QuantumNous/new-api) adaptado p
 
 | Item | Valor |
 |------|-------|
-| Fork URL | https://github.com/giovannimnz/atius-ai-router |
+| Fork URL | https://github.com/giovannimnz/router-ai-atius |
 | Parent URL | https://github.com/QuantumNous/new-api |
 | Fork Version | `0.12.14.2` (base: 0.12.14 + suffix) |
 | Git Branch | `main` |
@@ -312,7 +312,7 @@ Tokens de API disponíveis:
 ## 9. Git Remotes
 
 ```bash
-origin   → https://github.com/giovannimnz/atius-ai-router.git (fetch/push)
+origin   → https://github.com/giovannimnz/router-ai-atius.git (fetch/push)
 upstream → https://github.com/QuantumNous/new-api.git (fetch only)
 ```
 
@@ -350,7 +350,7 @@ docker exec new-api curl localhost:3000/v1/models  # Teste direto
 
 ## 11. Links
 
-- **Fork:** https://github.com/giovannimnz/atius-ai-router
+- **Fork:** https://github.com/giovannimnz/router-ai-atius
 - **Parent:** https://github.com/QuantumNous/new-api
 - **Router UI:** https://router.atius.com.br (via Apache proxy)
 - **Swagger Docs:** interno na rede Docker

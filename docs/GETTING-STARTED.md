@@ -14,7 +14,7 @@
 ## 1. Clone e Setup
 
 ```bash
-git clone https://github.com/giovannimnz/atius-ai-router.git
+git clone https://github.com/giovannimnz/router-ai-atius.git
 cd atius-ai-router
 ```
 

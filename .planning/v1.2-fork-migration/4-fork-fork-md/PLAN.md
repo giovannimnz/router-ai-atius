@@ -22,7 +22,7 @@ Template: `/home/ubuntu/GitHub/forks/openclaude/FORK.md`
 https://github.com/QuantumNous/new-api
 
 ## Fork Remote
-https://github.com/giovannimnz/atius-ai-router
+https://github.com/giovannimnz/router-ai-atius
 
 ## Version
 Current: X.Y.Z.N (see VERSION file)

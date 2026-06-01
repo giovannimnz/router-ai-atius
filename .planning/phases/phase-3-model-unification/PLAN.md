@@ -117,7 +117,7 @@ docker stop new-api && docker cp /home/ubuntu/new-api-build/new-api new-api:/new
 **Rebuild FastAPI:**
 ```bash
 cd /home/ubuntu/docker/Atius/router-ai-atius/integration/middleware && \
-docker build -f Dockerfile.fastapi -t ghcr.io/giovannimnz/atius-ai-router/model-detailed:latest .
+docker build -f Dockerfile.fastapi -t ghcr.io/giovannimnz/router-ai-atius/model-detailed:latest .
 ```
 
 **Redeploy FastAPI:**
@@ -126,7 +126,7 @@ docker stop model-detailed && docker run -d --name model-detailed \
   -p 3300:3300 \
   -e DOCS_USERNAME=admin -e DOCS_PASSWORD=atius2024 \
   --restart unless-stopped \
-  ghcr.io/giovannimnz/atius-ai-router/model-detailed:latest
+  ghcr.io/giovannimnz/router-ai-atius/model-detailed:latest
 ```
 
 ### Task 6: Atualizar Bruno tests

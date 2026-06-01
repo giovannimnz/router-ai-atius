@@ -72,7 +72,7 @@
 ### Phase 1: Git Setup & Remotes ✓
 **slug:** `fork-git-setup`
 
-- Configurar `origin` → `https://github.com/giovannimnz/atius-ai-router.git`
+- Configurar `origin` → `https://github.com/giovannimnz/router-ai-atius.git`
 - Configurar `upstream` → `https://github.com/QuantumNous/new-api.git`
 - Testar `git fetch upstream` e `git fetch origin`
 - Verificar compatibilidade de história git
@@ -108,7 +108,7 @@
 
 - Criar `.github/workflows/sync.yml` (scheduled sync)
 - Criar `.github/workflows/release.yml` (tag-based releases)
-- Protection: `if: github.repository == 'giovannimnz/atius-ai-router'`
+- Protection: `if: github.repository == 'giovannimnz/router-ai-atius'`
 
 ### Phase 6: CLI-Anything: NewAPI Management ✓
 **slug:** `cli-anything-newapi`

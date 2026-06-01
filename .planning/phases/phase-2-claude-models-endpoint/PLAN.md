@@ -54,9 +54,9 @@ git add -A && git commit -m "fix: resolve /v1/claude/models empty response — u
 
 ### Task 7: Push image to GHCR
 ```bash
-docker tag ghcr.io/giovannimnz/atius-ai-router:arm64-test ghcr.io/giovannimnz/atius-ai-router:latest
-docker push ghcr.io/giovannimnz/atius-ai-router:latest
-docker push ghcr.io/giovannimnz/atius-ai-router:arm64-test
+docker tag ghcr.io/giovannimnz/router-ai-atius:arm64-test ghcr.io/giovannimnz/router-ai-atius:latest
+docker push ghcr.io/giovannimnz/router-ai-atius:latest
+docker push ghcr.io/giovannimnz/router-ai-atius:arm64-test
 ```
 
 ### Task 8: Criar Bruno test collection

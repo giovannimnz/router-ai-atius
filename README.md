@@ -1,8 +1,8 @@
 # Atius AI Router
 
 <!-- Badges -->
-![License](https://img.shields.io/github/license/giovannimnz/atius-ai-router)
-![Version](https://img.shields.io/github/v/tag/giovannimnz/atius-ai-router?filter=v*)
+![License](https://img.shields.io/github/license/giovannimnz/router-ai-atius)
+![Version](https://img.shields.io/github/v/tag/giovannimnz/router-ai-atius?filter=v*)
 ![New-API](https://img.shields.io/badge/New--API-0.12.14-blue)
 
 ## O que é
@@ -11,7 +11,7 @@ Gateway LLM centralizado que agrega MiniMax, DeepSeek e 40+ provedores AI atrás
 
 | Item | Valor |
 |------|-------|
-| Fork URL | https://github.com/giovannimnz/atius-ai-router |
+| Fork URL | https://github.com/giovannimnz/router-ai-atius |
 | Parent URL | https://github.com/QuantumNous/new-api |
 | Versão fork | `0.12.14.2` (base: 0.12.14 + suffix `.2`) |
 | Stack | NewAPI (Go 1.22+) · PostgreSQL 15 · Python middleware |
@@ -101,8 +101,8 @@ Channel Selection (distribute middleware):
 
 ```bash
 # 1. Clone e entre no diretório
-git clone https://github.com/giovannimnz/atius-ai-router.git
-cd atius-ai-router
+git clone https://github.com/giovannimnz/router-ai-atius.git
+cd router-ai-atius
 
 # 2. Configure variáveis de ambiente
 cp .env.example .env
@@ -223,7 +223,7 @@ curl -X POST https://router.atius.com.br/v1/messages \
 
 ```bash
 # Remotes
-origin   → https://github.com/giovannimnz/atius-ai-router.git
+origin   → https://github.com/giovannimnz/router-ai-atius.git
 upstream → https://github.com/QuantumNous/new-api.git
 
 # Sync semanal (automático via GitHub Actions)
@@ -270,7 +270,7 @@ docker compose logs -f model-detailed
 
 | Recurso | URL |
 |---------|-----|
-| Fork | https://github.com/giovannimnz/atius-ai-router |
+| Fork | https://github.com/giovannimnz/router-ai-atius |
 | Parent | https://github.com/QuantumNous/new-api |
 | Router UI | https://router.atius.com.br |
 | Swagger Docs | interno na rede Docker |

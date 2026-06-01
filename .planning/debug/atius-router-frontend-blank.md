@@ -42,7 +42,7 @@ evidence:
     finding: "Container /new-api is the binary; /app does not exist; web/default/dist exists LOCALLY but not in container"
   - timestamp: 2026-05-31T05:28Z
     type: image_inspection
-    finding: "ghcr.io/giovannimnz/atius-ai-router:latest created 2026-05-28, derived from debian:bookworm-slim"
+    finding: "ghcr.io/giovannimnz/router-ai-atius:latest created 2026-05-28, derived from debian:bookworm-slim"
   - timestamp: 2026-05-31T05:29Z
     type: workflow_history
     finding: "GH Actions Release workflow failing since May 13 (sync.yml failures) — tag conflict with upstream"

@@ -39,7 +39,7 @@ Log: "request_conversion":["Claude Messages","OpenAI Compatible"]
 
 ## Task 3: Deploy ✅
 
-- Imagem construída: `ghcr.io/giovannimnz/atius-ai-router:latest`
+- Imagem construída: `ghcr.io/giovannimnz/router-ai-atius:latest`
 - Container recriado via `docker compose`
 - Health check: `http://localhost:3301/` → 200 OK
 - Remote: `https://router.atius.com.br/` → 200 OK

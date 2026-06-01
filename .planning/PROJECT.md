@@ -2,10 +2,10 @@
 
 ## Project Overview
 
-Gateway LLM centralizado (NewAPI) fork mantido no GitHub como `giovannimnz/atius-ai-router`, rodando em Docker como roteador de modelos AI para o ecossistema Atius. Baseado em [QuantumNous/new-api](https://github.com/QuantumNous/new-api), com PostgreSQL para persistência de channels, tokens e configurações.
+Gateway LLM centralizado (NewAPI) fork mantido no GitHub como `giovannimnz/router-ai-atius`, rodando em Docker como roteador de modelos AI para o ecossistema Atius. Baseado em [QuantumNous/new-api](https://github.com/QuantumNous/new-api), com PostgreSQL para persistência de channels, tokens e configurações.
 
 **URL pública:** https://router.atius.com.br
-**Git remote:** `https://github.com/giovannimnz/atius-ai-router.git`
+**Git remote:** `https://github.com/giovannimnz/router-ai-atius.git`
 **Parent upstream:** `https://github.com/QuantumNous/new-api.git`
 **Stack:** Go (NewAPI), Docker Compose, PostgreSQL 15
 
@@ -38,7 +38,7 @@ Este projeto segue o workflow de fork documentado em `FORK_MIGRATION.md`:
 ### Git Remotes
 
 ```
-origin  → https://github.com/giovannimnz/atius-ai-router.git (fetch/push)
+origin  → https://github.com/giovannimnz/router-ai-atius.git (fetch/push)
 upstream → https://github.com/QuantumNous/new-api.git (fetch only)
 ```
 

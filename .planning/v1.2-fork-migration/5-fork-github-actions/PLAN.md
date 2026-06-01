@@ -26,7 +26,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+    if: ${{ github.repository == 'giovannimnz/router-ai-atius' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -67,15 +67,15 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/atius-ai-router' }}
+    if: ${{ github.repository == 'giovannimnz/router-ai-atius' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build and push Docker image
         run: |
-          docker build -t ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }} .
-          docker push ghcr.io/giovannimnz/atius-ai-router:${{ github.ref_name }}
+          docker build -t ghcr.io/giovannimnz/router-ai-atius:${{ github.ref_name }} .
+          docker push ghcr.io/giovannimnz/router-ai-atius:${{ github.ref_name }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -112,5 +112,5 @@ e habilitar "Read and write permissions".
 
 - [ ] `.github/workflows/sync.yml` existe e é válido YAML
 - [ ] `.github/workflows/release.yml` existe e é válido YAML
-- [ ] `if: github.repository == 'giovannimnz/atius-ai-router'` presente em ambos
+- [ ] `if: github.repository == 'giovannimnz/router-ai-atius'` presente em ambos
 - [ ] Workflowsdisparam em push (testar com branch vazia ou tag test)

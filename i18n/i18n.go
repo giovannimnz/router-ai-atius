@@ -19,7 +19,7 @@ const (
 	LangZhCN    = "zh-CN"
 	LangZhTW    = "zh-TW"
 	LangEn      = "en"
-	LangPt      = "pt"
+	LangPt      = "pt-BR"
 	DefaultLang = LangEn // Fallback to English if language not supported
 )
 

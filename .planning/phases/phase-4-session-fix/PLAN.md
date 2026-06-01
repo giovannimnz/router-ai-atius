@@ -74,10 +74,10 @@ Reconstruir imagem com `docker build` e subir para GHCR.
 ```bash
 # No diretório do projeto
 cd /home/ubuntu/docker/Atius/router-ai-atius
-docker build -t ghcr.io/giovannimnz/atius-ai-router:session-fix -f Dockerfile .
-docker push ghcr.io/giovannimnz/atius-ai-router:session-fix
-docker tag ghcr.io/giovannimnz/atius-ai-router:session-fix ghcr.io/giovannimnz/atius-ai-router:latest
-docker push ghcr.io/giovannimnz/atius-ai-router:latest
+docker build -t ghcr.io/giovannimnz/router-ai-atius:session-fix -f Dockerfile .
+docker push ghcr.io/giovannimnz/router-ai-atius:session-fix
+docker tag ghcr.io/giovannimnz/router-ai-atius:session-fix ghcr.io/giovannimnz/router-ai-atius:latest
+docker push ghcr.io/giovannimnz/router-ai-atius:latest
 ```
 
 ### Resultado
@@ -96,7 +96,7 @@ Fazer pull da nova imagem e restartar o container.
 ```bash
 ssh atius-srv-1
 cd /home/ubuntu/docker/Atius/router-ai-atius
-docker pull ghcr.io/giovannimnz/atius-ai-router:latest
+docker pull ghcr.io/giovannimnz/router-ai-atius:latest
 docker-compose down
 docker-compose up -d
 docker ps | grep new-api
@@ -226,7 +226,7 @@ Se algo der errado:
 1. **Rollback docker-compose.yml**: remover `SESSION_SECRET` do environment
 2. **Rollback main.go**: voltar `Secure: false`
 3. **Restart container**: `docker-compose restart new-api`
-4. **Rollback imagem**: `docker tag ghcr.io/giovannimnz/atius-ai-router:<previous-tag> ghcr.io/giovannimnz/atius-ai-router:latest`
+4. **Rollback imagem**: `docker tag ghcr.io/giovannimnz/router-ai-atius:<previous-tag> ghcr.io/giovannimnz/router-ai-atius:latest`
 
 ---
 

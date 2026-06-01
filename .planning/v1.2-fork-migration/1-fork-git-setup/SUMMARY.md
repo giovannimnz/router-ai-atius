@@ -4,7 +4,7 @@
 
 ## What was done
 
-1. Added `origin` → `https://github.com/giovannimnz/atius-ai-router.git`
+1. Added `origin` → `https://github.com/giovannimnz/router-ai-atius.git`
 2. Added `upstream` → `https://github.com/QuantumNous/new-api.git`
 3. Fetched both remotes successfully
 4. Force-pushed local main to origin (local commits replaced origin/main)
@@ -21,7 +21,7 @@ Local repo (12 commits) and upstream/main share base commit `f995a868` but have 
 
 ```bash
 git remote -v
-# origin   https://github.com/giovannimnz/atius-ai-router.git (fetch/push)
+# origin   https://github.com/giovannimnz/router-ai-atius.git (fetch/push)
 # upstream https://github.com/QuantumNous/new-api.git (fetch/push)
 
 git fetch --all  # Works

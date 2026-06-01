@@ -6,7 +6,7 @@
 
 1. Created `.github/workflows/sync.yml` — weekly upstream sync
 2. Created `.github/workflows/release.yml` — tag-based releases
-3. Both workflows include `if: github.repository == 'giovannimnz/atius-ai-router'`
+3. Both workflows include `if: github.repository == 'giovannimnz/router-ai-atius'`
 
 ## Workflows
 

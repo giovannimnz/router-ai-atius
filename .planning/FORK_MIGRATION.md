@@ -1,7 +1,7 @@
 # FORK_MIGRATION.md — atius-ai-router
 
 **Fork of:** [QuantumNous/new-api](https://github.com/QuantumNous/new-api.git)
-**Fork URL:** https://github.com/giovannimnz/atius-ai-router.git
+**Fork URL:** https://github.com/giovannimnz/router-ai-atius.git
 **Created:** 2026-04-21
 
 ## Why This Fork

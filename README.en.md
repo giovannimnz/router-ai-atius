@@ -1,8 +1,8 @@
 # Atius AI Router
 
 <!-- Badges -->
-[![License](https://img.shields.io/github/license/giovannimnz/atius-ai-router)](https://github.com/giovannimnz/atius-ai-router)
-[![Version](https://img.shields.io/github/v/tag/giovannimnz/atius-ai-router?filter=v*)](https://github.com/giovannimnz/atius-ai-router/releases)
+[![License](https://img.shields.io/github/license/giovannimnz/router-ai-atius)](https://github.com/giovannimnz/router-ai-atius)
+[![Version](https://img.shields.io/github/v/tag/giovannimnz/router-ai-atius?filter=v*)](https://github.com/giovannimnz/router-ai-atius/releases)
 [![New-API](https://img.shields.io/badge/New--API-0.12.14-blue)](https://github.com/QuantumNous/new-api)
 
 ## What is it
@@ -11,7 +11,7 @@ Unified LLM gateway that aggregates MiniMax, DeepSeek and 40+ AI providers behin
 
 | Item | Value |
 |------|-------|
-| Fork URL | https://github.com/giovannimnz/atius-ai-router |
+| Fork URL | https://github.com/giovannimnz/router-ai-atius |
 | Parent URL | https://github.com/QuantumNous/new-api |
 | Fork version | `0.12.14.2` (base: 0.12.14 + suffix `.2`) |
 | Stack | NewAPI (Go 1.22+) · PostgreSQL 15 · Python middleware |
@@ -101,7 +101,7 @@ Channel Selection (distribute middleware):
 
 ```bash
 # 1. Clone and enter directory
-git clone https://github.com/giovannimnz/atius-ai-router.git
+git clone https://github.com/giovannimnz/router-ai-atius.git
 cd atius-ai-router
 
 # 2. Configure environment variables
@@ -223,7 +223,7 @@ curl -X POST https://router.atius.com.br/v1/messages \
 
 ```bash
 # Remotes
-origin   → https://github.com/giovannimnz/atius-ai-router.git
+origin   → https://github.com/giovannimnz/router-ai-atius.git
 upstream → https://github.com/QuantumNous/new-api.git
 
 # Weekly sync (auto via GitHub Actions)
@@ -270,7 +270,7 @@ docker compose logs -f model-detailed
 
 | Resource | URL |
 |---------|-----|
-| Fork | https://github.com/giovannimnz/atius-ai-router |
+| Fork | https://github.com/giovannimnz/router-ai-atius |
 | Parent | https://github.com/QuantumNous/new-api |
 | Router UI | https://router.atius.com.br |
 | Swagger Docs | internal on Docker network |

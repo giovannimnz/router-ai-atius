@@ -58,8 +58,8 @@ docker exec db-newapi psql -U admin -d newapi -c "SELECT \"group\", model, chann
 ### Task 3: Rebuild e deploy
 ```bash
 cd /home/ubuntu/docker/Atius/router-ai-atius
-docker build --no-cache -t ghcr.io/giovannimnz/atius-ai-router:latest .
-docker push ghcr.io/giovannimnz/atius-ai-router:latest
+docker build --no-cache -t ghcr.io/giovannimnz/router-ai-atius:latest .
+docker push ghcr.io/giovannimnz/router-ai-atius:latest
 # Deploy
 ssh -i ~/.ssh/id_oracle ubuntu@10.1.1.1
 sudo docker stop new-api && sudo docker rm new-api

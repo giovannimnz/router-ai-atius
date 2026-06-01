@@ -32,7 +32,7 @@ export const resources = {
   zh,
   fr,
   ja,
-  ptBR,
+  'pt-BR': ptBR,
   ru,
   vi,
 } as const

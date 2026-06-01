@@ -166,6 +166,21 @@ func buildOpenAIModel(modelName string, ownerByModel map[string]string) dto.Open
 		oaiModel.OwnedBy = owner
 	}
 	oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
+	// Enrich with context_length / max_completion_tokens / pricing from DB
+	if m, err := model.GetModelByName(modelName); err == nil && m != nil {
+		if m.ContextLength > 0 {
+			oaiModel.ContextLength = m.ContextLength
+		}
+		if m.MaxCompletionTokens > 0 {
+			oaiModel.MaxCompletionTokens = m.MaxCompletionTokens
+		}
+		if m.PricingPrompt > 0 {
+			oaiModel.PricingPrompt = m.PricingPrompt
+		}
+		if m.PricingCompletion > 0 {
+			oaiModel.PricingCompletion = m.PricingCompletion
+		}
+	}
 	return oaiModel
 }
 
@@ -339,6 +354,22 @@ func EnabledListModels(c *gin.Context) {
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
 	if aiModel, ok := openAIModelsMap[modelId]; ok {
+		// Mirror buildOpenAIModel: enrich with supported endpoint types + context/pricing from DB
+		aiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelId)
+		if m, err := model.GetModelByName(modelId); err == nil && m != nil {
+			if m.ContextLength > 0 {
+				aiModel.ContextLength = m.ContextLength
+			}
+			if m.MaxCompletionTokens > 0 {
+				aiModel.MaxCompletionTokens = m.MaxCompletionTokens
+			}
+			if m.PricingPrompt > 0 {
+				aiModel.PricingPrompt = m.PricingPrompt
+			}
+			if m.PricingCompletion > 0 {
+				aiModel.PricingCompletion = m.PricingCompletion
+			}
+		}
 		switch modelType {
 		case constant.ChannelTypeAnthropic:
 			c.JSON(200, dto.AnthropicModel{

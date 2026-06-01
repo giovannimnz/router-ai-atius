@@ -8,6 +8,10 @@ type OpenAIModels struct {
 	Object                 string                  `json:"object"`
 	Created                int                     `json:"created"`
 	OwnedBy                string                  `json:"owned_by"`
+	ContextLength          int                     `json:"context_length,omitempty"`
+	MaxCompletionTokens    int                     `json:"max_completion_tokens,omitempty"`
+	PricingPrompt          float64                 `json:"pricing_prompt,omitempty"`
+	PricingCompletion      float64                 `json:"pricing_completion,omitempty"`
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
 }
 

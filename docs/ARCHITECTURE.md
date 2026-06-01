@@ -706,20 +706,133 @@ Next middleware / handler
 
 ---
 
-## 11. Key Files Reference
+## 11. Bug Fix: CJK Character Pollution (MiniMax)
+
+### 11.1 Problema
+
+MiniMax-M2.7-hs ocasionalmente emitia caracteres CJK (chineses) em contexto não-CJK (português/inglês) devido a quirks do tokenizador BBPE com temperature sampling.
+
+**Commit:** `b5b1ac594 feat(minimax): add CJK strip filter — defense-in-depth`
+
+### 11.2 Arquitetura de Correção (2 camadas defense-in-depth)
+
+```
+Upstream MiniMax response
+    │
+    ├─ Layer 1: Go Router (StripCJK no relay — ativa via DB)
+    │       └─► common.StripCJK() → client
+    │
+    └─ Layer 2: Python Middleware (sempre ativa)
+            └─► strip_cjk_from_text() → client
+```
+
+### 11.3 Layer 1 — Go Router
+
+**Arquivos:**
+
+| Arquivo | Mudança |
+|---------|---------|
+| `common/str.go` | `cjkRegex` (Unicode ranges) + `StripCJK(s string) string` |
+| `dto/channel_settings.go` | `StripCJK bool` em `ChannelSettings` |
+| `relay/channel/openai/relay-openai.go` | `StripCJK` em streaming e non-streaming |
+| `data/migrations/migration_v0.4-strip-cjk-minimax.sql` | SQL migration para ativar `strip_cjk` |
+
+**Unicode ranges (`common/str.go`):**
+
+```go
+cjkRegex = regexp.MustCompile(`[\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}\x{3000}-\x{303f}\x{ff00}-\x{ffef}]`)
+// Ranges cobertos:
+// \x{4e00}-\x{9fff}   CJK Unified Ideographs (23,870 chars — maioria)
+// \x{3400}-\x{4dbf}   CJK Extension A
+// \x{3000}-\x{303f}   CJK Symbols/Punctuation
+// \x{ff00}-\x{ffef}   Halfwidth/Fullwidth Forms
+```
+
+**Cobertura Layer 1:**
+
+| Endpoint | Tipo | Função |
+|----------|------|--------|
+| `POST /v1/chat/completions` | Non-stream | `OpenaiHandler` → `StripCJK` applied ao content string |
+| `POST /v1/chat/completions` | Streaming | `sendStreamData` → `StripCJK` on raw string before delta parse |
+
+**Limitações Layer 1:**
+- Requer `strip_cjk: true` em `ChannelSettings` no DB (campo `settings` da tabela `channels`)
+- Só implementado em `relay/channel/openai/relay-openai.go` (formato OpenAI — não cobre Anthropic `/v1/messages`)
+- **Status atual:** `strip_cjk` NÃO está habilitado no canal type=35 (MiniMax) — Layer 1 não está ativa
+
+### 11.4 Layer 2 — Python Middleware (Defense-in-Depth)
+
+**Arquivo:** `integration/middleware/model_detailed_fastapi.py`
+
+**CJK regex:**
+
+```python
+CJK_PATTERN = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]")
+```
+
+**Funções de limpeza:**
+
+| Função | O que faz |
+|--------|-----------|
+| `strip_cjk_from_text(text)` | Regex sub CJK characters |
+| `strip_thinking_from_text(text)` | Remove blocos `<think>...</think>` |
+| `clean_code_fences(text)` | Strip markdown code fences |
+| `strip_thinking_blocks(body)` | Processa JSON body, aplica todas as limpezas |
+
+**Três paths de processamento:**
+
+| Path | Formato | Pipeline |
+|------|---------|---------|
+| Anthropic non-stream | `content[].text` | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
+| OpenAI non-stream | `choices[].message.content` | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
+| OpenAI streaming | SSE raw bytes | CJK strip na string raw ANTES de parsear delta |
+
+**Fix crítico do commit b5b1ac594:** O path OpenAI Agorax faz strip CJK MESMO quando não há think block (antes, só fazia se encontrasse `<think>`).
+
+### 11.5 Status Atual
+
+| Layer | Ativo? | Detalhe |
+|-------|--------|---------|
+| Layer 1 (Go Router) | **NÃO** | `strip_cjk` não está em `settings` do canal type=35 |
+| Layer 2 (Python) | **SIM** | Sempre ativa no middleware FastAPI |
+
+**Para ativar Layer 1:**
+
+```sql
+-- Verificar settings atual
+SELECT id, name, type, settings FROM channels WHERE type = 35;
+
+-- Aplicar strip_cjk
+UPDATE channels
+SET settings = (
+    CASE
+        WHEN settings::jsonb ? 'strip_cjk' THEN settings
+        ELSE (settings::jsonb || '{"strip_cjk": true}')::text
+    END
+)
+WHERE type = 35;
+```
+
+---
+
+## 12. Key Files Reference
 
 | File | Purpose |
 |------|---------|
 | `relay/relay_adaptor.go` | Core relay struct, HTTP client + upstream config |
 | `relay/api_request.go` | Generic HTTP request builder for upstream |
 | `relay/channel/minimax/adaptor.go` | MiniMax request/response conversion |
+| `relay/channel/openai/relay-openai.go` | OpenAI relay + StripCJK (Layer 1 CJK fix) |
 | `controller/relay.go` | Main dispatcher, routes to relay handler |
 | `middleware/distributor.go` | Channel selection by model abilities |
 | `service/channel_select.go` | Channel selection logic |
 | `service/billing_session.go` | Billing calculation post-request |
 | `service/quota.go` | Quota management and enforcement |
 | `model/main.go` | GORM connection setup, shared column helpers |
+| `common/str.go` | String utils incl. `StripCJK()` |
+| `dto/channel_settings.go` | `ChannelSettings` struct incl. `StripCJK` |
 | `pkg/billingexpr/expr.md` | Billing expression language spec |
+| `integration/middleware/model_detailed_fastapi.py` | FastAPI proxy + Layer 2 CJK strip |
 
 ---
 

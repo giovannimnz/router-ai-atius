@@ -44,8 +44,25 @@ upstream → https://github.com/QuantumNous/new-api.git (fetch only)
 
 ## Active Milestones
 
-### v1.4 — Model Aliases & Token Management (current)
-Aliases `-hs` para modelos highspeed e nova API key para Giovanni.
+### v1.6 — Internacionalização PT-BR (current)
+Adicionar Português do Brasil como idioma principal. Tradução completa de frontend, backend e DB.
+
+**Goal:** Atius Router 100% em Português do Brasil.
+
+**Target deliverables:**
+1. Frontend `i18n/locales/pt.json` com todas as chaves traduzidas
+2. Backend `i18n/locales/pt.yaml` com todas as traduções Go
+3. DB: `Language=pt`, `Logo=/logo.png`, `SystemName=Atius Router`
+4. BRANCH: `feat/portuguese-translation` para PR ao upstream
+5. README.pt.md e documentação em PT-BR
+
+### v1.7 — Documentação PT-BR
+README principal em PT-BR, `README.en.md` como cópia, docs folder, fork-sync cleanup para `~/fork-sync/`.
+
+### v1.8 — Podman Migration
+Migrar Docker Compose → Podman Compose. Limpar Docker references.
+
+### v1.4 — Model Aliases & Token Management
 
 **Goal:** Migracao gradual de `-highspeed` para `-hs` sem impacto nos clientes.
 

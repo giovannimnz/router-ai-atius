@@ -340,9 +340,8 @@ func ListModels(c *gin.Context, modelType int) {
 		})
 	default:
 		c.JSON(200, gin.H{
-			"success": true,
-			"data":    userOpenAiModels,
-			"object":  "list",
+			"data":   userOpenAiModels,
+			"object": "list",
 		})
 	}
 }
@@ -522,10 +521,22 @@ func ListClaudeModels(c *gin.Context) {
 	})
 }
 
-// modelSortKey returns a tuple (version, tier) used to sort /v1/models output.
-// Higher version first; -highspeed/-pro ahead of standard/-flash; tiebreak by name.
-func modelSortKey(name string) (float64, int, string) {
+// modelSortKey returns a tuple (vendor, version, tier) used to sort /v1/models output.
+// Vendor priority: MiniMax first, then everything else (sorted by name).
+// Within a vendor: higher version first; -highspeed/-pro before standard; -flash after.
+func modelSortKey(name string) (int, float64, int, string) {
 	lower := strings.ToLower(name)
+	// Vendor priority: 0 = MiniMax, 1 = other (then alphabetical)
+	vendorRank := 1
+	if strings.Contains(lower, "minimax-") {
+		vendorRank = 0
+	} else if strings.Contains(lower, "deepseek-") {
+		vendorRank = 1
+	} else {
+		// Other vendors: alphabetical rank offset (1, 2, 3, ...) so that
+		// MiniMax stays first regardless of vendor name.
+		vendorRank = 1 + (int(name[0]) % 26)
+	}
 	// Tier: -highspeed/-hs = 0 (highest), pro=0, standard=1, flash=2
 	tier := 1
 	if strings.HasSuffix(lower, "-highspeed") || strings.HasSuffix(lower, "-hs") {
@@ -535,10 +546,8 @@ func modelSortKey(name string) (float64, int, string) {
 	} else if strings.HasSuffix(lower, "-flash") {
 		tier = 2
 	}
-	// Version: extract numeric after the M-/v prefix, e.g. "MiniMax-M3" -> 3, "MiniMax-M2.7" -> 2.7,
-	// "deepseek-v4-flash" -> 4, "deepseek-v4-pro" -> 4
+	// Version: extract numeric after the M-/v prefix
 	version := 0.0
-	// Try MiniMax-M pattern
 	if idx := strings.Index(lower, "minimax-m"); idx >= 0 {
 		rest := lower[idx+len("minimax-m"):]
 		rest = strings.TrimSuffix(rest, "-highspeed")
@@ -548,7 +557,6 @@ func modelSortKey(name string) (float64, int, string) {
 		}
 	} else if idx := strings.Index(lower, "deepseek-v"); idx >= 0 {
 		rest := lower[idx+len("deepseek-v"):]
-		// extract leading digits
 		end := 0
 		for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
 			end++
@@ -560,15 +568,18 @@ func modelSortKey(name string) (float64, int, string) {
 		}
 	}
 	// DESC version => negate for sort.Slice ascending
-	return -version, tier, name
+	return vendorRank, -version, tier, name
 }
 
 func sortModelsByPriority(names []string) {
 	sort.SliceStable(names, func(i, j int) bool {
-		vi, ti, ni := modelSortKey(names[i])
-		vj, tj, nj := modelSortKey(names[j])
+		vi, veri, ti, ni := modelSortKey(names[i])
+		vj, verj, tj, nj := modelSortKey(names[j])
 		if vi != vj {
-			return vi < vj // vi is already negated, so smaller = higher version
+			return vi < vj
+		}
+		if veri != verj {
+			return veri < verj
 		}
 		if ti != tj {
 			return ti < tj

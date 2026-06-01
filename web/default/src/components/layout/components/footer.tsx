@@ -143,7 +143,6 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
   }
   return (
     <div className='text-muted-foreground/45 text-center text-xs sm:text-right'>
-<<<<<<< HEAD
       <span className='text-muted-foreground/45'>
         &copy; {props.currentYear}{' '}
         <a
@@ -156,9 +155,6 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
         </a>
         . {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}
       </span>
-=======
-      {content}
->>>>>>> upstream/main
     </div>
   )
 }

@@ -175,6 +175,26 @@ function reorderLikeBase(base, target, fill, extras, missing, currentPath = []) 
   return target === undefined ? (fill ?? base) : target
 }
 
+// Sanitize nested object values that should be plain strings.
+// Some locales (e.g. pt-BR) have values like {'': '...'} from a prior bad sync
+// run. We unwrap them so the key holds the actual translation string.
+function sanitizeValues(obj) {
+  if (Array.isArray(obj)) return obj.map(sanitizeValues)
+  if (isPlainObject(obj)) {
+    // If the object has only an '' key with a string value, unwrap to a string.
+    const keys = Object.keys(obj)
+    if (keys.length === 1 && keys[0] === '' && typeof obj[''] === 'string') {
+      return obj['']
+    }
+    const out = {}
+    for (const k of keys) {
+      out[k] = sanitizeValues(obj[k])
+    }
+    return out
+  }
+  return obj
+}
+
 function isLikelyUntranslated({ locale, baseValue, value }) {
   if (typeof value !== 'string' || typeof baseValue !== 'string') return false
   if (value !== baseValue) return false
@@ -260,6 +280,7 @@ async function main() {
     const extras = {}
     const missing = []
     const fixed = reorderLikeBase(baseJson, json, compareJson, extras, missing)
+    const sanitized = sanitizeValues(fixed)
 
     // Untranslated scan (translation namespace only)
     const untranslated = {}
@@ -303,7 +324,7 @@ async function main() {
     }
 
     // Rewrite locale file in base order (even for en to normalize formatting)
-    await fs.writeFile(full, stableStringify(fixed), 'utf8')
+    await fs.writeFile(full, stableStringify(sanitized), 'utf8')
   }
 
   await fs.writeFile(path.join(reportsDir, '_sync-report.json'), stableStringify(report), 'utf8')

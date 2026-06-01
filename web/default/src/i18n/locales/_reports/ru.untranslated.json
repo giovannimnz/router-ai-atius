@@ -1,5 +1,4 @@
 {
-  "Built for developers, designed for scale": "Construído para desenvolvedores, projetado para escalar",
   "Ready to simplify your AI integration?": "Pronto para simplificar sua integração com IA?",
   "How it works": "Como funciona",
   "Core features": "Principais recursos",
@@ -14,5 +13,9 @@
   "Statistics": "Estatísticas",
   "Powered by": "Desenvolvido com",
   "All rights reserved": "Todos os direitos reservados",
-  "No results": "Nenhum resultado"
+  "No results": "Nenhum resultado",
+  "Language preferences are synced across your connected devices and affect API error messages.": "Language preferences are synced across your connected devices and affect API error messages.",
+  "Login with passkey": "Login with passkey",
+  "Passkey authentication": "Passkey authentication",
+  "Use a passkey to sign in without entering your password.": "Use a passkey to sign in without entering your password."
 }

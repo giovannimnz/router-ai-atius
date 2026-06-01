@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# sync-fork.sh — Automatically sync atius-ai-router with upstream NewAPI
+# sync-fork.sh — Automatically sync router-ai-atius with upstream NewAPI
 #
 # Features:
 # - Merges upstream with "theirs" strategy (prefer upstream on conflict)
@@ -72,7 +72,7 @@ done
 
 cd "$REPO_ROOT"
 
-[[ "$SILENT" != "true" ]] && echo "=== atius-ai-router Fork Sync ==="
+[[ "$SILENT" != "true" ]] && echo "=== router-ai-atius Fork Sync ==="
 [[ "$SILENT" != "true" ]] && echo "Upstream:  $UPSTREAM_URL"
 [[ "$SILENT" != "true" ]] && echo "Branch:    $BRANCH"
 [[ "$SILENT" != "true" ]] && echo "Strategy:  $STRATEGY"

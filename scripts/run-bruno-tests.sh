@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run-bruno-tests.sh — Execute Bruno API tests for atius-ai-router
+# run-bruno-tests.sh — Execute Bruno API tests for router-ai-atius
 #
 # Usage:
 #   ./scripts/run-bruno-tests.sh [collection] [args...]
@@ -24,7 +24,7 @@ if [[ -f "${COLLECTION_DIR}/.env.local" ]]; then
     done < "${COLLECTION_DIR}/.env.local"
 fi
 
-echo "=== atius-ai-router Bruno Tests ==="
+echo "=== router-ai-atius Bruno Tests ==="
 echo "Target: ${TARGET}"
 echo "Bruno CLI: ${BRUNO_CLI}"
 echo ""

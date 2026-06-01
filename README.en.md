@@ -1,459 +1,280 @@
-<div align="center">
+# Atius AI Router
 
-![new-api](/web/default/public/logo.png)
+<!-- Badges -->
+[![License](https://img.shields.io/github/license/giovannimnz/atius-ai-router)](https://github.com/giovannimnz/atius-ai-router)
+[![Version](https://img.shields.io/github/v/tag/giovannimnz/atius-ai-router?filter=v*)](https://github.com/giovannimnz/atius-ai-router/releases)
+[![New-API](https://img.shields.io/badge/New--API-0.12.14-blue)](https://github.com/QuantumNous/new-api)
 
-# New API
+## What is it
 
-🍥 **Next-Generation Large Model Gateway and AI Asset Management System**
+Unified LLM gateway that aggregates MiniMax, DeepSeek and 40+ AI providers behind a single OpenAI/Anthropic-compatible API. Fork of [QuantumNous/new-api](https://github.com/QuantumNous/new-api) adapted for the Atius ecosystem.
 
-<p align="center">
-  <a href="./README.md">中文</a> | 
-  <strong>English</strong> | 
-  <a href="./README.fr.md">Français</a> | 
-  <a href="./README.ja.md">日本語</a>
-</p>
+| Item | Value |
+|------|-------|
+| Fork URL | https://github.com/giovannimnz/atius-ai-router |
+| Parent URL | https://github.com/QuantumNous/new-api |
+| Fork version | `0.12.14.2` (base: 0.12.14 + suffix `.2`) |
+| Stack | NewAPI (Go 1.22+) · PostgreSQL 15 · Python middleware |
 
-<p align="center">
-  <a href="https://raw.githubusercontent.com/Calcium-Ion/new-api/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Calcium-Ion/new-api?color=brightgreen" alt="license">
-  </a>
-  <a href="https://github.com/Calcium-Ion/new-api/releases/latest">
-    <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
-  </a>
-  <a href="https://github.com/users/Calcium-Ion/packages/container/package/new-api">
-    <img src="https://img.shields.io/badge/docker-ghcr.io-blue" alt="docker">
-  </a>
-  <a href="https://hub.docker.com/r/CalciumIon/new-api">
-    <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
-  </a>
-  <a href="https://goreportcard.com/report/github.com/Calcium-Ion/new-api">
-    <img src="https://goreportcard.com/badge/github.com/Calcium-Ion/new-api" alt="GoReportCard">
-  </a>
-</p>
+## Technical Stack
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/8227" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/8227" alt="Calcium-Ion%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-</p>
+| Layer | Technology |
+|-------|------------|
+| Gateway | Go + Gin + GORM v2 |
+| Frontend | React 19 + TypeScript + Rsbuild + Radix UI + Tailwind CSS |
+| Middleware | Python FastAPI (model enrichment) |
+| Database | PostgreSQL 15 (container `db-newapi`) |
+| Cache | Redis (go-redis) + in-memory |
+| Auth | JWT, WebAuthn/Passkeys, OAuth (GitHub, Discord, OIDC) |
+| Orchestration | Docker Compose |
 
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-key-features">Key Features</a> •
-  <a href="#-deployment">Deployment</a> •
-  <a href="#-documentation">Documentation</a> •
-  <a href="#-help-support">Help</a>
-</p>
+## Available Models
 
-</div>
+| Model | Provider | Context | Max Output |
+|-------|----------|---------|------------|
+| `MiniMax-M2.7` | MiniMax | 245760 | 50000 |
+| `MiniMax-M2.7-highspeed` | MiniMax | 245760 | 50000 |
+| `MiniMax-M2.5` | MiniMax | 245760 | 50000 |
+| `MiniMax-M2.5-highspeed` | MiniMax | 245760 | 50000 |
+| `deepseek-chat` | DeepSeek | 131072 | 8192 |
+| `deepseek-reasoner` | DeepSeek | 131072 | 65536 |
 
-## 📝 Project Description
+### Highspeed Aliases
 
-> [!NOTE]  
-> This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api)
+| Alias | Maps to |
+|-------|---------|
+| `MiniMax-M2.7-hs` | `MiniMax-M2.7-highspeed` |
+| `MiniMax-M2.5-hs` | `MiniMax-M2.5-highspeed` |
 
-> [!IMPORTANT]  
-> - This project is for personal learning purposes only, with no guarantee of stability or technical support
-> - Users must comply with OpenAI's [Terms of Use](https://openai.com/policies/terms-of-use) and **applicable laws and regulations**, and must not use it for illegal purposes
-> - According to the [《Interim Measures for the Management of Generative Artificial Intelligence Services》](http://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm), please do not provide any unregistered generative AI services to the public in China.
+Mapping done automatically via `model_mapping` in the MiniMax channel in the database.
 
----
+## Routing Architecture
 
-## 🤝 Trusted Partners
+```
+Client (OpenAI/Anthropic SDK)
+    │
+    ├─► POST /v1/chat/completions ──► RelayFormatOpenAI ──► minimax adaptor ──► /v1/text/chatcompletion_v2
+    │
+    ├─► POST /v1/messages ──────────► RelayFormatClaude ──► minimax adaptor ──► /anthropic/v1/messages
+    │
+    ├─► GET  /v1/models ─────────────► Python middleware ──► enrichment ──────► enriched response
+    │
+    ├─► POST /v1/embeddings ─────────────────────────────────────────► minimax
+    ├─► POST /v1/audio/speech ─────────────────────────────────────────► minimax TTS
+    ├─► POST /v1/audio/transcriptions ─────────────────────────────────► minimax STT
+    ├─► POST /v1/images/generations ───────────────────────────────────► minimax image
+    └─► POST /v1/rerank ───────────────────────────────────────────────► minimax rerank
 
-<p align="center">
-  <em>No particular order</em>
-</p>
-
-<p align="center">
-  <a href="https://www.cherry-ai.com/" target="_blank">
-    <img src="./docs/images/cherry-studio.png" alt="Cherry Studio" height="80" />
-  </a>
-  <a href="https://bda.pku.edu.cn/" target="_blank">
-    <img src="./docs/images/pku.png" alt="Peking University" height="80" />
-  </a>
-  <a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud" height="80" />
-  </a>
-  <a href="https://www.aliyun.com/" target="_blank">
-    <img src="./docs/images/aliyun.png" alt="Alibaba Cloud" height="80" />
-  </a>
-  <a href="https://io.net/" target="_blank">
-    <img src="./docs/images/io-net.png" alt="IO.NET" height="80" />
-  </a>
-</p>
-
----
-
-## 🙏 Special Thanks
-
-<p align="center">
-  <a href="https://www.jetbrains.com/?from=new-api" target="_blank">
-    <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" width="120" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>Thanks to <a href="https://www.jetbrains.com/?from=new-api">JetBrains</a> for providing free open-source development license for this project</strong>
-</p>
-
----
-
-## 🚀 Quick Start
-
-### Using Docker Compose (Recommended)
-
-```bash
-# Clone the project
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# Edit docker-compose.yml configuration
-nano docker-compose.yml
-
-# Start the service
-docker-compose up -d
+Channel Selection (distribute middleware):
+    Token ─► Abilities table ─► matching (group, model) ─► channel_id
+    ─► Channels table ─► base_url, model_mapping
 ```
 
-<details>
-<summary><strong>Using Docker Commands</strong></summary>
+## Main Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v1/chat/completions` | Chat completions (OpenAI compat.) |
+| POST | `/v1/messages` | Messages (Anthropic compat.) |
+| POST | `/v1/completions` | Completions (legacy) |
+| POST | `/v1/embeddings` | Embeddings |
+| POST | `/v1/audio/speech` | Text-to-Speech |
+| POST | `/v1/audio/transcriptions` | Speech-to-Text |
+| POST | `/v1/images/generations` | Image generation |
+| POST | `/v1/rerank` | Rerank |
+| GET | `/v1/models` | List models (enriched) |
+| GET | `/api/status` | System status + API Info |
+| POST | `/api/user/register` | Registration |
+| POST | `/api/user/login` | Login |
+
+### Access URLs
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Middleware (host) | `http://localhost:3300` | Via Python middleware |
+| Middleware (Docker) | `http://model-detailed:3001` | Via `newapi-internal` network |
+| NewAPI (host) | `http://localhost:3301` | Direct (no enrichment) |
+| NewAPI (Docker) | `http://new-api:3000` | Via `atius-shared` network |
+| PostgreSQL (host) | `localhost:8746` | psycopg2 |
+
+## Quick Start
 
 ```bash
-# Pull the latest image
-docker pull calciumion/new-api:latest
+# 1. Clone and enter directory
+git clone https://github.com/giovannimnz/atius-ai-router.git
+cd atius-ai-router
 
-# Using SQLite (default)
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+# 2. Configure environment variables
+cp .env.example .env
+# Edit .env with your API keys
 
-# Using MySQL
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+# 3. Start containers
+docker compose up -d
+
+# 4. Check status
+docker compose ps
+
+# 5. Test models endpoint
+curl http://localhost:3300/v1/models \
+  -H "Authorization: Bearer <YOUR_TOKEN>"
 ```
 
-> **💡 Tip:** `-v ./data:/data` will save data in the `data` folder of the current directory, you can also change it to an absolute path like `-v /your/custom/path:/data`
+## Usage Examples
 
-</details>
+### OpenAI SDK
 
----
+```python
+from openai import OpenAI
 
-🎉 After deployment is complete, visit `http://localhost:3000` to start using!
+client = OpenAI(
+    api_key="<YOUR_TOKEN>",
+    base_url="https://router.atius.com.br/v1"
+)
 
-📖 For more deployment methods, please refer to [Deployment Guide](https://docs.newapi.pro/en/docs/installation)
+response = client.chat.completions.create(
+    model="MiniMax-M2.7",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Explain quantum computing simply."}
+    ],
+    max_tokens=1024,
+    temperature=0.7
+)
+print(response.choices[0].message.content)
+```
 
----
+### Anthropic SDK
 
-## 📚 Documentation
+```python
+import anthropic
 
-<div align="center">
+client = anthropic.Anthropic(
+    api_key="<YOUR_TOKEN>",
+    base_url="https://router.atius.com.br/v1"
+)
 
-### 📖 [Official Documentation](https://docs.newapi.pro/en/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
+message = client.messages.create(
+    model="MiniMax-M2.7",
+    max_tokens=1024,
+    system="You are a helpful assistant.",
+    messages=[
+        {"role": "user", "content": "Explain quantum computing simply."}
+    ]
+)
+print(message.content[0].text)
+```
 
-</div>
-
-**Quick Navigation:**
-
-| Category | Link |
-|------|------|
-| 🚀 Deployment Guide | [Installation Documentation](https://docs.newapi.pro/en/docs/installation) |
-| ⚙️ Environment Configuration | [Environment Variables](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables) |
-| 📡 API Documentation | [API Documentation](https://docs.newapi.pro/en/docs/api) |
-| ❓ FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-
----
-
-## ✨ Key Features
-
-> For detailed features, please refer to [Features Introduction](https://docs.newapi.pro/en/docs/guide/wiki/basic-concepts/features-introduction)
-
-### 🎨 Core Functions
-
-| Feature | Description |
-|------|------|
-| 🎨 New UI | Modern user interface design |
-| 🌍 Multi-language | Supports Chinese, English, French, Japanese |
-| 🔄 Data Compatibility | Fully compatible with the original One API database |
-| 📈 Data Dashboard | Visual console and statistical analysis |
-| 🔒 Permission Management | Token grouping, model restrictions, user management |
-
-### 💰 Payment and Billing
-
-- ✅ Online recharge (EPay, Stripe)
-- ✅ Pay-per-use model pricing
-- ✅ Cache billing support (OpenAI, Azure, DeepSeek, Claude, Qwen and all supported models)
-- ✅ Flexible billing policy configuration
-
-### 🔐 Authorization and Security
-
-- 😈 Discord authorization login
-- 🤖 LinuxDO authorization login
-- 📱 Telegram authorization login
-- 🔑 OIDC unified authentication
-
-### 🚀 Advanced Features
-
-**API Format Support:**
-- ⚡ [OpenAI Responses](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-response)
-- ⚡ [OpenAI Realtime API](https://docs.newapi.pro/en/docs/api/ai-model/realtime/create-realtime-session) (including Azure)
-- ⚡ [Claude Messages](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message)
-- ⚡ [Google Gemini](https://doc.newapi.pro/en/api/google-gemini-chat)
-- 🔄 [Rerank Models](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank) (Cohere, Jina)
-
-**Intelligent Routing:**
-- ⚖️ Channel weighted random
-- 🔄 Automatic retry on failure
-- 🚦 User-level model rate limiting
-
-**Format Conversion:**
-- 🔄 **OpenAI Compatible ⇄ Claude Messages**
-- 🔄 **OpenAI Compatible → Google Gemini**
-- 🔄 **Google Gemini → OpenAI Compatible** - Text only, function calling not supported yet
-- 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - In development
-- 🔄 **Thinking-to-content functionality**
-
-**Reasoning Effort Support:**
-
-<details>
-<summary>View detailed configuration</summary>
-
-**OpenAI series models:**
-- `o3-mini-high` - High reasoning effort
-- `o3-mini-medium` - Medium reasoning effort
-- `o3-mini-low` - Low reasoning effort
-- `gpt-5-high` - High reasoning effort
-- `gpt-5-medium` - Medium reasoning effort
-- `gpt-5-low` - Low reasoning effort
-
-**Claude thinking models:**
-- `claude-3-7-sonnet-20250219-thinking` - Enable thinking mode
-
-**Google Gemini series models:**
-- `gemini-2.5-flash-thinking` - Enable thinking mode
-- `gemini-2.5-flash-nothinking` - Disable thinking mode
-- `gemini-2.5-pro-thinking` - Enable thinking mode
-- `gemini-2.5-pro-thinking-128` - Enable thinking mode with thinking budget of 128 tokens
-- You can also append `-low`, `-medium`, or `-high` to any Gemini model name to request the corresponding reasoning effort (no extra thinking-budget suffix needed).
-
-</details>
-
----
-
-## 🤖 Model Support
-
-> For details, please refer to [API Documentation - Relay Interface](https://docs.newapi.pro/en/docs/api)
-
-| Model Type | Description | Documentation |
-|---------|------|------|
-| 🤖 OpenAI GPTs | gpt-4-gizmo-* series | - |
-| 🎨 Midjourney-Proxy | [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) | [Documentation](https://doc.newapi.pro/en/api/midjourney-proxy-image) |
-| 🎵 Suno-API | [Suno API](https://github.com/Suno-API/Suno-API) | [Documentation](https://doc.newapi.pro/en/api/suno-music) |
-| 🔄 Rerank | Cohere, Jina | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank) |
-| 💬 Claude | Messages format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message) |
-| 🌐 Gemini | Google Gemini format | [Documentation](https://doc.newapi.pro/en/api/google-gemini-chat) |
-| 🔧 Dify | ChatFlow mode | - |
-| 🎯 Custom | Supports complete call address | - |
-
-### 📡 Supported Interfaces
-
-<details>
-<summary>View complete interface list</summary>
-
-- [Chat Interface (Chat Completions)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-chat-completion)
-- [Response Interface (Responses)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-response)
-- [Image Interface (Image)](https://docs.newapi.pro/en/docs/api/ai-model/images/openai/v1-images-generations--post)
-- [Audio Interface (Audio)](https://docs.newapi.pro/en/docs/api/ai-model/audio/openai/create-transcription)
-- [Video Interface (Video)](https://docs.newapi.pro/en/docs/api/ai-model/videos/create-video-generation)
-- [Embedding Interface (Embeddings)](https://docs.newapi.pro/en/docs/api/ai-model/embeddings/create-embedding)
-- [Rerank Interface (Rerank)](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank)
-- [Realtime Conversation (Realtime)](https://docs.newapi.pro/en/docs/api/ai-model/realtime/create-realtime-session)
-- [Claude Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message)
-- [Google Gemini Chat](https://doc.newapi.pro/en/api/google-gemini-chat)
-
-</details>
-
----
-
-## 🚢 Deployment
-
-> [!TIP]
-> **Latest Docker image:** `calciumion/new-api:latest`
-
-### 📋 Deployment Requirements
-
-| Component | Requirement |
-|------|------|
-| **Local database** | SQLite (Docker must mount `/data` directory)|
-| **Remote database** | MySQL ≥ 5.7.8 or PostgreSQL ≥ 9.6 |
-| **Container engine** | Docker / Docker Compose |
-
-### ⚙️ Environment Variable Configuration
-
-<details>
-<summary>Common environment variable configuration</summary>
-
-| Variable Name | Description | Default Value |
-|--------|------|--------|
-| `SESSION_SECRET` | Session secret (required for multi-machine deployment) | - |
-| `CRYPTO_SECRET` | Encryption secret (required for Redis) | - |
-| `SQL_DSN` | Database connection string | - |
-| `REDIS_CONN_STRING` | Redis connection string | - |
-| `STREAMING_TIMEOUT` | Streaming timeout (seconds) | `300` |
-| `STREAM_SCANNER_MAX_BUFFER_MB` | Max per-line buffer (MB) for the stream scanner; increase when upstream sends huge image/base64 payloads | `64` |
-| `MAX_REQUEST_BODY_MB` | Max request body size (MB, counted **after decompression**; prevents huge requests/zip bombs from exhausting memory). Exceeding it returns `413` | `32` |
-| `AZURE_DEFAULT_API_VERSION` | Azure API version | `2025-04-01-preview` |
-| `ERROR_LOG_ENABLED` | Error log switch | `false` |
-| `PYROSCOPE_URL` | Pyroscope server address | - |
-| `PYROSCOPE_APP_NAME` | Pyroscope application name | `new-api` |
-| `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope basic auth user | - |
-| `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope basic auth password | - |
-| `PYROSCOPE_MUTEX_RATE` | Pyroscope mutex sampling rate | `5` |
-| `PYROSCOPE_BLOCK_RATE` | Pyroscope block sampling rate | `5` |
-| `HOSTNAME` | Hostname tag for Pyroscope | `new-api` |
-
-📖 **Complete configuration:** [Environment Variables Documentation](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables)
-
-</details>
-
-### 🔧 Deployment Methods
-
-<details>
-<summary><strong>Method 1: Docker Compose (Recommended)</strong></summary>
+### curl
 
 ```bash
-# Clone the project
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+# Chat completions
+curl -X POST https://router.atius.com.br/v1/chat/completions \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "MiniMax-M2.7",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "max_tokens": 50
+  }'
 
-# Edit configuration
-nano docker-compose.yml
-
-# Start service
-docker-compose up -d
+# Anthropic messages
+curl -X POST https://router.atius.com.br/v1/messages \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -H "x-api-key: <YOUR_TOKEN>" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "MiniMax-M2.7",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
 ```
 
-</details>
+## MiniMax Pricing (per Million tokens)
 
-<details>
-<summary><strong>Method 2: Docker Commands</strong></summary>
+| Model | Input | Output | Cache Read | Cache Write |
+|-------|-------|--------|------------|-------------|
+| M2.7 | $0.30 | $1.20 | $0.06 | $0.375 |
+| M2.7-hs | $0.30 | $2.40 | $0.06 | $0.375 |
+| M2.5 | $0.30 | $1.20 | $0.03 | $0.375 |
+| M2.5-hs | $0.30 | $2.40 | $0.03 | $0.375 |
 
-**Using SQLite:**
+> Cache write tokens = 1.25× input price. Cache read tokens = 0.1× input price.
+
+## Rate Limits
+
+| Model | RPM | TPM |
+|-------|-----|-----|
+| All M2.x | 500 | 20,000,000 |
+
+> TPM of 20M ≈ ~333K tokens/second. Practical limit = RPM 500 (~8.3 req/s).
+
+## Available Scripts
+
+| Script | Function |
+|--------|----------|
+| `scripts/sync-fork.sh` | Sync with upstream + version bump |
+| `scripts/version-bump.sh` | Semantic versioning X.Y.Z.N |
+| `scripts/run-bruno-tests.sh` | Run Bruno CLI test suite |
+| `scripts/deploy-ghcr.sh` | Build + push to GHCR |
+| `scripts/auto-sync-deploy.sh` | Auto sync + deploy |
+
+## Git Workflow
+
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+# Remotes
+origin   → https://github.com/giovannimnz/atius-ai-router.git
+upstream → https://github.com/QuantumNous/new-api.git
+
+# Weekly sync (auto via GitHub Actions)
+./scripts/sync-fork.sh --dry-run
+
+# Version bump check
+./scripts/version-bump.sh --check
+
+# Restore protected files after sync
+git checkout HEAD -- integration/middleware/model_detailed.py
+git checkout HEAD -- docker-compose.yml
 ```
 
-**Using MySQL:**
+## Versioning
+
+Fork uses `X.Y.Z.N`:
+- `X.Y.Z` = upstream NewAPI base version
+- `N` = fork suffix (incremented on each sync)
+
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+cat VERSION  # 0.12.14.2
+git tag -l "v0.12.*"
 ```
 
-> **💡 Path explanation:** 
-> - `./data:/data` - Relative path, data saved in the data folder of the current directory
-> - You can also use absolute path, e.g.: `/your/custom/path:/data`
+## Troubleshooting
 
-</details>
+```bash
+# Containers won't start
+docker compose down && docker compose up -d
+docker compose ps
 
-<details>
-<summary><strong>Method 3: BaoTa Panel</strong></summary>
+# Test directly on new-api (no middleware)
+docker exec new-api curl localhost:3000/v1/models
 
-1. Install BaoTa Panel (≥ 9.2.0 version)
-2. Search for **New-API** in the application store
-3. One-click installation
+# Bruno tests fail
+./scripts/run-bruno-tests.sh
 
-📖 [Tutorial with images](./docs/BT.md)
+# View logs
+docker compose logs -f new-api
+docker compose logs -f model-detailed
+```
 
-</details>
+## Links
 
-### ⚠️ Multi-machine Deployment Considerations
-
-> [!WARNING]
-> - **Must set** `SESSION_SECRET` - Otherwise login status inconsistent
-> - **Shared Redis must set** `CRYPTO_SECRET` - Otherwise data cannot be decrypted
-
-### 🔄 Channel Retry and Cache
-
-**Retry configuration:** `Settings → Operation Settings → General Settings → Failure Retry Count`
-
-**Cache configuration:**
-- `REDIS_CONN_STRING`: Redis cache (recommended)
-- `MEMORY_CACHE_ENABLED`: Memory cache
+| Resource | URL |
+|---------|-----|
+| Fork | https://github.com/giovannimnz/atius-ai-router |
+| Parent | https://github.com/QuantumNous/new-api |
+| Router UI | https://router.atius.com.br |
+| Swagger Docs | internal on Docker network |
 
 ---
 
-## 🔗 Related Projects
-
-### Upstream Projects
-
-| Project | Description |
-|------|------|
-| [One API](https://github.com/songquanpeng/one-api) | Original project base |
-| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney interface support |
-
-### Supporting Tools
-
-| Project | Description |
-|------|------|
-| [neko-api-key-tool](https://github.com/Calcium-Ion/neko-api-key-tool) | Key quota query tool |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API high-performance optimized version |
-
----
-
-## 💬 Help Support
-
-### 📖 Documentation Resources
-
-| Resource | Link |
-|------|------|
-| 📘 FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-| 🐛 Issue Feedback | [Issue Feedback](https://docs.newapi.pro/en/docs/support/feedback-issues) |
-| 📚 Complete Documentation | [Official Documentation](https://docs.newapi.pro/en/docs) |
-
-### 🤝 Contribution Guide
-
-Welcome all forms of contribution!
-
-- 🐛 Report Bugs
-- 💡 Propose New Features
-- 📝 Improve Documentation
-- 🔧 Submit Code
-
----
-
-## 🌟 Star History
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Calcium-Ion/new-api&type=Date)](https://star-history.com/#Calcium-Ion/new-api&Date)
-
-</div>
-
----
-
-<div align="center">
-
-### 💖 Thank you for using New API
-
-If this project is helpful to you, welcome to give us a ⭐️ Star！
-
-**[Official Documentation](https://docs.newapi.pro/en/docs)** • **[Issue Feedback](https://github.com/Calcium-Ion/new-api/issues)** • **[Latest Release](https://github.com/Calcium-Ion/new-api/releases)**
-
-<sub>Built with ❤️ by QuantumNous</sub>
-
-</div>
+_Last updated: 2026-05-31_

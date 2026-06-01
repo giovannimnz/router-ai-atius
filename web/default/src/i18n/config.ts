@@ -43,8 +43,8 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    supportedLngs: ['en', 'zh', 'fr', 'ja', 'pt-BR', 'ru', 'vi'],
-    load: 'languageOnly', // Convert zh-CN -> zh
+    supportedLngs: ['en', 'zh', 'fr', 'ja', 'pt-BR', 'pt', 'ru', 'vi'],
+    // keep 'pt-BR' literal; do not collapse to 'pt' (which would clash with pt-BR resources)
     nsSeparator: false, // Allow literal colons in keys (e.g., URLs, labels)
     debug: import.meta.env.DEV,
     interpolation: {

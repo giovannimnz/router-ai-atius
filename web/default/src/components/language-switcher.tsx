@@ -17,7 +17,7 @@ const languages = [
   { code: 'zh', label: '中文' },
   { code: 'fr', label: 'Français' },
   { code: 'ja', label: '日本語' },
-  { code: 'pt', label: 'Português' },
+  { code: 'pt-BR', label: 'Português' },
   { code: 'ru', label: 'Русский' },
   { code: 'vi', label: 'Tiếng Việt' },
 ]

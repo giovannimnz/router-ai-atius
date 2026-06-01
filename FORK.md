@@ -84,11 +84,15 @@ CLI Click para gerenciar NewAPI via agentes:
 
 ### 2.5 Scripts Customizados
 
-| Script | Função |
-|--------|--------|
-| `scripts/sync-fork.sh` | Merge upstream + proteção + version bump |
-| `scripts/version-bump.sh` | Versionamento X.Y.Z.N baseado em upstream |
-| `scripts/run-bruno-tests.sh` | Executar suite de testes Bruno |
+| Script | Função | Status |
+|--------|--------|--------|
+| `scripts/run-bruno-tests.sh` | Executar suite de testes Bruno | Mantido no repo |
+| `scripts/patch-logo.py` | Branding patch para binary | Mantido no repo |
+| `~/fork-sync/bin/sync.sh` | Merge upstream + proteção + version bump | **Migrado para fork-sync** |
+| `~/fork-sync/bin/deploy.sh` | Build + push GHCR + restart | **Migrado para fork-sync** |
+| `~/fork-sync/bin/test.sh` | Wrapper Bruno tests | **Migrado para fork-sync** |
+
+> Scripts de sync/build/deploy vivem em `~/fork-sync/`. Ver [Fork Sync Repo](https://github.com/giovannimnz/fork-sync-aionui).
 
 ### 2.6 GitHub Actions Workflows
 
@@ -99,6 +103,16 @@ CLI Click para gerenciar NewAPI via agentes:
 
 ## 3. Sync Workflow
 
+### Fork Sync Location
+
+O sync/build/deploy agora vive em `~/fork-sync/`:
+
+| Componente | Local |
+|---|---|
+| Config principal | `~/fork-sync/projects/atius-router/sync.yaml` |
+| Config deploy | `~/fork-sync/projects/atius-router/deploy.yaml` |
+| Scripts | `~/fork-sync/bin/sync.sh`, `deploy.sh`, `test.sh` |
+
 ### Fluxo Automático
 
 ```
@@ -108,15 +122,15 @@ sync.yml: sync-check job
     ↓ (has_changes == true)
 sync.yml: sync job
     ↓
-sync-fork.sh
-    ├─ git fetch upstream
-    ├─ git merge upstream/main -X theirs
-    ├─ Restore protected files
-    ├─ Restore fork-only files
-    ├─ git commit (if changes)
-    ├─ version-bump.sh
-    ├─ git push origin main
-    └─ git push origin vX.Y.Z.N
+fork-sync/bin/sync.sh --deploy
+    ├─ detect-release.sh (verifica upstream)
+    ├─ merge-upstream.sh (git merge upstream/main)
+    ├─ AI Decision Engine (se conflitos)
+    ├─ create-release.sh (git tag vX.Y.Z.N)
+    └─ deploy.sh
+        ├─ docker buildx (multi-arch)
+        ├─ docker push GHCR
+        └─ docker compose restart + health check
     ↓
 release.yml: (detecta tag)
     └─ GitHub Release criado
@@ -125,14 +139,20 @@ release.yml: (detecta tag)
 ### Fluxo Manual
 
 ```bash
-# Sync com upstream (dry-run)
-./scripts/sync-fork.sh --dry-run
+# Sync apenas (merge + tag)
+~/fork-sync/bin/sync.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius
 
-# Sync completo
-./scripts/sync-fork.sh
+# Sync + deploy automático
+~/fork-sync/bin/sync.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius --deploy
 
-# Com estratégia "ours" (preferir fork em conflitos)
-./scripts/sync-fork.sh --strategy ours
+# Dry-run
+~/fork-sync/bin/sync.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius --dry-run
+
+# Deploy apenas
+~/fork-sync/bin/deploy.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius
+
+# Testes
+~/fork-sync/bin/test.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius
 ```
 
 ### Estratégias de Merge
@@ -172,35 +192,41 @@ git tag -l "v0.12.*"
 
 ## 5. Protected Files
 
-Arquivos que NUNCA são sobrescritos pelo merge do upstream:
+Arquivos protegidos pelo `sync.yaml` em `~/fork-sync/projects/atius-router/sync.yaml`.
+Estes arquivos NUNCA são sobrescritos pelo merge do upstream:
 
-| Arquivo | Proteção | Razão |
-|---------|----------|-------|
-| `docker-compose.yml` | git checkout HEAD | Configuração Atius (redes, portas) |
-| `integration/middleware/model_detailed.py` | git checkout HEAD | Lógica custom de enrichment |
-| `integration/middleware/model_details.py` | git checkout HEAD | Versão anterior (backup) |
-| `integration/middleware/model_enrichment.py` | git checkout HEAD | Versão anterior (backup) |
+| Arquivo | Razão |
+|---------|-------|
+| `integration/middleware/model_detailed.py` | Lógica custom de enrichment |
+| `docker-compose.yml` | Configuração Atius (redes, portas) |
+| `.env.example` | Template de variáveis Atius |
+| `i18n/locales/pt-BR.yaml` | Traduções PT-BR |
+| `i18n/i18n.go` | Constante LangPt |
+| `web/default/src/i18n/locales/pt-BR.json` | Traduções frontend PT-BR |
+| `web/default/src/i18n/config.ts` | Config i18n frontend |
+| `web/default/src/components/language-switcher.tsx` | Component PT-BR |
+| `README.md` | Documentação PT-BR |
+| `README.en.md` | Documentação EN |
+| `docs/` | Documentação do fork |
+| `.planning/` | GSD roadmap e milestones |
+| `VERSION` | Versão do fork |
+| `web/default/public/logo.png` | Branding Atius |
+| `web/default/public/favicon.ico` | Branding Atius |
 
-Arquivos que existem SÓ no fork (verificados pós-merge):
-
-| Arquivo/Dir | Razão |
-|-------------|-------|
-| `.planning/` | Documentação Atius (roadmap, milestones) |
-| `agent-harness/` | CLI custom para agentes |
-| `integration/bruno-tests/` | Suite de testes de API |
-| `scripts/run-bruno-tests.sh` | Wrapper de testes |
-| `.github/workflows/sync.yml` | Workflow de sync diário |
-| `.github/workflows/release.yml` | Workflow de release |
+> **Nota:** Scripts de sync/build/deploy (sync-fork.sh, version-bump.sh, deploy-ghcr.sh, auto-sync-deploy.sh, pull-and-restart.sh) foram migrados para `~/fork-sync/bin/` e removidos do repo.
 
 ### Restore Commands
 
-Se um protected file for sobrescrito:
-
 ```bash
+# Via fork-sync (preferred)
+cd ~/fork-sync
+./bin/sync.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius --dry-run
+
+# Manual (raramente necessário)
+cd /home/ubuntu/docker/Atius/router-ai-atius
 git checkout HEAD -- integration/middleware/model_detailed.py
 git checkout HEAD -- docker-compose.yml
-git commit -m "chore: restore fork overrides"
-git push origin main
+git commit -m "chore: restore fork overrides" && git push
 ```
 
 ## 6. Container Architecture
@@ -321,11 +347,18 @@ upstream → https://github.com/QuantumNous/new-api.git (fetch only)
 ### Sync falhou com conflitos
 
 ```bash
-git merge --abort
-./scripts/sync-fork.sh --strategy ours
+# Via fork-sync — faz merge e mostra conflitos
+~/fork-sync/bin/sync.sh atius-router /home/ubuntu/docker/Atius/router-ai-atius --dry-run
+
+# Forçar theirs strategy
+cd /home/ubuntu/docker/Atius/router-ai-atius
+git merge upstream/main -X theirs
+git push origin main
 ```
 
 ### Protected file sobrescrito
+
+Raro — sync.yaml protege automaticamente. Se acontecer:
 
 ```bash
 git checkout HEAD -- integration/middleware/model_detailed.py

@@ -721,9 +721,12 @@ Upstream MiniMax response
     │
     ├─ Layer 1: Go Router (StripCJK no relay — ativa via DB)
     │       └─► common.StripCJK() → client
+    │       Cobertura: OpenAI streaming + non-streaming (via ChannelSettings.StripCJK)
     │
     └─ Layer 2: Python Middleware (sempre ativa)
             └─► strip_cjk_from_text() → client
+            Cobertura: OpenAI + Anthropic non-streaming
+            Limitação: streaming SSE passa direto (thinking span chunks)
 ```
 
 ### 11.3 Layer 1 — Go Router
@@ -753,16 +756,32 @@ cjkRegex = regexp.MustCompile(`[\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}\x{3000}-\x{30
 | Endpoint | Tipo | Função |
 |----------|------|--------|
 | `POST /v1/chat/completions` | Non-stream | `OpenaiHandler` → `StripCJK` applied ao content string |
-| `POST /v1/chat/completions` | Streaming | `sendStreamData` → `StripCJK` on raw string before delta parse |
+| `POST /v1/chat/completions` | Streaming | `sendStreamData` → `StripCJK` on raw SSE string before delta parse |
 
 **Limitações Layer 1:**
 - Requer `strip_cjk: true` em `ChannelSettings` no DB (campo `settings` da tabela `channels`)
-- Só implementado em `relay/channel/openai/relay-openai.go` (formato OpenAI — não cobre Anthropic `/v1/messages`)
+- Implementado em `relay/channel/openai/relay-openai.go` (formato OpenAI)
+- Canal type=14 (Anthropic-compatible) usa relay path diferente — **não coberto** pelo StripCJK do Go
 - **Status atual:** `strip_cjk` NÃO está habilitado no canal type=35 (MiniMax) — Layer 1 não está ativa
 
 ### 11.4 Layer 2 — Python Middleware (Defense-in-Depth)
 
 **Arquivo:** `integration/middleware/model_detailed_fastapi.py`
+
+**Arquitetura de processamento de resposta:**
+
+```
+Middleware intercepta resposta upstream
+    │
+    ├─ Non-streaming (chunked: false)
+    │   ├─ path.startswith("v1/messages") → Anthropic JSON → strip_thinking_blocks()
+    │   └─ path.startswith("v1/chat") → OpenAI JSON → strip_thinking_blocks()
+    │
+    └─ Streaming SSE (chunked: true)
+            └─ PASS THROUGH — não processa (thinking span multiple chunks)
+```
+
+**Detecção automática de formato:** O middleware detecta o formato pela URL (`v1/messages` = Anthropic, `v1/chat` = OpenAI) — não há conversão entre formatos, apenas stripping.
 
 **CJK regex:**
 
@@ -781,20 +800,22 @@ CJK_PATTERN = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef
 
 **Três paths de processamento:**
 
-| Path | Formato | Pipeline |
-|------|---------|---------|
-| Anthropic non-stream | `content[].text` | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
-| OpenAI non-stream | `choices[].message.content` | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
-| OpenAI streaming | SSE raw bytes | CJK strip na string raw ANTES de parsear delta |
+| Path | Formato | Condição | Pipeline |
+|------|---------|----------|----------|
+| Anthropic non-stream | `content[].text` | `v1/messages` + non-chunked | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
+| OpenAI non-stream | `choices[].message.content` | `v1/chat` + non-chunked | `strip_thinking_from_text` → `clean_code_fences` → `strip_cjk_from_text` |
+| OpenAI streaming | SSE raw bytes | chunked (transfer-encoding: chunked) | **PASS THROUGH** — não processa |
 
-**Fix crítico do commit b5b1ac594:** O path OpenAI Agorax faz strip CJK MESMO quando não há think block (antes, só fazia se encontrasse `<think>`).
+**Nota sobre streaming:** Respostas streaming SSE passam direto sem processamento porque `<think>...</think>` pode span múltiplos chunks, tornando impossível strip confiável sem reassembly. Para streaming, o Layer 1 (Go `sendStreamData`) é a camada responsável — requer `ChannelSettings.StripCJK = true` no DB.
+
+**Fix crítico do commit b5b1ac594:** O path OpenAI agora faz strip CJK MESMO quando não há think block (CJK pode aparecer sem precedeê-lo). Antes, só processava se encontrasse `<think>`.
 
 ### 11.5 Status Atual
 
 | Layer | Ativo? | Detalhe |
 |-------|--------|---------|
-| Layer 1 (Go Router) | **NÃO** | `strip_cjk` não está em `settings` do canal type=35 |
-| Layer 2 (Python) | **SIM** | Sempre ativa no middleware FastAPI |
+| Layer 1 (Go Router) | **NÃO** | `strip_cjk` não está em `settings` do canal type=35. Cobre streaming OpenAI + non-stream. |
+| Layer 2 (Python) | **SIM** | Sempre ativa no middleware. Cobre OpenAI + Anthropic non-stream. Streaming SSE passa direto. |
 
 **Para ativar Layer 1:**
 

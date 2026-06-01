@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
 import fr from './locales/fr.json'
 import ja from './locales/ja.json'
-import pt from './locales/pt.json'
+import ptBR from './locales/pt-BR.json'
 import ru from './locales/ru.json'
 import vi from './locales/vi.json'
 import zh from './locales/zh.json'
@@ -14,7 +14,7 @@ export const resources = {
   zh,
   fr,
   ja,
-  pt,
+  ptBR,
   ru,
   vi,
 } as const
@@ -25,7 +25,7 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    supportedLngs: ['en', 'zh', 'fr', 'ja', 'pt', 'ru', 'vi'],
+    supportedLngs: ['en', 'zh', 'fr', 'ja', 'pt-BR', 'ru', 'vi'],
     load: 'languageOnly', // Convert zh-CN -> zh
     nsSeparator: false, // Allow literal colons in keys (e.g., URLs, labels)
     debug: import.meta.env.DEV,

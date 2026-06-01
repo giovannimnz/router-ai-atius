@@ -285,6 +285,19 @@ func ListModels(c *gin.Context, modelType int) {
 		}
 	}
 
+	// Filter out -hs aliases: they exist in abilities for routing (model_mapping
+	// rewrites them upstream to -highspeed), but they should not appear as
+	// separate entries in /v1/models. The /v1/chat/completions endpoint still
+	// accepts -hs and redirects transparently.
+	filtered := make([]string, 0, len(userModelNames))
+	for _, n := range userModelNames {
+		if strings.HasSuffix(n, "-hs") {
+			continue
+		}
+		filtered = append(filtered, n)
+	}
+	userModelNames = filtered
+
 	ownerByModel := map[string]string{}
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)

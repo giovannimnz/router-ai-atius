@@ -858,3 +858,85 @@ WHERE type = 35;
 ---
 
 _Last updated: 2026-05-31_
+
+## 9. Python Middleware — model-detailed
+
+The router ships with a **FastAPI** middleware (`integration/middleware/model_detailed_fastapi.py`) that sits in front of the NewAPI Go binary and provides:
+
+### 9.1 Model enrichment
+
+`GET /v1/models` is intercepted and enriched with metadata from the **middleware** before reaching the client. The metadata is sourced from `KNOWN_MODELS` table in `model_detailed.py`:
+
+| Field | Source | Example for MiniMax-M3 |
+|-------|--------|------------------------|
+| `context_length` | static table | `1_048_576` |
+| `max_tokens` | static table | `64_000` |
+| `supports_tools` | static table | `true` |
+| `supports_vision` | static table | `false` |
+| `tier` | static table | `flagship` |
+| `vendor_aliases` | channel config | `M2.7-hs → M2.7-highspeed` |
+
+### 9.2 Alias resolution
+
+When a client requests model `MiniMax-M2.7-hs` (vendor-friendly short alias), the middleware transparently rewrites it to `MiniMax-M2.7-highspeed` (the actual upstream model name) before forwarding to NewAPI.
+
+### 9.3 CJK strip (v1.7, planned)
+
+To prevent Chinese / Japanese / Korean characters from leaking into Portuguese / English responses from MiniMax, a post-filter will be added in the Go binary (`.planning/phases/v1.7-cjk-strip-filter/PLAN.md`):
+
+```go
+var cjkRegex = regexp.MustCompile(`[\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}\x{3000}-\x{303f}\x{ff00}-\x{ffef}]`)
+
+func StripCJK(s string) string {
+    return cjkRegex.ReplaceAllString(s, "")
+}
+```
+
+Toggleable per-channel via `ChannelSettings.StripCJK bool`.
+
+### 9.4 OpenAPI 3.1 schema
+
+The middleware exposes `/openapi.json` (machine-readable) and `/docs` (Swagger UI) for the entire router surface, including:
+
+- `/v1/chat/completions` (OpenAI-compatible)
+- `/v1/messages` (Anthropic-compatible)
+- `/v1/embeddings`
+- `/v1/audio/speech` / `/v1/audio/transcriptions`
+- `/v1/images/generations`
+- `/v1/rerank`
+
+## 10. Podman / Quadlet deployment
+
+The Atius infrastructure runs the entire stack on **Podman** with **systemd quadlets**. See `README.en.md` and `README.pt-BR.md` for the full topology.
+
+Key quadlet snippets:
+
+```ini
+# /etc/containers/systemd/new-api.container
+[Unit]
+Description=Atius Router (new-api)
+After=network-online.target
+
+[Container]
+Image=ghcr.io/giovannimnz/router-ai-atius:local
+PublishPort=3301:3000
+Network=newapi-internal.network
+Network=atius-shared.network
+Volume=/srv/Atius/router/data:/data:Z
+EnvironmentFile=/srv/Atius/router/.env
+Environment=TZ=America/Sao_Paulo
+Environment=LANG=pt_BR.UTF-8
+AutoUpdate=registry
+HealthCmd=curl -fsS http://localhost:3000/api/status
+HealthInterval=30s
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The full deployment is reproducible from the `docker-compose.yml` at the repo root, with one twist: replace `docker compose` with `podman compose` (Podman 4.x+ supports Compose spec).
+

@@ -5,16 +5,6 @@ This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
 */
 import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
@@ -27,6 +17,15 @@ import ru from './locales/ru.json'
 import vi from './locales/vi.json'
 import zh from './locales/zh.json'
 
+/**
+ * Resources map: locale key -> { translation: { ... } }.
+ * i18next v26+ expects this exact shape (the inner `translation` is
+ * the default namespace, applied automatically on lookup).
+ *
+ * The `pt-BR` key in the resources object MUST match the `supportedLngs`
+ * entry below — using a different key (e.g. `ptBR` or `pt-br`) breaks
+ * the lookup.
+ */
 export const resources = {
   en,
   zh,

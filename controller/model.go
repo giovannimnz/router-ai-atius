@@ -3,6 +3,8 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -287,6 +289,8 @@ func ListModels(c *gin.Context, modelType int) {
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
 	}
+	// Sort: higher version first, -highspeed/-pro before standard/-flash
+	sortModelsByPriority(userModelNames)
 	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
 	for _, modelName := range userModelNames {
 		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
@@ -502,5 +506,60 @@ func ListClaudeModels(c *gin.Context) {
 		HasMore: hasMore,
 		FirstID: firstID,
 		LastID:  lastID,
+	})
+}
+
+// modelSortKey returns a tuple (version, tier) used to sort /v1/models output.
+// Higher version first; -highspeed/-pro ahead of standard/-flash; tiebreak by name.
+func modelSortKey(name string) (float64, int, string) {
+	lower := strings.ToLower(name)
+	// Tier: -highspeed/-hs = 0 (highest), pro=0, standard=1, flash=2
+	tier := 1
+	if strings.HasSuffix(lower, "-highspeed") || strings.HasSuffix(lower, "-hs") {
+		tier = 0
+	} else if strings.HasSuffix(lower, "-pro") {
+		tier = 0
+	} else if strings.HasSuffix(lower, "-flash") {
+		tier = 2
+	}
+	// Version: extract numeric after the M-/v prefix, e.g. "MiniMax-M3" -> 3, "MiniMax-M2.7" -> 2.7,
+	// "deepseek-v4-flash" -> 4, "deepseek-v4-pro" -> 4
+	version := 0.0
+	// Try MiniMax-M pattern
+	if idx := strings.Index(lower, "minimax-m"); idx >= 0 {
+		rest := lower[idx+len("minimax-m"):]
+		rest = strings.TrimSuffix(rest, "-highspeed")
+		rest = strings.TrimSuffix(rest, "-hs")
+		if v, err := strconv.ParseFloat(rest, 64); err == nil {
+			version = v
+		}
+	} else if idx := strings.Index(lower, "deepseek-v"); idx >= 0 {
+		rest := lower[idx+len("deepseek-v"):]
+		// extract leading digits
+		end := 0
+		for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+			end++
+		}
+		if end > 0 {
+			if v, err := strconv.ParseFloat(rest[:end], 64); err == nil {
+				version = v
+			}
+		}
+	}
+	// DESC version => negate for sort.Slice ascending
+	return -version, tier, name
+}
+
+func sortModelsByPriority(names []string) {
+	sort.SliceStable(names, func(i, j int) bool {
+		vi, ti, ni := modelSortKey(names[i])
+		vj, tj, nj := modelSortKey(names[j])
+		if vi != vj {
+			return vi < vj // vi is already negated, so smaller = higher version
+		}
+		if ti != tj {
+			return ti < tj
+		}
+		return ni < nj
 	})
 }

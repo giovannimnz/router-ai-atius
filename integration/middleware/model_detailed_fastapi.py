@@ -656,7 +656,8 @@ app.add_middleware(
 )
 
 # Mount Scalar standalone bundle (IIFE, self-contained)
-app.mount("/scalar", StaticFiles(directory="/app/scalar"), name="scalar")
+# Scalar API reference page (optional — comment out if not needed)
+# app.mount("/scalar", StaticFiles(directory="/app/scalar"), name="scalar")
 
 
 # ==============================================================================

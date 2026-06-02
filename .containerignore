@@ -7,17 +7,13 @@ Makefile
 docs
 .eslintcache
 .gocache
+**/db-data
+**/data/postgres_data
+**/data/logs
+**/data
 /web/node_modules
-<<<<<<< HEAD
-db-data
-data/postgres_data
-data/logs
-web/default/dist
-web/classic/dist
-=======
 /web/default/node_modules
 /web/default/dist
 /web/classic/node_modules
 /web/classic/dist
 !THIRD-PARTY-LICENSES.md
->>>>>>> upstream/main

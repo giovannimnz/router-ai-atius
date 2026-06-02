@@ -1,6 +1,9 @@
 services:
   new-api:
-    image: ghcr.io/giovannimnz/router-ai-atius:local
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/router-ai-zentrius-new-api:local
     container_name: new-api
     restart: always
     ports:
@@ -16,7 +19,7 @@ services:
     volumes:
       - ./data:/data
     networks:
-      - newapi-internal
+      - default
       - atius-shared
     healthcheck:
       test: ["CMD", "wget", "-O-", "-q", "http://localhost:3000/"]
@@ -29,6 +32,7 @@ services:
     build:
       context: ./integration/middleware
       dockerfile: Dockerfile.fastapi
+    image: localhost/router-ai-zentrius-model-detailed:local
     container_name: model-detailed
     restart: always
     ports:
@@ -39,7 +43,7 @@ services:
       - NEW_API_INTERNAL_URL=http://new-api:3000
       - BACKEND_TIMEOUT=60
     networks:
-      - newapi-internal
+      - default
       - atius-shared
     depends_on:
       new-api:
@@ -52,20 +56,28 @@ services:
       start_period: 30s
 
   db-newapi:
-    image: postgres:15-alpine
+    image: docker.io/library/postgres:15-alpine
     container_name: db-newapi
     restart: always
+    networks:
+      - default
     environment:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=Bkfigt!546
       - POSTGRES_DB=newapi
     volumes:
-      - ./db-data:/var/lib/postgresql/data
-    networks:
-      - newapi-internal
+      - db-newapi-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d newapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-newapi-data:
 
 networks:
-  newapi-internal:
-    internal: true
+  default:
+    name: podman
   atius-shared:
     external: true

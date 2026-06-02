@@ -35,8 +35,12 @@ export function normalizeInterfaceLanguage(value?: string | null): string {
 
   const normalized = value.trim().replace(/_/g, '-').toLowerCase()
   if (normalized.startsWith('zh')) return 'zh'
+  // pt-BR / pt_br / PT-br etc. must all resolve to the 'pt-BR' locale code.
+  if (normalized === 'pt' || normalized === 'pt-br') return 'pt-BR'
 
-  return INTERFACE_LANGUAGE_OPTIONS.some((lang) => lang.code === normalized)
+  return INTERFACE_LANGUAGE_OPTIONS.some(
+    (lang) => lang.code.toLowerCase() === normalized,
+  )
     ? normalized
     : 'en'
 }

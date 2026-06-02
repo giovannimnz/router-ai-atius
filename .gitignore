@@ -42,3 +42,6 @@ backups/
 =======
 .playwright-mcp
 >>>>>>> upstream/main
+
+# Vendored upstream docs (cloned, not tracked)
+docs/new-api-docs-v1/

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Docker commands for NewAPI container management.
+Podman commands for NewAPI container management.
 """
 
 import subprocess
@@ -11,7 +11,7 @@ import click
 def get_newapi_containers():
     """Get list of new-api related containers."""
     result = subprocess.run(
-        ["docker", "ps", "--filter", "name=new-api", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Ports}}"],
+        ["podman", "ps", "--filter", "name=new-api", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Ports}}"],
         capture_output=True, text=True, check=False
     )
     containers = []
@@ -61,7 +61,7 @@ def container_status(ctx):
         if ctx.obj.get("json"):
             # Detailed JSON
             insp = subprocess.run(
-                ["docker", "inspect", c["name"]],
+                ["podman", "inspect", c["name"]],
                 capture_output=True, text=True, check=False
             )
             if insp.returncode == 0:
@@ -87,10 +87,10 @@ def container_status(ctx):
 def container_logs(ctx, tail, follow, service):
     """View container logs"""
     if follow:
-        subprocess.run(["docker", "logs", "-f", f"--tail={tail}", service], check=False)
+        subprocess.run(["podman", "logs", "-f", f"--tail={tail}", service], check=False)
     else:
         result = subprocess.run(
-            ["docker", "logs", f"--tail={tail}", service],
+            ["podman", "logs", f"--tail={tail}", service],
             capture_output=True, text=True, check=False
         )
         click.echo(result.stdout)
@@ -103,7 +103,7 @@ def container_logs(ctx, tail, follow, service):
 def container_restart(service):
     """Restart a container"""
     click.echo(f"Restarting {service}...")
-    result = subprocess.run(["docker", "restart", service], capture_output=True, text=True, check=False)
+    result = subprocess.run(["podman", "restart", service], capture_output=True, text=True, check=False)
     if result.returncode == 0:
         click.echo(f"{service} restarted successfully")
     else:

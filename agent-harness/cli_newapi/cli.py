@@ -10,7 +10,7 @@ Usage:
 """
 
 import click
-from .docker import container
+from .podman import container
 from .channel import channel
 from .model import model
 

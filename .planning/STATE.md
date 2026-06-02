@@ -5,7 +5,7 @@
 **Milestone:** v1.6 — Internacionalização PT-BR
 **Phase:** Not started (planning)
 **Status:** Defining requirements
-**Last activity:** 2026-05-31 — Milestone v1.6 started
+**Last activity:** 2026-06-02 — Vendored new-api-docs-v1 reference (quick task 260601-wnh)
 
 ## What Was Done
 
@@ -55,3 +55,9 @@ db-newapi       PostgreSQL 15      port 5432:internal
 | v1.6 | Internacionalização PT-BR | in progress |
 | v1.7 | Documentação PT-BR | pending |
 | v1.8 | Podman Migration | pending |
+
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260601-wnh | Clone QuantumNous/new-api-docs-v1 into docs/new-api-docs-v1 and add it to .gitignore | 2026-06-02 | a53a57941 | [260601-wnh-clone-quantumnous-new-api-docs-v1-into-d](./quick/260601-wnh-clone-quantumnous-new-api-docs-v1-into-d/) |

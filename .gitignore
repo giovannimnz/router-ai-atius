@@ -44,4 +44,8 @@ backups/
 >>>>>>> upstream/main
 
 # Vendored upstream docs (cloned, not tracked)
-docs/new-api-docs-v1/
+# Note: `docs/new-api-docs-v1` is a symlink to ~/GitHub/refs/new-api-docs-v1/
+# The convention is: refs live outside worktrees, symlink in for IDE convenience.
+# Pattern without trailing slash so it matches the symlink FILE itself,
+# not just a directory (with slash, git would follow the symlink and stage 138M).
+docs/new-api-docs-v1

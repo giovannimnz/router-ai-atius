@@ -4,7 +4,7 @@
     <style>
       .z-shape {
         fill: none;
-        stroke: #0a2512;
+        stroke: #174224;
         stroke-width: 65;
         stroke-linejoin: miter;
         stroke-linecap: square;
@@ -16,7 +16,7 @@
         stroke-linecap: square;
       }
       .h-line {
-        stroke: #0a2512;
+        stroke: #174224;
         stroke-width: 6;
       }
     </style>

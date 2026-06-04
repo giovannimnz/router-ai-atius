@@ -47,11 +47,37 @@ Reabrir a submissão da tradução PT-BR para o upstream QuantumNous/new-api em 
 - **Validação frontend:** `bun install && bun run typecheck && bun run build` em web/default/
 - **PR workflow:** push branch + fechar #5245 com comentário + abrir PR novo
 
+### Working Tree Strategy (LOCKED — discussed 2026-06-04)
+
+- **Pre-flight:** `git stash push -u` antes de criar o branch, pra limpar `podman-compose.yml` modified e `integration/docs/` untracked. Aplicar `git stash pop` DEPOIS de validar Phase 7, antes de Phase 8.
+- **Razão:** o working tree sujo pode poluir `git status` durante a validação. O stash preserva o trabalho do fork e isola Phase 7.
+- **Exceção:** se o stash conflitar com feat/pt-native working tree, abortar e pedir guidance.
+
+### Conflict Resolution Strategy (LOCKED — discussed 2026-06-04)
+
+- **Método:** para cada arquivo, usar `git show main:<file> > <file>` (do fork, fonte da tradução) OU `git show upstream/main:<file> > <file>` (do upstream, baseline).
+- **i18n.go:** patchar com `patch` tool — não `cp`. O upstream `i18n.go` é base, os 4 hunks vão aplicados por cima. Se o patch falhar (rejeição por offset), abrir o arquivo e editar manualmente linha por linha.
+- **i18n/locales/pt.yaml + pt.json:** `git show main:web/default/src/i18n/locales/pt.json > web/default/src/i18n/locales/pt.json` — copy pura, sem patch.
+- **config.ts + languages.ts:** patch com `patch` tool usando hunks conhecidos (já especificados no PLAN.md).
+
+### Coverage Validation (LOCKED — discussed 2026-06-04)
+
+- **Método:** `jq '.translation | keys | length' pt.json` deve igualar mesmo comando em `en.json` (3910 chaves).
+- **Mesma checagem em pt.yaml:** `python3 -c "import yaml; d=yaml.safe_load(open('pt.yaml')); print(len(d))"` deve igualar en.yaml.
+- **Sem tooling upstream:** `bun run i18n:sync` não é usado (script interno do fork, não confiável cross-fork).
+
+### Commit Strategy (LOCKED — discussed 2026-06-04)
+
+- **1 squash final:** 5 arquivos em 1 commit único. Mensagem: `feat: add Portuguese (pt) language`.
+- **Razão:** PR mais limpo, atomic change, mais fácil de revisar upstream.
+- **Implementação:** `git add i18n/ web/default/src/i18n/ && git commit -m "feat: add Portuguese (pt) language"` (1 só commit, no final da Phase 7).
+- **Nota:** Phase 7 = "ready to commit" (working tree). Phase 8 = "commit + push + PR". Pra Phase 7 autônoma, NÃO commitar — usuário decide quando commitar.
+
 ### Claude's Discretion
 
-- Estrutura exata dos commits (1 squash vs 5 separados) — recomendação: 1 squash limpo
-- Conteúdo do comentário de fechamento do PR #5245 — referência ao novo PR + explicação do rebase
-- Validação de chaves 100% cobertura — pode usar `bun run i18n:sync` se disponível, ou checagem manual
+- Estrutura exata do commit message (sufixo body, refs a PR #2) — recomendado: minimal, sem body
+- Conteúdo do comentário de fechamento do PR #5245 — Phase 8, não Phase 7
+- Ordem de aplicação dos hunks em i18n.go — bottom-up pra evitar offset shifts
 
 </decisions>
 

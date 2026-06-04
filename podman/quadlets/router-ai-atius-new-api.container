@@ -30,7 +30,10 @@ StartLimitIntervalSec=300
 StartLimitBurst=5
 
 [Container]
-Image=ghcr.io/giovannimnz/router-ai-atius:v2.11.1-rebrand
+# :latest is the canonical tag — populate it before systemctl --user start.
+# See header of podman-compose.yml and scripts/podman-prepare-images.sh
+# for build/pull instructions. Override with ROUTER_AI_ATIUS_VERSION=<pin>.
+Image=ghcr.io/giovannimnz/router-ai-atius:latest
 AutoUpdate=registry
 ContainerName=router-ai-atius
 EnvironmentFile=%h/.config/containers/systemd/router-ai-atius.env

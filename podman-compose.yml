@@ -21,18 +21,47 @@
 #   - network new-api-network   → atius-ai-router_internal
 #   - DB name newapi            → DBRouterAiAtius
 #   - Host port 3301            → 3030 (frees 3000 for pm2web)
-#   - Image tag :local          → :v2.11.1-rebrand (or :local for dev)
+#   - Image tag :v2.11.1-rebrand  → :latest (this file ships with :latest;
+#     run prepare-images to build/pull-and-tag :latest before podman up)
+#
+# Why :latest?
+#   - Operators deploying a fresh prod don't have to know the version
+#     number; "latest" is whatever the registry says is the most recent
+#     stable build.
+#   - Mirrors the Docker community convention (`docker run foo:latest`).
+#   - The compose file stays a single, versionless artifact.
+#   - Override per-host with ROUTER_AI_ATIUS_VERSION=<tag> when you want
+#     a specific version pinned (see scripts/podman-prepare-images.sh).
+#
+# How to populate :latest before ./scripts/podman-up.sh:
+#
+#   Option A — build from source (preferred for prod with custom patches):
+#     podman build -t ghcr.io/giovannimnz/router-ai-atius:latest .
+#
+#   Option B — pull from GHCR (default tag is :latest):
+#     podman pull ghcr.io/giovannimnz/router-ai-atius:latest
+#
+#   Option C — pin a specific version, pulled and re-tagged :latest:
+#     ROUTER_AI_ATIUS_VERSION=v2.11.1-rebrand \
+#       ./scripts/podman-prepare-images.sh
+#
+#   Option D — use the helper script (auto-detects best option):
+#     ./scripts/podman-prepare-images.sh
 #
 # Quick Start:
-#   1. ./scripts/podman-up.sh         (builds + starts detached)
-#   2. curl http://localhost:3030/api/status   (verify)
+#   1. ./scripts/podman-prepare-images.sh   (build/pull :latest)
+#   2. ./scripts/podman-up.sh               (starts detached)
+#   3. curl http://localhost:3030/api/status (verify)
 #
 # Migration from Docker:
 #   ./scripts/podman-migrate-from-docker.sh   (one-shot)
 
 services:
   router-ai-atius:
-    image: ghcr.io/giovannimnz/router-ai-atius:v2.11.1-rebrand
+    # :latest is the canonical tag — populate it before `podman up`.
+    # See header comments and scripts/podman-prepare-images.sh.
+    # Override with ROUTER_AI_ATIUS_VERSION=<pin> to lock a specific build.
+    image: ghcr.io/giovannimnz/router-ai-atius:latest
     container_name: router-ai-atius
     restart: always
     command: --log-dir /app/logs

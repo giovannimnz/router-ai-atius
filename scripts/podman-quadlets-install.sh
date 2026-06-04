@@ -27,6 +27,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Ensure :latest images exist before enabling the systemd services.
+# (systemd will fail to start units that reference missing images.)
+if command -v podman >/dev/null 2>&1; then
+  if ! podman image exists ghcr.io/giovannimnz/router-ai-atius:latest 2>/dev/null \
+     || ! podman image exists router-ai-atius-model-detailed:latest 2>/dev/null; then
+    echo "[quadlets-install] :latest images not all present. running prepare-images..."
+    ./scripts/podman-prepare-images.sh || {
+      echo "ERROR: prepare-images failed; quadlets will not start without images." >&2
+    }
+  fi
+fi
+
 QUADLET_SRC="podman/quadlets"
 DEST="${HOME}/.config/containers/systemd"
 mkdir -p "$DEST"

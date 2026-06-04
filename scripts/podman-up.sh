@@ -13,7 +13,8 @@
 #   docker compose -f podman-compose.yml up -d
 #
 # Prereqs: podman 4.x, podman-compose 1.0+, .env file with POSTGRES_PASSWORD
-# and REDIS_PASSWORD set.
+# and REDIS_PASSWORD set, and the :local images present on the host
+# (run ./scripts/podman-prepare-images.sh first if not).
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -35,6 +36,19 @@ done
 # Sanity check
 command -v podman >/dev/null || { echo "ERROR: podman not installed" >&2; exit 1; }
 command -v podman-compose >/dev/null || { echo "ERROR: podman-compose not installed" >&2; exit 1; }
+
+# Ensure the :latest images exist before bringing the stack up. The compose
+# file uses :latest as the canonical tag (decoupled from registry versions).
+# If the images are missing, run prepare-images and abort so the operator
+# can decide whether to build or pull.
+if ! podman image exists ghcr.io/giovannimnz/router-ai-atius:latest 2>/dev/null \
+   || ! podman image exists router-ai-atius-model-detailed:latest 2>/dev/null; then
+  echo "[podman-up] :latest images not all present. running prepare-images..."
+  ./scripts/podman-prepare-images.sh || {
+    echo "ERROR: prepare-images failed; aborting podman-up." >&2
+    exit 2
+  }
+fi
 
 # Ensure .env exists. If missing, copy from .env.example and abort so the
 # operator fills real secrets before bringing up the stack (the example file

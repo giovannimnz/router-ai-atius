@@ -44,13 +44,38 @@ scripts/
 | DB name | `newapi` | `DBRouterAiAtius` |
 | Host port (api) | `3301:3000` | `3030:3000` |
 | Host port (middleware) | `3300:3001` | `3300:3001` (unchanged) |
-| Image tag | `ghcr.io/.../router-ai-atius:local` | `ghcr.io/.../router-ai-atius:v2.11.1-rebrand` |
+| Image tag | `ghcr.io/.../router-ai-atius:v2.11.1-rebrand` | `ghcr.io/.../router-ai-atius:latest` (canonical, source of truth) |
+| Tag source | (registry) | `scripts/podman-prepare-images.sh` (build or pull :latest; pin via `ROUTER_AI_ATIUS_VERSION`) |
 | NODE_NAME | `new-api` | `router-ai-atius-podman` |
 
 Apache reverse proxy on the host continues to front port 443 and forwards
 to either backend. See `/etc/apache2/sites-enabled/router.atius.com.br-le-ssl.conf`.
 
 ## Two ways to run
+
+### 0. Prepare `:latest` images (once per host, idempotent)
+
+Both compose and quadlets reference `:latest` as the canonical tag.
+Run this once per host (or after every image rebuild) to populate:
+
+```bash
+./scripts/podman-prepare-images.sh
+```
+
+Strategy:
+1. If `:latest` already exists → do nothing.
+2. If `./Dockerfile` exists → `podman build -t ...:latest .`
+3. Else `podman pull ghcr.io/...:latest` directly.
+4. model-detailed is always built locally (no upstream registry copy).
+
+Pinning a specific build (optional):
+```bash
+ROUTER_AI_ATIUS_VERSION=v2.11.1-rebrand ./scripts/podman-prepare-images.sh
+# → pulls that tag and re-tags it as :latest
+```
+
+`podman-up.sh` and `podman-quadlets-install.sh` call this automatically
+if the images are missing, so manual invocation is optional.
 
 ### 1. Compose (dev / CI) — `podman-compose`
 
@@ -177,6 +202,7 @@ systemctl --user is-active router-ai-atius
 | `scripts/podman-up.sh` | Compose-based bring-up |
 | `scripts/podman-down.sh` | Compose-based teardown |
 | `scripts/podman-validate.sh` | Pre-flight check (no full stack needed) |
+| `scripts/podman-prepare-images.sh` | Populate `:latest` images (build or pull; pin via `ROUTER_AI_ATIUS_VERSION`) |
 | `scripts/podman-migrate-from-docker.sh` | One-shot Docker → Podman migration |
 | `scripts/podman-quadlets-install.sh` | One-shot quadlet install to `~/.config/containers/systemd/` |
 | `docs/PODMAN.md` | This file |

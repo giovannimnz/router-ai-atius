@@ -19,6 +19,8 @@
 #   - Docker stack was up and serving (DB is alive).
 #   - podman + podman-compose installed (4.x / 1.0+).
 #   - .env populated with POSTGRES_PASSWORD and REDIS_PASSWORD.
+#   - The :latest images have been populated (this script calls
+#     prepare-images after the Docker stack is down, before Podman up).
 #
 # NOT a live cutover. The downtime window is roughly:
 #   down:   5-30s
@@ -53,8 +55,8 @@ docker rm -f new-api model-detailed db-newapi redis-newapi 2>/dev/null || true
 docker network rm router-ai_newapi-internal 2>/dev/null || true
 docker network rm atius-ai-router_internal 2>/dev/null || true
 
-echo "[migrate] step 3/6: build the model-detailed image with Podman"
-podman-compose -f podman-compose.yml build router-ai-atius-model-detailed
+echo "[migrate] step 3/6: populate :latest images (build or pull)"
+./scripts/podman-prepare-images.sh
 
 echo "[migrate] step 4/6: start the Podman stack"
 podman-compose -f podman-compose.yml up -d

@@ -16,7 +16,7 @@ func GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	}
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
-		return fmt.Sprintf("%s/anthropic/v1/messages", info.ChannelBaseUrl), nil
+		return fmt.Sprintf("%s/anthropic/v1/messages", baseUrl), nil
 	default:
 		switch info.RelayMode {
 		case constant.RelayModeChatCompletions:

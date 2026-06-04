@@ -1,9 +1,11 @@
 # ROADMAP.md - atius-ai-router
 
 ## v1.4 — Model Aliases & Token Management ✓
+
 **Status:** COMPLETE
 
 ### Phase 1: Model Aliases Setup ✓
+
 **slug:** `model-aliases-hs`
 
 - Adicionados `MiniMax-M2.7-hs` e `MiniMax-M2.5-hs` na tabela `models`
@@ -13,6 +15,7 @@
 - Router reiniciado e validado: GET /v1/models lista os aliases, POST funciona
 
 ### Phase 2: API Key Giovanni-Acc ✓
+
 **slug:** `api-key-giovanni-acc`
 
 - Token criado: `9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92`
@@ -23,9 +26,11 @@
 ---
 
 ## v1.3 — Testing Infrastructure & CLI ✓
+
 **Status:** COMPLETE
 
 ### Phase 1: Bruno CLI Setup ✓
+
 **slug:** `bruno-cli-install`
 
 - Bruno CLI instalado em `/home/ubuntu/.nvm/versions/node/v24.13.1/bin/bru`
@@ -33,6 +38,7 @@
 - Verificado funcional
 
 ### Phase 2: Collection Creation ✓
+
 **slug:** `bruno-collection`
 
 - Criado `integration/bruno-tests/atius-router-tests/`
@@ -40,6 +46,7 @@
 - Environment `.env.local` com variáveis em camelCase
 
 ### Phase 3: Test Suite ✓
+
 **slug:** `bruno-tests`
 
 - `list-models.bru` — GET /v1/models
@@ -51,6 +58,7 @@
 **Tests Passing:** 5/5 ✅
 
 ### Phase 4: Wrapper Script ✓
+
 **slug:** `bruno-runner-script`
 
 - `scripts/run-bruno-tests.sh` criado
@@ -58,6 +66,7 @@
 - Usa delay 500ms para evitar rate limiting
 
 ### Phase 5: Skill Creation ✓
+
 **slug:** `bruno-skill`
 
 - Skill em `~/.agents/skills/bruno-cli/SKILL.md`
@@ -67,9 +76,11 @@
 ---
 
 ## v1.2 — Fork Migration & Sync Workflow ✓
+
 **Completed:** 2026-04-21
 
 ### Phase 1: Git Setup & Remotes ✓
+
 **slug:** `fork-git-setup`
 
 - Configurar `origin` → `https://github.com/giovannimnz/atius-ai-router.git`
@@ -79,6 +90,7 @@
 - Primeiro push para origin (force-push)
 
 ### Phase 2: Fork Sync Script (`sync-fork.sh`) ✓
+
 **slug:** `fork-sync-script`
 
 - Criar `scripts/sync-fork.sh` em bash puro
@@ -87,6 +99,7 @@
 - Testar com dry-run
 
 ### Phase 3: Version Bump Script (`version-bump.sh`) ✓
+
 **slug:** `fork-version-bump`
 
 - Criar `scripts/version-bump.sh`
@@ -96,6 +109,7 @@
 - Criar git tag `vX.Y.Z.N`
 
 ### Phase 4: FORK.md Documentation ✓
+
 **slug:** `fork-fork-md`
 
 - Documentar parent repo e fork purpose
@@ -104,6 +118,7 @@
 - Criar troubleshooting section
 
 ### Phase 5: GitHub Actions CI/CD ✓
+
 **slug:** `fork-github-actions`
 
 - Criar `.github/workflows/sync.yml` (scheduled sync)
@@ -111,6 +126,7 @@
 - Protection: `if: github.repository == 'giovannimnz/atius-ai-router'`
 
 ### Phase 6: CLI-Anything: NewAPI Management ✓
+
 **slug:** `cli-anything-newapi`
 
 - Criar `agent-harness/` com CLI Click para NewAPI
@@ -121,23 +137,29 @@
 ---
 
 ## v1.1 — DeepSeek Model Metadata Enrichment ✓
+
 **Completed:** 2026-04-14
 
 ### Phase 1: Investigate NewAPI Customization ✓
+
 **slug:** `investigate-newapi-customization`
 
 ### Phase 2: Configure DeepSeek Metadata DB ✓
+
 **slug:** `configure-deepseek-metadata-db`
 
 ### Phase 3: Implement Enrichment Middleware ✓
+
 **slug:** `implement-enrichment-middleware`
 
 ### Phase 4: Validate Enriched Endpoint ✓
+
 **slug:** `validate-enriched-endpoint-consumers`
 
 ---
 
 ## v1.0 — Initial Setup ✓
+
 **Completed:** 2026-04-12
 
 - Docker Compose com NewAPI + PostgreSQL
@@ -149,6 +171,7 @@
 ## v1.5 — API Unification & Model Listing ✓
 
 ### Phase 1: Anthropic Channels Setup ✓
+
 **slug:** `router-anthropic-channels`
 
 - Session timeout 12h (MaxAge: 43200)
@@ -157,6 +180,7 @@
 - Abilities populadas para M2.1, M2.5, M2.7 nos canais Anthropic
 
 ### Phase 2: /v1/claude/models Endpoint ✓
+
 **slug:** `claude-models-endpoint`
 
 - `GET /v1/claude/models` adicionado
@@ -164,6 +188,7 @@
 - Bruno test collection criada (3/3 passing)
 
 ### Phase 3: Model Unification via Middleware [PLANNING]
+
 **slug:** `model-unification`
 
 - Unificar `/v1/models` com `?api_format=openai|anthropic`
@@ -176,9 +201,40 @@
 
 ---
 
+## v2.12 — pt-native upstream sync [PLANNING]
+**Status:** Not started
+**Goal:** Re-submeter a tradução PT-BR para o upstream QuantumNous/new-api em um PR limpo, com escopo mínimo (idioma nativo), sem inflar com código do fork Atius.
+
+**Background:** PR #5245 aberto pelo fork giovannimnz/router-ai-atius contra QuantumNous/new-api está poluído: 60 arquivos modificados, 49757 adições, 76 deleções, 15 commits. 95% do PR é fork Atius contaminando (PODMAN, model-detailed, .planning, docker-compose rebrand, login route, vitest, login.tsx, routeTree.gen.ts). Apenas 5 arquivos são escopo legítimo de tradução PT: i18n.go, pt.yaml, pt.json, config.ts, languages.ts.
+
+### Phase 7: feat-pt-native-branch
+
+**Goal:** Criar branch `feat/pt-native` no fork baseado em `upstream/main`, contendo apenas os 5 arquivos nativos de tradução PT (mesmo padrão de zh/en), sem nenhuma contaminação do fork Atius.
+**Requirements:** TBD
+**Depends on:** —
+**Plans:** 1 plan (8 tasks)
+
+Plans:
+
+- [x] 01-feat-pt-native-branch-PLAN.md (created via inline plan)
+
+### Phase 8: feat-pt-native-pr
+
+**Goal:** Push do branch novo pro fork, fechar PR #5245 poluído com comentário, abrir PR novo limpo contra QuantumNous/new-api.
+**Requirements:** TBD
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 8 to break down)
+
+---
+
 ## v1.6 — Future
 
 - Monitoring & Health Checks (logs centralizados, métricas, alerting)
 - Additional Providers (Gemini, Claude via Anthropic API)
 - Rate Limiting & Quota Management
 - Failover & HA (múltiplas instâncias, load balancing)
+

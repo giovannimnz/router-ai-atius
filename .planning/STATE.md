@@ -2,10 +2,10 @@
 
 ## Current Position
 
-**Milestone:** v1.7 — Documentação PT-BR (next)
-**Phase:** Not started (planning)
-**Status:** v1.6 and v1.8 closed; ready to plan v1.7
-**Last activity:** 2026-06-04 — v1.6 (PT-BR) and v1.8 (Podman) completed; pushed to origin/main
+**Milestone:** v2.12 — pt-native upstream sync (next)
+**Phase:** Phase 7 (feat-pt-native-branch) ready to execute; Phase 8 pending
+**Status:** v1.6 and v1.8 closed; v2.12 planned (not started)
+**Last activity:** 2026-06-04 — v1.6 (PT-BR) and v1.8 (Podman) completed; v2.12 planning committed
 
 ## What Was Done
 
@@ -102,25 +102,30 @@ DB:      DBRouterAiAtius
 | v1.4 | Model Aliases | ✅ |
 | v1.5 | API Documentation Site | ✅ |
 | v1.6 | Internacionalização PT-BR | ✅ done 2026-06-04 |
-| v1.7 | Documentação PT-BR | pending — next milestone |
+| v1.7 | Documentação PT-BR | deferred (lower priority) |
 | v1.8 | Podman Migration | ✅ done 2026-06-04 (code); SRV-1 cutover pending |
 | v1.9 | GHCR Deploy | pending |
 | v2.0 | Podman Migration (legacy name) | ✅ superseded by v1.8 |
 | v2.10 | MiniMax Anthropic | ✅ done 2026-05-31 |
+| v2.12 | pt-native upstream sync | 📋 planned — Phase 7+8 |
 
 ## Next actions
 
-1. **Plan v1.7 — Documentação PT-BR**:
-   - `README.pt.md` principal
-   - `README.en.md` como cópia
-   - `docs/` em PT-BR
-   - fork-sync cleanup → `~/fork-sync/`
-2. **SRV-1 Podman cutover** (quando Giovanni marcar):
+1. **Execute v2.12 Phase 7 — feat-pt-native-branch**:
+   - Run 8 tasks from `01-feat-pt-native-branch-PLAN.md`
+   - Branch `feat/pt-native` from `upstream/main` (5 files only)
+   - Validar: `go build ./...` + `bun run typecheck` + `bun run build`
+   - NÃO commitar/pushar (Phase 8 depende de autorização)
+2. **Execute v2.12 Phase 8 — feat-pt-native-pr** (autorização necessária):
+   - Push branch novo pro fork (`giovannimnz/router-ai-atius`)
+   - Fechar PR #5245 poluído com comentário
+   - Abrir PR novo limpo contra `QuantumNous/new-api`
+3. **SRV-1 Podman cutover** (quando Giovanni marcar):
    - Build/populate `:latest` images
    - Janela de manutenção
    - `./scripts/podman-migrate-from-docker.sh`
    - Smoke test: `curl https://router.atius.com.br/api/status`
-3. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+4. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 

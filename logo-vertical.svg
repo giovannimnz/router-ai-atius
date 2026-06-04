@@ -4,7 +4,7 @@
     <style>
       .z-shape {
         fill: none;
-        stroke: #174224;
+        stroke: #0a2512;
         stroke-width: 65;
         stroke-linejoin: miter;
         stroke-linecap: square;
@@ -12,11 +12,11 @@
       .c-shape {
         fill: none;
         stroke: #C59B35;
-        stroke-width: 40;
+        stroke-width: 45;
         stroke-linecap: square;
       }
       .h-line {
-        stroke: #174224;
+        stroke: #0a2512;
         stroke-width: 6;
       }
     </style>
@@ -24,7 +24,7 @@
 
   <path class="z-shape" d="M 130 140 L 370 140 L 130 360 L 370 360" />
 
-  <path class="c-shape" d="M 330 190 A 85 85 0 1 0 330 310" />
+  <path class="c-shape" d="M 290 240 A 70 70 0 1 0 290 380" />
 
-  <line class="h-line" x1="260" y1="310" x2="380" y2="310" />
+  <line class="h-line" x1="220" y1="380" x2="340" y2="380" />
 </svg>

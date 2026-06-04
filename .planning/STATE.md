@@ -1,3 +1,18 @@
+---
+gsd_state_version: 1.0
+milestone: v1.4
+milestone_name: — Model Aliases & Token Management ✓
+status: v1.6 and v1.8 closed; v2.12 planned (not started)
+last_updated: "2026-06-04T08:26:27.363Z"
+last_activity: 2026-06-04 — v1.6 (PT-BR) and v1.8 (Podman) completed; v2.12 planning committed
+progress:
+  total_phases: 8
+  completed_phases: 0
+  total_plans: 5
+  completed_plans: 0
+  percent: 0
+---
+
 # STATE.md — atius-ai-router
 
 ## Current Position
@@ -5,13 +20,14 @@
 **Milestone:** v2.12 — pt-native upstream sync (next)
 **Phase:** Phase 7 (feat-pt-native-branch) ready to execute; Phase 8 pending
 **Status:** v1.6 and v1.8 closed; v2.12 planned (not started)
-**Last activity:** 2026-06-04 — v1.6 (PT-BR) and v1.8 (Podman) completed; v2.12 planning committed
+**Last activity:** 2026-06-04 — v1.6 (PT-BR) and v1.8 (Podman) completed; v2.12 Phase 7 discussed + context captured
 
 ## What Was Done
 
 ### 2026-06-04 — v1.6 ✅ DONE + v1.8 ✅ DONE
 
 **v1.6 — Internacionalização PT-BR** (closed):
+
 - Frontend `web/default/src/i18n/locales/pt.json` — 3910 chaves, 100% de en.json
 - Backend `i18n/locales/pt.yaml` — 227 chaves, 100% de en.yaml
 - `web/default/src/i18n/languages.ts` — pt registrado, fallback en
@@ -21,6 +37,7 @@
   `i18n initialized with languages: zh-CN, zh-TW, en, pt`
 
 **v1.8 — Podman Migration** (closed):
+
 - `podman-compose.yml` — rebrand v2.11 + tag `:latest` canônico
 - 4 systemd quadlets: `podman/quadlets/router-ai-atius-*.container`
 - 6 scripts operacionais: `podman-{up,down,validate,prepare-images,migrate-from-docker,quadlets-install}.sh`
@@ -39,6 +56,7 @@
   de manutenção, rodar `./scripts/podman-migrate-from-docker.sh` no
   SRV-1 (137.131.190.161). Sem push do `:v2.11.1-rebrand` pro GHCR
   ainda — Docker local build é suficiente.
+
 - **Limpar backup tag** `backup/before-squash-20260604` depois de
   confirmar produção estável por ≥ 7 dias.
 

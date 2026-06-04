@@ -1,15 +1,12 @@
 services:
   new-api:
-    build:
-      context: .
-      dockerfile: Containerfile
-    image: localhost/router-ai-zentrius-new-api:local
+    image: ghcr.io/giovannimnz/router-ai-atius:latest
     container_name: new-api
     restart: always
     ports:
       - "3301:3000"
     environment:
-      - SQL_DSN=postgres://admin:Bkfigt!546@db-newapi:5432/newapi?sslmode=disable
+      - SQL_DSN=postgres://admin:***@host.containers.internal:5432/newapi?sslmode=disable
       - TZ=America/Sao_Paulo
       - LANG=pt_BR.UTF-8
       - SESSION_SECRET=${SESSION_SECRET}
@@ -28,39 +25,11 @@ services:
       retries: 3
       start_period: 60s
 
-  model-detailed:
-    build:
-      context: ./integration/middleware
-      dockerfile: Dockerfile.fastapi
-    image: localhost/router-ai-zentrius-model-detailed:local
-    container_name: model-detailed
-    restart: always
-    ports:
-      - "3300:3001"
-    environment:
-      - MIDDLEWARE_PORT=3001
-      - NEWAPI_BACKEND_URL=http://new-api:3000
-      - NEW_API_INTERNAL_URL=http://new-api:3000
-      - BACKEND_TIMEOUT=60
-    networks:
-      - default
-      - atius-shared
-    depends_on:
-      new-api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-O-", "-q", "http://localhost:3001/v1/models"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
   db-newapi:
     image: docker.io/library/postgres:15-alpine
     container_name: db-newapi
     restart: always
-    networks:
-      - default
+    network_mode: host
     environment:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=Bkfigt!546

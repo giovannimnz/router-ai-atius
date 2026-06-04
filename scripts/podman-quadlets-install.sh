@@ -2,7 +2,9 @@
 # podman-quadlets-install.sh
 #
 # One-shot: install the systemd quadlets for a rootless Podman deployment
-# (per-user, ~USER/.config/containers/systemd/).
+# (per-user, ~$USER/.config/containers/systemd/).
+#
+# Rebrand v2.11: service unit names updated to router-ai-atius-* pattern.
 #
 # Usage:
 #   ./scripts/podman-quadlets-install.sh
@@ -16,9 +18,9 @@
 # After this:
 #   systemctl --user daemon-reload
 #   systemctl --user start \
-#     router-ai-atius-postgres.service \
+#     router-ai-atius-db.service \
 #     router-ai-atius-redis.service \
-#     router-ai-atius-new-api.service \
+#     router-ai-atius.service \
 #     router-ai-atius-model-detailed.service
 #   systemctl --user status
 
@@ -36,7 +38,7 @@ install -m 0644 "$QUADLET_SRC"/*.container "$DEST/"
 # embedded; we use the actual POSTGRES_PASSWORD from .env if present).
 ENV_FILE="$DEST/router-ai-atius.env"
 if [ -f .env ]; then
-  grep -E '^(POSTGRES_PASSWORD|REDIS_PASSWORD|SESSION_SECRET)=' .env > "$ENV_FILE" || true
+  grep -E '^(POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|REDIS_PASSWORD|SESSION_SECRET)=' .env > "$ENV_FILE" || true
   chmod 0600 "$ENV_FILE"
   echo "[quadlets-install] wrote $ENV_FILE (chmod 600)"
 fi
@@ -49,9 +51,9 @@ cat <<'EOF'
 
 Next:
   systemctl --user enable --now \
-    router-ai-atius-postgres.service \
+    router-ai-atius-db.service \
     router-ai-atius-redis.service \
-    router-ai-atius-new-api.service \
+    router-ai-atius.service \
     router-ai-atius-model-detailed.service
 
   systemctl --user status

@@ -1,4 +1,4 @@
-# router-ai-atius — Podman compose
+# router-ai-atius — Podman compose (v2.11.1 rebrand)
 #
 # Drop-in equivalent of docker-compose.yml that runs natively on rootless
 # Podman (no docker daemon required). Same service layout, same ports,
@@ -13,102 +13,118 @@
 #     podman-compose reads the same Compose Spec and Docker/Podman are
 #     CLI-compatible for the operations we use here.
 #
+# Rebrand v2.11 (new-api → router-ai-atius):
+#   - container new-api         → router-ai-atius
+#   - container db-newapi       → router-ai-atius-db
+#   - container redis-newapi    → router-ai-atius-redis
+#   - container model-detailed  → router-ai-atius-model-detailed
+#   - network new-api-network   → atius-ai-router_internal
+#   - DB name newapi            → DBRouterAiAtius
+#   - Host port 3301            → 3030 (frees 3000 for pm2web)
+#   - Image tag :local          → :v2.11.1-rebrand (or :local for dev)
+#
 # Quick Start:
-#   1. ./scripts/podman-up.sh         (builds + starts in foreground-less mode)
-#   2. curl http://localhost:3000/api/status   (verify)
+#   1. ./scripts/podman-up.sh         (builds + starts detached)
+#   2. curl http://localhost:3030/api/status   (verify)
 #
 # Migration from Docker:
 #   ./scripts/podman-migrate-from-docker.sh   (one-shot)
 
 services:
-  new-api:
-    image: ghcr.io/giovannimnz/router-ai-atius:local
-    container_name: new-api
+  router-ai-atius:
+    image: ghcr.io/giovannimnz/router-ai-atius:v2.11.1-rebrand
+    container_name: router-ai-atius
     restart: always
     command: --log-dir /app/logs
     ports:
-      - "3301:3000"  # host:container — 3301 to match the Apache ProxyPass upstream
+      - "3030:3000"  # host 3030 → container 3000 (Apache fronts 443)
     volumes:
       - ./data:/data
       - ./logs:/app/logs
+    env_file:
+      - .env
     environment:
-      - SQL_DSN=postgresql://admin:${POSTGRES_PASSWORD:?}@db-newapi:5432/newapi?sslmode=disable
-      - REDIS_CONN_STRING=redis://:${REDIS_PASSWORD:?}@redis-newapi:6379
       - TZ=America/Sao_Paulo
+      - LANG=pt_BR.UTF-8
       - ERROR_LOG_ENABLED=true
       - BATCH_UPDATE_ENABLED=true
       - NODE_NAME=router-ai-atius-podman
-      - SESSION_SECRET=e6e60c89fa342258a3e995e0997290eb92656f1bc517759520f98c9b04f66b49
+      - TRUST_PROXY=true
     depends_on:
-      - redis
-      - postgres
+      router-ai-atius-redis:
+        condition: service_healthy
+      router-ai-atius-db:
+        condition: service_healthy
     networks:
-      - new-api-network
+      - atius-ai-router_internal
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
-  model-detailed:
+  router-ai-atius-model-detailed:
     build:
-      context: .
-      dockerfile: integration/middleware/Dockerfile.fastapi
+      context: ./integration/middleware
+      dockerfile: Dockerfile.fastapi
     image: router-ai-atius-model-detailed:local
-    container_name: model-detailed
+    container_name: router-ai-atius-model-detailed
     restart: always
     environment:
       - MIDDLEWARE_PORT=3001
-      - NEWAPI_BACKEND_URL=http://new-api:3000
+      - NEWAPI_BACKEND_URL=http://router-ai-atius:3000
+      - NEW_API_INTERNAL_URL=http://router-ai-atius:3000
       - BACKEND_TIMEOUT=60
-      - DOCS_USERNAME=admin@atius.com.br
-      - DOCS_PASSWORD=atius2024
-      - OPENAPI_SPEC_PATH=/app/docs/openapi.json
-      - STATIC_FILES_PATH=/app/static
-      - SESSION_SECRET=e6e60c89fa342258a3e995e0997290eb92656f1bc517759520f98c9b04f66b49
+    env_file:
+      - .env
     ports:
       - "3300:3001"  # host 3300 → container 3001 (FastAPI uvicorn)
     volumes:
       - ./integration/middleware/static:/app/static:ro
       - ./integration/middleware/docs:/app/docs:ro
     depends_on:
-      new-api:
+      router-ai-atius:
         condition: service_healthy
     networks:
-      - new-api-network
+      - atius-ai-router_internal
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/health | grep -o '\"status\":\"healthy\"' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  redis:
+  router-ai-atius-redis:
     image: docker.io/library/redis:7-alpine
-    container_name: redis-newapi
+    container_name: router-ai-atius-redis
     restart: always
-    command: ["redis-server", "--requirepass", "123456"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    env_file:
+      - .env
     networks:
-      - new-api-network
+      - atius-ai-router_internal
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "123456", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-  postgres:
+  router-ai-atius-db:
     image: docker.io/library/postgres:15-alpine
-    container_name: db-newapi
+    container_name: router-ai-atius-db
     restart: always
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
-      POSTGRES_DB: newapi
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-DBRouterAiAtius}
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
-      - new-api-network
+      - atius-ai-router_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d newapi"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-DBRouterAiAtius}"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -117,5 +133,6 @@ volumes:
   pg_data:
 
 networks:
-  new-api-network:
+  atius-ai-router_internal:
     driver: bridge
+    name: atius-ai-router_internal

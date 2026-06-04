@@ -1,4 +1,7 @@
-# systemd quadlet for new-api
+# systemd quadlet for router-ai-atius (Go AI gateway)
+#
+# Rebrand v2.11: was new-api, now router-ai-atius. Container name and
+# service unit name updated to match.
 #
 # Quadlets are systemd-managed Podman units. They live in one of:
 #   /etc/containers/systemd/                (rootful, system-wide)
@@ -6,10 +9,10 @@
 #
 # After dropping this file in, run:
 #   systemctl --user daemon-reload
-#   systemctl --user start router-ai-atius-new-api.service
+#   systemctl --user start router-ai-atius.service
 #
 # To enable on boot:
-#   systemctl --user enable router-ai-atius-new-api.service
+#   systemctl --user enable router-ai-atius.service
 #   loginctl enable-linger <username>   # so user services survive logout
 #
 # Compare to: scripts/podman-up.sh (compose-based, dev) and
@@ -20,20 +23,20 @@
 # to podman/secrets/<name>.secret (loaded via LoadCredential=).
 
 [Unit]
-Description=router-ai-atius — new-api (Go AI gateway, podman)
-After=network-online.target router-ai-atius-postgres.service
-Wants=router-ai-atius-postgres.service router-ai-atius-redis.service
+Description=router-ai-atius (Go AI gateway, podman)
+After=network-online.target router-ai-atius-db.service
+Wants=router-ai-atius-db.service router-ai-atius-redis.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
 [Container]
-Image=ghcr.io/giovannimnz/router-ai-atius:local
+Image=ghcr.io/giovannimnz/router-ai-atius:v2.11.1-rebrand
 AutoUpdate=registry
-ContainerName=new-api
+ContainerName=router-ai-atius
 EnvironmentFile=%h/.config/containers/systemd/router-ai-atius.env
 # Bind ports via the host network for max throughput. The Apache
 # reverse proxy on port 443 fronts this.
-PublishPort=3301:3000
+PublishPort=3030:3000
 Volume=%h/docker/Atius/router-ai-atius/data:/data
 Volume=%h/docker/Atius/router-ai-atius/logs:/app/logs
 # Run in the host's timezone so log timestamps line up with the host.

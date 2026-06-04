@@ -1,14 +1,16 @@
-# systemd quadlet for Redis
+# systemd quadlet for Redis (router-ai-atius-redis)
+#
+# Rebrand v2.11: was redis-newapi, now router-ai-atius-redis.
 
 [Unit]
-Description=router-ai-atius — Redis 7 (cache + rate limiting)
+Description=router-ai-atius-redis (Redis 7 — cache + rate limiting)
 After=network-online.target
 
 [Container]
 Image=docker.io/library/redis:7-alpine
-ContainerName=redis-newapi
+ContainerName=router-ai-atius-redis
 # Password is injected via EnvironmentFile in production. Dev default below.
-Environment=REDIS_PASSWORD=123456
+Environment=REDIS_PASSWORD=change-me-in-production
 Command=redis-server --requirepass ${REDIS_PASSWORD}
 Timezone=local
 NoNewPrivileges=true

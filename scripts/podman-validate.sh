@@ -15,6 +15,8 @@
 #   1  — YAML parse error or missing required field
 #   2  — service has an unresolved reference (e.g. image that won't pull)
 #   3  — podman (when --with-podman) is unavailable
+#
+# Rebrand v2.11: validates for router-ai-atius stack.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -38,9 +40,9 @@ if ! python3 -c "import yaml,sys; d=yaml.safe_load(open('podman-compose.yml')); 
 fi
 echo "  OK"
 
-# Step 2: verify required services are present
+# Step 2: verify required services are present (v2.11 rebrand)
 echo "[validate] step 2/4: check required services"
-REQUIRED=(new-api model-detailed postgres redis)
+REQUIRED=(router-ai-atius router-ai-atius-model-detailed router-ai-atius-db router-ai-atius-redis)
 SERVICES=$(python3 -c "import yaml; print(' '.join(yaml.safe_load(open('podman-compose.yml'))['services'].keys()))")
 echo "  services found: $SERVICES"
 for r in "${REQUIRED[@]}"; do
@@ -52,8 +54,7 @@ for r in "${REQUIRED[@]}"; do
   fi
 done
 
-# Step 3: render the resolved config (using Docker compose as the
-# canonical spec parser if podman-compose isn't available).
+# Step 3: render the resolved config
 echo "[validate] step 3/4: render resolved config"
 # The compose YAML uses ${POSTGRES_PASSWORD:?} and ${REDIS_PASSWORD:?}
 # variables. To render the resolved config, we need a .env with
@@ -61,8 +62,11 @@ echo "[validate] step 3/4: render resolved config"
 # mistaken for a real secret).
 ENV_FILE=$(mktemp)
 trap "rm -f $ENV_FILE" EXIT
+echo "POSTGRES_USER=validate" >> "$ENV_FILE"
 echo "POSTGRES_PASSWORD=validate-me" >> "$ENV_FILE"
+echo "POSTGRES_DB=DBRouterAiAtius" >> "$ENV_FILE"
 echo "REDIS_PASSWORD=validate-me" >> "$ENV_FILE"
+echo "SESSION_SECRET=validate-me-32-byte-hex" >> "$ENV_FILE"
 if command -v docker >/dev/null 2>&1; then
   if docker compose --env-file "$ENV_FILE" -f podman-compose.yml config --quiet 2>/dev/null; then
     echo "  ✓ compose spec renders cleanly (with --env-file)"
@@ -72,7 +76,7 @@ if command -v docker >/dev/null 2>&1; then
     exit 2
   fi
 elif command -v podman-compose >/dev/null 2>&1; then
-  if env POSTGRES_PASSWORD=validate-me REDIS_PASSWORD=validate-me podman-compose -f podman-compose.yml config --quiet 2>/dev/null; then
+  if env POSTGRES_USER=validate POSTGRES_PASSWORD=validate-me POSTGRES_DB=DBRouterAiAtius REDIS_PASSWORD=validate-me SESSION_SECRET=validate-me-32-byte-hex podman-compose -f podman-compose.yml config --quiet 2>/dev/null; then
     echo "  ✓ podman-compose spec renders cleanly"
   fi
 else

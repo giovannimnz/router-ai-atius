@@ -124,6 +124,36 @@ services:
       timeout: 10s
       retries: 3
 
+  # new-api-docs-v1 (Atius-branded documentation site)
+  # Serves /docs/* (with i18n redirect /docs -> /en/docs).
+  # Mounted internally on port 3003, exposed only via Apache.
+  # The build reads NEXT_PUBLIC_NEW_API_URL via ATIUS_NEWAPI_BASE_URL below
+  # so the "Try it" buttons in the rendered OpenAPI docs point to
+  # https://router.atius.com.br (our upstream) instead of the upstream
+  # docs site.
+  router-ai-atius-docs:
+    build:
+      context: ./integration/docs
+      dockerfile: Dockerfile
+    image: router-ai-atius-docs:local
+    container_name: router-ai-atius-docs
+    restart: always
+    environment:
+      - ATIUS_NEWAPI_BASE_URL=https://router.atius.com.br
+    networks:
+      - atius-ai-router_internal
+    expose:
+      - "3003"
+    depends_on:
+      router-ai-atius:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3003/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   router-ai-atius-redis:
     image: docker.io/library/redis:7-alpine
     container_name: router-ai-atius-redis

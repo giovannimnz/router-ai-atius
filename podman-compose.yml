@@ -112,13 +112,14 @@ services:
     volumes:
       - ./integration/middleware/static:/app/static:ro
       - ./integration/middleware/docs:/app/docs:ro
+      - ./integration/middleware/scalar:/app/scalar:ro
     depends_on:
       router-ai-atius:
         condition: service_healthy
     networks:
       - atius-ai-router_internal
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/health | grep -o '\"status\":\"healthy\"' || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:3001/health | grep -o '\"status\":\"healthy\"' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

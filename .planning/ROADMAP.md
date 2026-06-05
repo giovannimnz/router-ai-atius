@@ -2,13 +2,13 @@
 
 ## v2.12 — pt Native i18n Integration
 
-Goal: Integrate Portuguese locale into the upstream new-api native i18n infrastructure — zero custom code, only registration points.
+Goal: Integrate Portuguese locale into the entire stack — backend Go (new-api), frontend React/i18next, AND Fumadocs docs site. Zero custom code, only registration points.
 
 ### Phase 01: pt Locale Registration ✅ (2026-06-05)
 
-Register `pt` locale in all native i18n registration points (backend Go + frontend React) following the exact same pattern used by fr, ja, ru, vi locales.
+Register `pt` locale in new-api's native i18n (Go + React/i18next). 5 native registration points.
 
-| Arquivo | Mudança |
+| File | Result |
 |---|---|
 | `i18n/i18n.go` | LangPt + pt.yaml loading + localizer + normalizeLang + SupportedLanguages |
 | `i18n/locales/pt.yaml` | 228 keys backend PT-BR |
@@ -16,15 +16,38 @@ Register `pt` locale in all native i18n registration points (backend Go + fronte
 | `web/default/src/i18n/languages.ts` | opção "Português" |
 | `web/default/src/i18n/locales/pt.json` | 4521 keys frontend PT-BR |
 
-Canonical refs:
-- `i18n/i18n.go` — backend locale loading
-- `web/default/src/i18n/config.ts` — frontend i18next config
-- `web/default/src/i18n/languages.ts` — language options
-- `web/default/src/components/language-switcher.tsx` — UI switcher
+### Phase 02: pt Fumadocs i18n (Ready for planning)
+
+Add `pt` to the Atius-branded Fumadocs site (fork `giovannimnz/new-api-docs-v1`).
+
+| File | Change |
+|---|---|
+| Fork: `src/lib/i18n.ts` | Add 'pt' to `languages: ['en', 'zh', 'ja', 'pt']` |
+| Fork: `next.config.mjs` | Extend `:lang(en\|zh\|ja)` regex → `(en\|zh\|ja\|pt)` |
+| Fork: `scripts/translate-docs.ts` | Add `pt` to LANGUAGES, source = en, update GLOSSARY |
+| Fork: `content/docs/pt/` | 313 MDX files (11 already exist in fork-sync seed) |
+| Fork: `.github/workflows/translate.yml` | Add pt trigger path |
+| Fork-sync: `pt-content/` | Mirror the 313 translated files (already has `protected_globs: ["content/docs/pt/**"]`) |
+
+---
+
+## Architecture Note
+
+The router-ai-atius stack has **3 i18n systems** that all need `pt`:
+
+| App | Framework | i18n mechanism |
+|---|---|---|
+| Backend (new-api) | Go | `go-i18n` with YAML |
+| Frontend (new-api SPA) | React | i18next + language detector |
+| Docs (Fumadocs) | Next.js | URL prefix + MDX per locale |
+
+Phase 01 covers backend + frontend. Phase 02 covers docs. Both follow the native pattern — only registration points, no custom code.
 
 ---
 
 ## Up Next
 
-- [ ] Deploy + browser validation — construir Docker image, rodar no servidor, validar visualmente
-- [ ] Push `feat/pt-native` para origin
+- [ ] Phase 02: pt Fumadocs i18n (12 tasks — see PLAN.md)
+- [ ] Push `feat/pt-native` for router-ai-atius
+- [ ] Push `feat/pt-fumadocs` for the fork docs repo
+- [ ] Production deploy of both

@@ -33,6 +33,17 @@ Add `pt` to the Fumadocs docs site (upstream QuantumNous/new-api-docs-v1, will p
 
 **Result:** `/pt/docs/`, `/pt/docs/skills/` → 200 OK, PT-BR content live in production.
 
+### Phase 03: PT Docs Bugfixes ✅ (2026-06-05)
+
+Fix 2 bugs found during Phase 02 browser validation.
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| hreflang missing pt | `layout.tsx` alternates.languages static literal | Add `pt: '/pt'` |
+| /{lang}/docs/guide/ 404 | No `guide/index.mdx` in any locale | 4 landing pages (en/zh/ja/pt) |
+
+**Files:** 1 edit (`layout.tsx`) + 4 new (`guide/index.mdx`) — 1 commit.
+
 ---
 
 ## Architecture Note

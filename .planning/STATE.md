@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.14
 milestone_name: Codex SDK Transformer
 status: planning
-last_updated: "2026-06-06T10:25:00.000Z"
-last_activity: 2026-06-06
+last_updated: "2026-06-06T10:35:02.786Z"
+last_activity: 2026-06-06 — Milestone v2.14 roadmap created (4 phases)
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,10 +21,10 @@ progress:
 
 ## Current Position
 
-Phase: 05 (next — Sidecar Python + HTTP Bridge)
+Phase: 05 (discussed — ready for plan)
 Plan: —
-Status: Roadmap defined, waiting for Phase 05 start
-Last activity: 2026-06-06 — Milestone v2.14 roadmap created (4 phases)
+Status: Context gathered, Phase 05 ready for /gsd-plan-phase
+Last activity: 2026-06-06 — Phase 05 context gathered (D-01..D-04 defaulted)
 
 ## v2.12 Progress (CLOSED ✅)
 
@@ -52,10 +52,12 @@ Last activity: 2026-06-06 — Milestone v2.14 roadmap created (4 phases)
 🟢 4. **Phase 08** (coexistence + validação) ← último, integra tudo
 
 **Porquê esta ordem:**
+
 - Phase 05 antes: o sidecar é o core. Sem ele, não tem o que autenticar nem testar.
 - Phase 06 depende de 05: o fluxo de login escreve `data/codex/license.json` que o sidecar lê.
 - Phase 07 é parcialmente independente: o endpoint `wham/usage` já existe no relay HTTP.
   Pode ser desenvolvido em paralelo com 06 se quiser.
+
 - Phase 08 fecha: valida coexistência relay/sdk, testa fluxo completo.
 
 ## Summary

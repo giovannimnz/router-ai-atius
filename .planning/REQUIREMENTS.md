@@ -9,7 +9,7 @@
 
 ### Transformer Module
 
-- [ ] **SDK-01**: Sidecar Python com HTTP bridge para Codex SDK. Expõe endpoints
+- [x] **SDK-01**: Sidecar Python com HTTP bridge para Codex SDK. Expõe endpoints
   `/v1/codex/run` (one-shot) e `/v1/codex/thread` (stateful com thread_id).
   Traduz requests do router Go → chamadas `thread.run()` no `openai-codex` SDK.
   Suporta modelos: `gpt-5.4`, `gpt-5-codex`, `gpt-5.1-codex`, `gpt-5.2-codex`,

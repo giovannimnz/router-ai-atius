@@ -126,7 +126,7 @@ Validação end-to-end de todos os fluxos.
 
 | # | Phase | Requirements | Status |
 |---|-------|-------------|--------|
-| 05 | Sidecar Python + HTTP Bridge | SDK-01 | ⏳ Not Started |
+| 05 | 1/1 | Complete    | 2026-06-06 |
 | 06 | Login Explícito + Licença | SDK-02 | ⏳ Not Started |
 | 07 | Dashboard Usage/Saldo | SDK-03 | ⏳ Not Started |
 | 08 | Channel Coexistence + Validação | SDK-04 | ⏳ Not Started |
@@ -137,7 +137,7 @@ Validação end-to-end de todos os fluxos.
 
 ## Next
 
-- [ ] `/gsd-discuss-phase 05` — gather context for Phase 05 (Sidecar Python)
+- [x] `/gsd-discuss-phase 05` — gather context for Phase 05 (Sidecar Python) (completed 2026-06-06)
 - [ ] Run Phase 05: Sidecar Python + HTTP Bridge
 - [ ] Run Phase 06: Login Explícito + Licença
 - [ ] Run Phase 07: Dashboard Usage/Saldo

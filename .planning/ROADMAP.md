@@ -44,6 +44,21 @@ Fix 2 bugs found during Phase 02 browser validation.
 
 **Files:** 1 edit (`layout.tsx`) + 4 new (`guide/index.mdx`) — 1 commit.
 
+### Phase 04: Prod Docs Bugfixes ✅ (2026-06-06)
+
+3 post-deploy fixes after user reported "site is broken, never tested properly":
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| `/pt/docs/` served as Go SPA 404 | Apache missing `ProxyPass /pt/` (en/zh/ja had it, pt didn't) | Add `/pt/` ProxyPass → 3003 |
+| `/assets/atius-logo.svg` 404 | No Apache alias for Fumadocs header path | Add `Alias /assets/atius-logo.{svg,png}` |
+| CSS unstyled (Times New Roman) | `/_next/static/chunks/*.css` fell to Go catch-all (text/html) | Add `ProxyPass /_next/` → 3003 |
+| Lang switcher not alphabetical | zh/en/fr/ru/ja/vi/pt order | Alphabetical: en, fr, ja, pt, ru, vi, zh |
+
+**Files:** 1 commit (`f78631367`) — `web/default/src/i18n/languages.ts` + planning + screenshots + validation script.
+**Infra (out of repo):** Apache vhost patch (3 surgical edits, configtest OK).
+**Deferred to user:** Cloudflare cache purge for stale 404 entries (origin is now correct, new requests succeed).
+
 ---
 
 ## Architecture Note

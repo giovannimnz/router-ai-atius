@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.14
 milestone_name: Codex SDK Transformer
-status: planning
-last_updated: "2026-06-06T21:36:06.066Z"
-last_activity: 2026-06-06
+status: executing
+last_updated: "2026-06-06T21:54:49.114Z"
+last_activity: 2026-06-06 -- Phase 06 planning complete
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 1
+  total_plans: 2
   completed_plans: 1
   percent: 25
 ---
@@ -17,14 +17,14 @@ progress:
 
 **Project:** Atius AI Router
 **Current milestone:** v2.14 — Codex SDK Transformer
-**Status:** Ready to plan
+**Status:** Ready to execute
 
 ## Current Position
 
 Phase: 06
 Plan: Not started
-Status: Phase 06 context gathered
-Last activity: 2026-06-06 — Phase 06 context gathered
+Status: Ready to execute
+Last activity: 2026-06-06 -- Phase 06 planning complete
 
 ## v2.12 Progress (CLOSED ✅)
 
@@ -39,8 +39,8 @@ Last activity: 2026-06-06 — Phase 06 context gathered
 
 | Phase | Status | Date |
 |---|---|---|
-| 05 — Sidecar Python + HTTP Bridge (SDK-01) | ⏳ Not Started | — |
-| 06 — Login Explícito + Armazenamento Licença (SDK-02) | ⏳ Not Started | — |
+| 05 — Sidecar Python + HTTP Bridge (SDK-01) | ✅ Complete | 2026-06-06 |
+| 06 — Login Explícito + Armazenamento Licença (SDK-02) | 📋 Planned | 2026-06-06 |
 | 07 — Dashboard Usage/Saldo (SDK-03) | ⏳ Not Started | — |
 | 08 — Channel Coexistence + Validação (SDK-04) | ⏳ Not Started | — |
 
@@ -68,5 +68,5 @@ usage dashboard, and channel coexistence. 4 phases, 4 requirements, 1:1 mapping.
 
 ## Last Activity
 
-2026-06-06: v2.14 milestone started. REQUIREMENTS.md + ROADMAP.md created.
-4 phases (05-08) defined. Phase 05 (Sidecar Python) is next.
+2026-06-06: Phase 06 planned. UI contract, research, and execution plan created.
+Next step: execute Phase 06 implementation from `06-PLAN.md`.

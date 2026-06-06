@@ -66,49 +66,44 @@ upstream QuantumNous/new-api codebase via fork-sync.
 - **Infra:** Apache 2.4, Cloudflare, Podman, PM2
 - **i18n:** go-i18n (backend) + i18next (frontend) + Fumadocs (docs)
 
-## Current Milestone: v2.13 — Post-i18n Hardening
+## Current Milestone: v2.14 — Codex SDK Transformer
 
-**Goal:** Close the v2.12 deferred items and add the missing infrastructure
-to prevent the same class of bugs (Next.js asset proxy gaps, Cloudflare
-stale cache, visual regressions) from recurring.
+**Goal:** Usar assinatura Codex Pro (plano 100 USD) como módulo transformer
+dentro do router-ai-atius, expondo o Codex SDK programaticamente com
+visibilidade de saldo/usage — sem quebrar o canal Codex tipo 57 existente.
 
 **Premissas (constraints that MUST hold):**
 
-1. **Native infrastructure only.** Every fix must follow the existing native
-   pattern. Zero custom code. If the upstream QuantumNous/new-api has a way
-   to do it, use that way. (Same principle as v2.12.)
-2. **fork-sync safe.** All changes must survive `fork-sync` from upstream.
-   No edits to upstream-only paths. Use `protected_globs` if needed.
-3. **No scope creep.** v2.13 is exclusively about closing the 4 deferred
-   items from v2.12. New features, new locales, new design = v2.14+.
+1. **Aditivo, não substitutivo.** O transformer novo coexiste com o relay
+   HTTP Codex tipo 57 atual. Nenhum canal existente pode quebrar.
+2. **fork-sync safe.** Mudanças no código Go e frontend devem sobreviver
+   a sync de upstream. Scripts/adapters externos (Python/TS SDK) podem
+   viver fora da árvore Go principal.
+3. **Credenciais reutilizadas.** Usa o mesmo OAuth token que o Codex CLI
+   já usa (`~/.codex/auth.json` ou equivalente via router). Zero novo login.
+4. **Scope contido.** v2.14 é só Codex SDK transformer + saldo. Features
+   não-Codex ou outros providers ficam pra v2.15+.
 
-**Target features (4 total, derived strictly from v2.12 SUMMARY deferred list):**
+**Target features (4):**
 
-- **CF-01 — Cloudflare cache purge automation:** CLI script + deploy hook
-  to purge `/pt/docs/*` and `/assets/atius-logo.svg` stale entries. Token
-  stored in vault, not in repo. Triggered manually + on deploy.
-- **VIS-01 — Visual validation gate:** Reusable `validate-spa.py` script
-  (chromium + CDP raw WS + mmx vision) that can be invoked post-deploy
-  to catch unstyled layouts, broken images, and 404 SPA bodies. Lives in
-  `.planning/scripts/`. User runs it manually after each deploy.
-- **APX-01 — Apache proxy smoke test:** curl-based check that verifies
-  all 4 locales return `x-powered-by: Next.js`, `/_next/static/chunks/*.css`
-  returns `text/css`, `/assets/atius-logo.{svg,png}` returns 200. Catches
-  the "added a new locale but forgot the proxy" class of bug. Lives in
-  `.planning/scripts/`, run before each deploy.
-- **CLS-01 — Classic frontend PT support:** Register `pt` in
-  `web/classic/src/i18n/i18n.js` + `web/classic/src/i18n/language.js`,
-  translate `pt.json` keys (mirror default frontend pattern). Code-only
-  — classic frontend not deployed, but completes the pt coverage matrix.
+- **SDK-01 — Transformer module:** Novo módulo que converte requests do
+  router em chamadas ao Codex SDK (Python `openai-codex` como primeira
+  runtime), em vez do relay HTTP puro `/backend-api/codex/responses`.
+- **SDK-02 — Credential bridge:** Autenticação que usa a licença Codex
+  Pro existente via OAuth token. Sem novo login, sem fluxo separado.
+- **SDK-03 — Usage/saldo endpoint:** Expor dados de pricing/usage do
+  account Codex no admin dashboard e via endpoint REST. Mostrar consumo
+  do plano Pro (100 USD), renovação, histórico.
+- **SDK-04 — Fallback coexistence:** O transformer novo coexiste com o
+  canal Codex tipo 57 atual. Admin pode escolher qual backend usar
+  (SDK vs relay HTTP) via config de canal.
 
-**Out of scope (explicitly excluded for v2.13):**
+**Out of scope (explicitly excluded for v2.14):**
 
-- Multi-tenant / SaaS mode
-- CI/CD pipeline (no GitHub Actions, no deploy automation beyond the script hooks)
-- Translation service integration (DeepL, etc.) — offline-generated only
-- Classic frontend deployment (code-only support, no Apache routing)
-- Mobile apps
-- Visual validation as blocking CI gate (advisory only in v2.13)
+- Outros provedores SDK (Claude, Gemini, etc.) — Codex only
+- TypeScript SDK runtime (v2.14 é Python-first)
+- Multi-key / multi-account Codex
+- Faturamento próprio do router via Codex — é só relay/transformer
 
 ## Evolution
 
@@ -150,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ## Last updated
 
-2026-06-06 — Milestone v2.13 started (4 v2.12-deferred items)
+2026-06-06 — Milestone v2.14 started (Codex SDK Transformer)

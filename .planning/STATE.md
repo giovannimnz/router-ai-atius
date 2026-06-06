@@ -1,3 +1,18 @@
+---
+gsd_state_version: 1.0
+milestone: v2.14
+milestone_name: Codex SDK Transformer
+status: planning
+last_updated: "2026-06-06T10:19:10.360Z"
+last_activity: 2026-06-06
+progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
 # STATE.md
 
 **Project:** Atius AI Router
@@ -6,10 +21,10 @@
 
 ## Current Position
 
-Phase: 05 (next — CF purge automation)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Defining roadmap, waiting for Phase 1 start
-Last activity: 2026-06-06 — Milestone v2.13 started; 4 v2.12 deferred items become Phase 05-08
+Status: Defining requirements
+Last activity: 2026-06-06 — Milestone v2.14 started
 
 ## v2.12 Progress (CLOSED ✅)
 
@@ -37,11 +52,14 @@ Last activity: 2026-06-06 — Milestone v2.13 started; 4 v2.12 deferred items be
 🟢 4. **Phase 08** (Verification + audit) ← last, runs APX+VIS against all prior work
 
 **Porquê esta ordem:**
+
 - Phase 05 antes: CF purge é o que destrava o `cf-cache-status: HIT` antigo
   dos assets logo. Phase 06 valida que tudo carrega LIMPO, então precisa que
   o CF já esteja purgado primeiro.
+
 - Phase 07 independente: classic frontend não compartilha arquivo com
   infra/scripts — pode rodar em paralelo com Phase 06 se quiser.
+
 - Phase 08 último: audita Phase 05-07. Roda APX smoke + VIS validate em
   /pt/, /en/, /ja/, /zh/ + classic /pt/.
 

@@ -96,3 +96,25 @@ volumes:
 networks:
   new-api-network:
     driver: bridge
+
+  # =========================================================================
+  # Codex SDK Sidecar (Phase 05 — SDK-01)
+  # Bridges the openai-codex Python SDK to the Go router via HTTP.
+  # Router proxies Codex channels with backend=sdk to http://codex-sidecar:1456
+  # =========================================================================
+  codex-sidecar:
+    build:
+      context: ./integration/codex-sidecar
+      dockerfile: Dockerfile
+    container_name: codex-sidecar
+    restart: always
+    volumes:
+      - ./data/codex:/app/data
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:1456/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

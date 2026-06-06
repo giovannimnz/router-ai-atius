@@ -75,9 +75,42 @@ All follow native pattern — only registration points, zero custom code.
 
 ---
 
+## v2.13 — Post-i18n Hardening 🔵 Active
+
+Goal: Close the 4 v2.12 deferred items and add infrastructure to prevent
+regression. Native-only, fork-sync-safe, no scope creep.
+
+### Phase 05: Cloudflare Cache Purge Automation
+- CLI script `purge-cf.sh` accepting paths as args
+- Token in vault, not in repo
+- Optional post-deploy hook in deploy script
+- Idempotent (no-op if no stale entries)
+
+### Phase 06: Apache Proxy + Visual Validation Toolkit
+- `apx-smoke.sh` — curl-based check for 4 locales + `/_next/` + `/assets/atius-logo.*`
+- `validate-spa.py` — chromium + CDP raw WS + mmx vision (reusable, not phase-specific)
+- Both live in `.planning/scripts/`, run manually pre/post deploy
+
+### Phase 07: Classic Frontend PT Support
+- Register `pt` in `web/classic/src/i18n/{i18n,language}.js`
+- Translate `pt.json` keys (mirror default frontend pattern)
+- Code-only — classic not in production, completes pt coverage matrix
+- Validation: `bun run typecheck && bun run build` in `web/classic/`
+
+### Phase 08: v2.13 Verification + Roadmap Audit
+- Run apx-smoke + validate-spa on full prod
+- Visual confirm 4/4 locales still styled, logos loaded, lang order ok
+- Audit deferred items closed, file new M099 if any residual
+- Update STATE.md + ROADMAP.md → ready for v2.13 complete-milestone
+
+---
+
 ## Next
 
 - [ ] Push `feat/pt-native` for router-ai-atius (pending approval)
 - [ ] Push upstream for new-api-docs-v1 PT changes (pending)
-- [ ] Monitor Cloudflare cache for PT docs full propagation
-- [ ] Classic frontend pt support (optional — not active in prod)
+- [ ] Cloudflare cache purge (manual, or wait TTL ~24h)
+- [ ] Run Phase 05: CF purge CLI
+- [ ] Run Phase 06: APX + VIS toolkit
+- [ ] Run Phase 07: Classic PT
+- [ ] Run Phase 08: Verification + audit

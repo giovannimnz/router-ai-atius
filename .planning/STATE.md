@@ -1,10 +1,17 @@
 # STATE.md
 
 **Project:** Atius AI Router
-**Current milestone:** v2.12 — pt Native i18n Integration
-**Status:** ✅ Complete (all phases done — 4/4)
+**Current milestone:** v2.13 — Post-i18n Hardening
+**Status:** 🔵 Planning (v2.12 complete, v2.13 just started)
 
-## Progress
+## Current Position
+
+Phase: 05 (next — CF purge automation)
+Plan: —
+Status: Defining roadmap, waiting for Phase 1 start
+Last activity: 2026-06-06 — Milestone v2.13 started; 4 v2.12 deferred items become Phase 05-08
+
+## v2.12 Progress (CLOSED ✅)
 
 | Phase | Status | Date |
 |---|---|---|
@@ -13,30 +20,40 @@
 | 03 — PT Docs Bugfixes (hreflang + guide) | ✅ Complete | 2026-06-05 |
 | 04 — Prod Docs Bugfixes (Apache + logo + lang order) | ✅ Complete | 2026-06-06 |
 
+## v2.13 Progress (ACTIVE 🔵)
+
+| Phase | Status | Date |
+|---|---|---|
+| 05 — Cloudflare Cache Purge Automation | ⏳ Not Started | — |
+| 06 — Apache Proxy + Visual Validation Toolkit | ⏳ Not Started | — |
+| 07 — Classic Frontend PT Support | ⏳ Not Started | — |
+| 08 — v2.13 Verification + Audit | ⏳ Not Started | — |
+
+## ⚡ EXECUTION ORDER (2026-06-06)
+
+🟡 1. **Phase 05** (CF purge CLI) ← first (no deps, foundation for VIS in Phase 06)
+🟡 2. **Phase 06** (APX + VIS toolkit) ← depends on Phase 05 infra (uses CF purge CLI indirectly)
+🟢 3. **Phase 07** (Classic PT) ← independent (frontend only, separate from infra)
+🟢 4. **Phase 08** (Verification + audit) ← last, runs APX+VIS against all prior work
+
+**Porquê esta ordem:**
+- Phase 05 antes: CF purge é o que destrava o `cf-cache-status: HIT` antigo
+  dos assets logo. Phase 06 valida que tudo carrega LIMPO, então precisa que
+  o CF já esteja purgado primeiro.
+- Phase 07 independente: classic frontend não compartilha arquivo com
+  infra/scripts — pode rodar em paralelo com Phase 06 se quiser.
+- Phase 08 último: audita Phase 05-07. Roda APX smoke + VIS validate em
+  /pt/, /en/, /ja/, /zh/ + classic /pt/.
+
 ## Summary
 
-All 4 systems of the v2.12 milestone are complete. The `pt` locale is now registered in:
-
-1. **Backend Go** (go-i18n): 5 registration points + 228 key YAML
-2. **Frontend SPA** (i18next): 4 registration points + 4521 key JSON
-3. **Docs** (Fumadocs): 3 config points + 294 MDX files
-4. **fork-sync**: pt-content mirror updated, protected_globs active
-5. **Production routing** (Apache vhost): 4 locales consistent, /_next/ proxied to 3003
-6. **Visual validation**: mmx vision confirms "completamente estilizada" Fumadocs layout
-
-All changes follow the native i18n infrastructure of each platform. Zero custom code.
+v2.12 (pt i18n) shipped successfully. v2.13 closes the 4 deferred items from
+v2.12 with the constraint: native infra only, fork-sync safe, no scope creep.
+The 4 phases are 1:1 with the 4 v2.12 deferred concerns (CF cache, validation
+toolkit, classic PT, audit). Each phase is small and has clear verification.
 
 ## Last Activity
 
-2026-06-06: Phase 04 complete. Apache patch in /etc/apache2/sites-enabled/, repo
-commit f78631367. 4/4 locales return `x-powered-by: Next.js`. CSS rule count
-2 → 392. Visual validation: PT-BR Fumadocs fully styled.
-
-## Pending (user action)
-
-- Cloudflare cache purge for stale `/pt/docs/` (x-new-api-version) and
-  `/assets/atius-logo.svg` (404) entries. Origin Apache is now correct;
-  new requests will succeed. Old cached entries expire naturally in ~24h
-  or via manual CF purge.
-- Push `feat/pt-native` to fork origin (waiting for user approval).
-- Push upstream for new-api-docs-v1 PT changes (waiting).
+2026-06-06: v2.13 milestone opened. ROADMAP updated with 4 new phases.
+Project.md created. Apex skill pattern reused: small phases, named after the
+exact deferred item, verification at the end.

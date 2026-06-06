@@ -1,7 +1,7 @@
 # Phase 05: Sidecar Python + HTTP Bridge (SDK-01) - Context
 
 **Gathered:** 2026-06-06
-**Status:** Ready for planning
+**Status:** Ready for planning (refined by user)
 
 ## Phase Boundary
 
@@ -14,33 +14,41 @@ Suporta modelos `gpt-5.4`, `gpt-5-codex`, `gpt-5.1-codex`, `gpt-5.2-codex`,
 ## Implementation Decisions
 
 ### Runtime & Packaging
-- **D-01:** Docker container no mesmo `docker-compose.yml`. Serviço `codex-sidecar`
+- **D-01:** Container Podman no mesmo `podman-compose.yml`. Serviço `codex-sidecar`
   na rede `newapi-internal`. Imagem base: `python:3.12-slim` com `pip install
-  openai-codex`. (timeout — best-judgment default: Docker, consistente com
-  new-api + model-detailed + db-newapi.)
+  openai-codex`. Stack é sempre Podman — `podman compose`, não Docker.
 
 ### HTTP Framework
 - **D-02:** FastAPI com uvicorn. Já usado no `model-detailed` middleware
   (`integration/middleware/Dockerfile.fastapi`). Async nativo — importante
-  porque chamadas SDK podem levar minutos. (timeout — best-judgment default:
-  FastAPI.)
+  porque chamadas SDK podem levar minutos. Integrado no sistema como
+  serviço Podman, mesmo padrão do `model-detailed`.
 
 ### SDK Lifecycle
 - **D-03:** Sidecar gerencia o ciclo de vida do `codex` app-server. O SDK
   Python spawna automaticamente o binário `codex` como subprocesso. O sidecar
   inicia no startup (`Codex()` context manager), health check, graceful
-  shutdown no SIGTERM. (timeout — best-judgment default: managed.)
+  shutdown no SIGTERM. Token refresh automático — depois de autenticado
+  (SDK-02), a goroutine `codex_credential_refresh_task.go` renova
+  automaticamente sem pedir código. Nunca interrompe o usuário.
 
 ### Thread State
 - **D-04:** Estado dos threads em memória (dict Python: `thread_id → Codex
   thread handle`). v2.14 é minimal — persistência (SQLite/Redis) seria
   overengineering. Se precisar de threads persistentes entre restarts,
-  refatora na Phase 08. (timeout — best-judgment default: in-memory.)
+  refatora na Phase 08.
+
+### Streaming
+- **D-05:** Sidecar suporta streaming SSE. Endpoint `/v1/codex/run` aceita
+  `stream: true` no request body e retorna `text/event-stream`. O router Go
+  faz proxy transparente do SSE do sidecar → cliente final. Usa o mesmo
+  padrão de streaming do relay HTTP existente (`oaiResponsesStreamHandler`).
 
 ### Claude's Discretion
-Todas as 4 decisões foram defaulted por timeout do usuário. O agente tem
-flexibilidade para ajustar detalhes de implementação que não contradigam
-D-01..D-04.
+4 áreas foram defaulted inicialmente por timeout. Refinadas pelo usuário:
+D-01 (Podman), D-02 (FastAPI integrado), D-03 (auto-refresh token),
+D-04 (in-memory), D-05 (streaming SSE adicionado). Agente tem flexibilidade
+para detalhes de implementação que não contradigam D-01..D-05.
 
 ## Canonical References
 
@@ -96,11 +104,7 @@ existente, Docker compose, sem surpresas.
 
 ## Deferred Ideas
 
-- **Thread persistence (SQLite/Redis)**: Mencionado como opção em D-04.
-  Postergado pra Phase 08 ou milestone futuro.
-- **Streaming SSE do sidecar pro router**: Suporte a streaming na resposta
-  do SDK → SSE. Pode ser necessário pra modelos grandes. Avaliar durante
-  implementação.
+- **Thread persistence (SQLite/Redis)**: Postergado pra Phase 08 ou milestone futuro.
 
 ---
 

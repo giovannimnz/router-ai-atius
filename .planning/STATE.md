@@ -24,7 +24,7 @@ progress:
 Phase: 06
 Plan: Not started
 Status: Phase 06 context gathered
-Last activity: 2026-06-06 — Phase 06 context gathered — Phase 06 context gathered
+Last activity: 2026-06-06 — Phase 06 context gathered
 
 ## v2.12 Progress (CLOSED ✅)
 

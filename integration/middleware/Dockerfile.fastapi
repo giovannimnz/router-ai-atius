@@ -1,0 +1,55 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install FastAPI and uvicorn with httpx for async HTTP
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.32.0 \
+    httpx==0.27.2
+
+# Copy middleware code
+COPY model_detailed_fastapi.py /app/model_detailed_fastapi.py
+
+# Copy curated docs (OpenAPI spec)
+COPY docs/ /app/docs/
+
+# Copy static files (Scalar HTML page)
+COPY static/ /app/static/
+
+# Copy Scalar standalone bundle (IIFE, self-contained) — required for /scalar/* assets
+COPY scalar/ /app/scalar/
+
+# Build Go helper binary to decode gorilla/securecookie session cookies.
+# This is needed because new-api requires the New-Api-User header (since rc.2),
+# and the model-detailed must extract the user_id from the session cookie
+# to send that header. The Go helper uses the SAME gin-contrib/sessions lib
+# as new-api, guaranteeing format compatibility.
+FROM golang:1.22-alpine AS go-helper-builder
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download || true
+COPY decode-cookie.go ./
+RUN go build -o decode-cookie decode-cookie.go
+
+# Copy Go helper binary
+COPY --from=go-helper-builder /build/decode-cookie /usr/local/bin/decode-cookie
+RUN chmod +x /usr/local/bin/decode-cookie
+
+# Environment variables
+ENV OPENAPI_SPEC_PATH=/app/docs/openapi.json
+ENV STATIC_FILES_PATH=/app/static
+ENV DOCS_USERNAME=admin
+ENV DOCS_PASSWORD=atius2024
+ENV NEW_API_INTERNAL_URL=http://new-api:3000
+ENV NEWAPI_BACKEND_URL=http://new-api:3000
+ENV MIDDLEWARE_PORT=3001
+ENV BACKEND_TIMEOUT=60
+# SESSION_SECRET must match new-api's. Default is the same as main.go hardcoded fallback.
+ENV SESSION_SECRET=e6e60c89fa342258a3e995e0997290eb92656f1bc517759520f98c9b04f66b49
+
+# Expose port
+EXPOSE 3001
+
+# Run with uvicorn (4 workers for production)
+CMD ["uvicorn", "model_detailed_fastapi:app", "--host", "0.0.0.0", "--port", "3001", "--workers", "4", "--log-level", "info"]

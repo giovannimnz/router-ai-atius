@@ -79,8 +79,10 @@ visibilidade de saldo/usage — sem quebrar o canal Codex tipo 57 existente.
 2. **fork-sync safe.** Mudanças no código Go e frontend devem sobreviver
    a sync de upstream. Scripts/adapters externos (Python/TS SDK) podem
    viver fora da árvore Go principal.
-3. **Credenciais reutilizadas.** Usa o mesmo OAuth token que o Codex CLI
-   já usa (`~/.codex/auth.json` ou equivalente via router). Zero novo login.
+3. **Login explícito (estilo Hermes).** O transformer SEMPRE pede input do
+   admin para autenticar: OAuth code colado no dashboard ou token manual.
+   Nunca reutiliza credenciais automaticamente do filesystem do host.
+   Mesmo comportamento do Hermes Agent: `hermes login` → pede código.
 4. **Scope contido.** v2.14 é só Codex SDK transformer + saldo. Features
    não-Codex ou outros providers ficam pra v2.15+.
 
@@ -89,8 +91,13 @@ visibilidade de saldo/usage — sem quebrar o canal Codex tipo 57 existente.
 - **SDK-01 — Transformer module:** Novo módulo que converte requests do
   router em chamadas ao Codex SDK (Python `openai-codex` como primeira
   runtime), em vez do relay HTTP puro `/backend-api/codex/responses`.
-- **SDK-02 — Credential bridge:** Autenticação que usa a licença Codex
-  Pro existente via OAuth token. Sem novo login, sem fluxo separado.
+- **SDK-02 — Login explícito + armazenamento próprio:** O transformer SEMPRE
+  força input do admin para autenticar: (a) colar authorization code do
+  OAuth flow no campo do dashboard, ou (b) importar JSON manual com
+  `{access_token, refresh_token, account_id}`. Resultado armazenado em
+  `data/codex/license.json` com refresh automático depois de autenticado.
+  Nunca reutiliza `~/.codex/auth.json` do host automaticamente. Mesmo
+  comportamento do Hermes Agent: login explícito → armazena → usa.
 - **SDK-03 — Usage/saldo endpoint:** Expor dados de pricing/usage do
   account Codex no admin dashboard e via endpoint REST. Mostrar consumo
   do plano Pro (100 USD), renovação, histórico.

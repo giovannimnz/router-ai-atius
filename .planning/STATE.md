@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.14
 milestone_name: Codex SDK Transformer
 status: planning
-last_updated: "2026-06-06T10:19:10.360Z"
+last_updated: "2026-06-06T10:25:00.000Z"
 last_activity: 2026-06-06
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -16,15 +16,15 @@ progress:
 # STATE.md
 
 **Project:** Atius AI Router
-**Current milestone:** v2.13 — Post-i18n Hardening
-**Status:** 🔵 Planning (v2.12 complete, v2.13 just started)
+**Current milestone:** v2.14 — Codex SDK Transformer
+**Status:** 🔵 Planning (requirements + roadmap defined)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 05 (next — Sidecar Python + HTTP Bridge)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-06 — Milestone v2.14 started
+Status: Roadmap defined, waiting for Phase 05 start
+Last activity: 2026-06-06 — Milestone v2.14 roadmap created (4 phases)
 
 ## v2.12 Progress (CLOSED ✅)
 
@@ -35,43 +35,36 @@ Last activity: 2026-06-06 — Milestone v2.14 started
 | 03 — PT Docs Bugfixes (hreflang + guide) | ✅ Complete | 2026-06-05 |
 | 04 — Prod Docs Bugfixes (Apache + logo + lang order) | ✅ Complete | 2026-06-06 |
 
-## v2.13 Progress (ACTIVE 🔵)
+## v2.14 Progress (ACTIVE 🔵)
 
 | Phase | Status | Date |
 |---|---|---|
-| 05 — Cloudflare Cache Purge Automation | ⏳ Not Started | — |
-| 06 — Apache Proxy + Visual Validation Toolkit | ⏳ Not Started | — |
-| 07 — Classic Frontend PT Support | ⏳ Not Started | — |
-| 08 — v2.13 Verification + Audit | ⏳ Not Started | — |
+| 05 — Sidecar Python + HTTP Bridge (SDK-01) | ⏳ Not Started | — |
+| 06 — Login Explícito + Armazenamento Licença (SDK-02) | ⏳ Not Started | — |
+| 07 — Dashboard Usage/Saldo (SDK-03) | ⏳ Not Started | — |
+| 08 — Channel Coexistence + Validação (SDK-04) | ⏳ Not Started | — |
 
-## ⚡ EXECUTION ORDER (2026-06-06)
+## ⚡ EXECUTION ORDER
 
-🟡 1. **Phase 05** (CF purge CLI) ← first (no deps, foundation for VIS in Phase 06)
-🟡 2. **Phase 06** (APX + VIS toolkit) ← depends on Phase 05 infra (uses CF purge CLI indirectly)
-🟢 3. **Phase 07** (Classic PT) ← independent (frontend only, separate from infra)
-🟢 4. **Phase 08** (Verification + audit) ← last, runs APX+VIS against all prior work
+🟡 1. **Phase 05** (sidecar Python) ← primeiro (foundation — sem sidecar nada funciona)
+🟡 2. **Phase 06** (login + licença) ← depende do sidecar existente (SDK precisa autenticar)
+🟢 3. **Phase 07** (usage dashboard) ← paralelizável com 06 (só precisa do wham/usage endpoint)
+🟢 4. **Phase 08** (coexistence + validação) ← último, integra tudo
 
 **Porquê esta ordem:**
-
-- Phase 05 antes: CF purge é o que destrava o `cf-cache-status: HIT` antigo
-  dos assets logo. Phase 06 valida que tudo carrega LIMPO, então precisa que
-  o CF já esteja purgado primeiro.
-
-- Phase 07 independente: classic frontend não compartilha arquivo com
-  infra/scripts — pode rodar em paralelo com Phase 06 se quiser.
-
-- Phase 08 último: audita Phase 05-07. Roda APX smoke + VIS validate em
-  /pt/, /en/, /ja/, /zh/ + classic /pt/.
+- Phase 05 antes: o sidecar é o core. Sem ele, não tem o que autenticar nem testar.
+- Phase 06 depende de 05: o fluxo de login escreve `data/codex/license.json` que o sidecar lê.
+- Phase 07 é parcialmente independente: o endpoint `wham/usage` já existe no relay HTTP.
+  Pode ser desenvolvido em paralelo com 06 se quiser.
+- Phase 08 fecha: valida coexistência relay/sdk, testa fluxo completo.
 
 ## Summary
 
-v2.12 (pt i18n) shipped successfully. v2.13 closes the 4 deferred items from
-v2.12 with the constraint: native infra only, fork-sync safe, no scope creep.
-The 4 phases are 1:1 with the 4 v2.12 deferred concerns (CF cache, validation
-toolkit, classic PT, audit). Each phase is small and has clear verification.
+v2.12 (pt i18n) shipped ✅. v2.14 (Codex SDK Transformer) adds a Python sidecar
+that bridges the router Go → Codex SDK, with explicit login (Hermes-style),
+usage dashboard, and channel coexistence. 4 phases, 4 requirements, 1:1 mapping.
 
 ## Last Activity
 
-2026-06-06: v2.13 milestone opened. ROADMAP updated with 4 new phases.
-Project.md created. Apex skill pattern reused: small phases, named after the
-exact deferred item, verification at the end.
+2026-06-06: v2.14 milestone started. REQUIREMENTS.md + ROADMAP.md created.
+4 phases (05-08) defined. Phase 05 (Sidecar Python) is next.

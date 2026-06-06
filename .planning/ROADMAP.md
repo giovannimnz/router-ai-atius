@@ -5,59 +5,9 @@
 Goal: Integrate Portuguese locale into the entire stack — backend Go (new-api), frontend React/i18next, AND Fumadocs docs site. Zero custom code, only registration points.
 
 ### Phase 01: pt Locale Registration ✅ (2026-06-05)
-
-Register `pt` locale in new-api's native i18n (Go + React/i18next). 5 native registration points.
-
-| File | Result |
-|---|---|
-| `i18n/i18n.go` | LangPt + pt.yaml loading + localizer + normalizeLang + SupportedLanguages |
-| `i18n/locales/pt.yaml` | 228 keys backend PT-BR |
-| `web/default/src/i18n/config.ts` | import pt + resources + supportedLngs |
-| `web/default/src/i18n/languages.ts` | opção "Português" |
-| `web/default/src/i18n/locales/pt.json` | 4521 keys frontend PT-BR |
-
-**Branch:** `feat/pt-native` — 3 commits (planning + implementation + tracking)
-
 ### Phase 02: pt Fumadocs i18n ✅ (2026-06-05)
-
-Add `pt` to the Fumadocs docs site (upstream QuantumNous/new-api-docs-v1, will propagate to fork via fork-sync).
-
-| File | Change |
-|---|---|
-| `src/lib/i18n.ts` | Add 'pt' to `languages: ['en', 'zh', 'ja', 'pt']` |
-| `next.config.mjs` | Extend `:lang(en\|zh\|ja)` regex → `(en\|zh\|ja\|pt)` |
-| `scripts/translate-docs.ts` | Add `pt` to LANGUAGES |
-| `scripts/translate-en-to-pt.py` | **NEW** Python wrapper for en→pt batch translation using mmx CLI |
-| `content/docs/pt/` | 294 files PT-BR (203 API ref + 80 NL docs + 11 seed) |
-| Docker | Image `localhost/router-ai-atius-docs:local` rebuilt + container restarted |
-
-**Result:** `/pt/docs/`, `/pt/docs/skills/` → 200 OK, PT-BR content live in production.
-
 ### Phase 03: PT Docs Bugfixes ✅ (2026-06-05)
-
-Fix 2 bugs found during Phase 02 browser validation.
-
-| Bug | Root Cause | Fix |
-|---|---|---|
-| hreflang missing pt | `layout.tsx` alternates.languages static literal | Add `pt: '/pt'` |
-| /{lang}/docs/guide/ 404 | No `guide/index.mdx` in any locale | 4 landing pages (en/zh/ja/pt) |
-
-**Files:** 1 edit (`layout.tsx`) + 4 new (`guide/index.mdx`) — 1 commit.
-
 ### Phase 04: Prod Docs Bugfixes ✅ (2026-06-06)
-
-3 post-deploy fixes after user reported "site is broken, never tested properly":
-
-| Bug | Root Cause | Fix |
-|---|---|---|
-| `/pt/docs/` served as Go SPA 404 | Apache missing `ProxyPass /pt/` (en/zh/ja had it, pt didn't) | Add `/pt/` ProxyPass → 3003 |
-| `/assets/atius-logo.svg` 404 | No Apache alias for Fumadocs header path | Add `Alias /assets/atius-logo.{svg,png}` |
-| CSS unstyled (Times New Roman) | `/_next/static/chunks/*.css` fell to Go catch-all (text/html) | Add `ProxyPass /_next/` → 3003 |
-| Lang switcher not alphabetical | zh/en/fr/ru/ja/vi/pt order | Alphabetical: en, fr, ja, pt, ru, vi, zh |
-
-**Files:** 1 commit (`f78631367`) — `web/default/src/i18n/languages.ts` + planning + screenshots + validation script.
-**Infra (out of repo):** Apache vhost patch (3 surgical edits, configtest OK).
-**Deferred to user:** Cloudflare cache purge for stale 404 entries (origin is now correct, new requests succeed).
 
 ---
 
@@ -75,42 +25,120 @@ All follow native pattern — only registration points, zero custom code.
 
 ---
 
-## v2.13 — Post-i18n Hardening 🔵 Active
+## v2.14 — Codex SDK Transformer 🔵 Active
 
-Goal: Close the 4 v2.12 deferred items and add infrastructure to prevent
-regression. Native-only, fork-sync-safe, no scope creep.
+Goal: Usar assinatura Codex Pro (plano 100 USD) como módulo transformer
+dentro do router-ai-atius, expondo o Codex SDK programaticamente com
+visibilidade de saldo/usage. Login explícito estilo Hermes. Zero breaking
+change no canal tipo 57 existente.
 
-### Phase 05: Cloudflare Cache Purge Automation
-- CLI script `purge-cf.sh` accepting paths as args
-- Token in vault, not in repo
-- Optional post-deploy hook in deploy script
-- Idempotent (no-op if no stale entries)
+### Phase 05: Sidecar Python + HTTP Bridge (SDK-01)
 
-### Phase 06: Apache Proxy + Visual Validation Toolkit
-- `apx-smoke.sh` — curl-based check for 4 locales + `/_next/` + `/assets/atius-logo.*`
-- `validate-spa.py` — chromium + CDP raw WS + mmx vision (reusable, not phase-specific)
-- Both live in `.planning/scripts/`, run manually pre/post deploy
+**Goal:** Microserviço Python com `openai-codex` SDK exposto via HTTP local.
+Router Go proxyia requests Codex `backend=sdk` para o sidecar.
 
-### Phase 07: Classic Frontend PT Support
-- Register `pt` in `web/classic/src/i18n/{i18n,language}.js`
-- Translate `pt.json` keys (mirror default frontend pattern)
-- Code-only — classic not in production, completes pt coverage matrix
-- Validation: `bun run typecheck && bun run build` in `web/classic/`
+**Requirements mapped:** SDK-01
 
-### Phase 08: v2.13 Verification + Roadmap Audit
-- Run apx-smoke + validate-spa on full prod
-- Visual confirm 4/4 locales still styled, logos loaded, lang order ok
-- Audit deferred items closed, file new M099 if any residual
-- Update STATE.md + ROADMAP.md → ready for v2.13 complete-milestone
+**Scope:**
+- Criar diretório `integration/codex-sidecar/` com app FastAPI
+- `pip install openai-codex` no ambiente do sidecar
+- Endpoints:
+  - `POST /v1/codex/run` — one-shot prompt, retorna `TurnResult`
+  - `POST /v1/codex/thread` — stateful com `thread_id`
+  - `GET /health` — health check
+- Dockerfile para o sidecar (imagem separada ou mesmo compose)
+- docker-compose.yml: novo serviço `codex-sidecar` na rede `newapi-internal`
+- Go: novo handler em `service/` que proxyia para o sidecar quando
+  `backend=sdk`
+
+**Verification:**
+- `curl -X POST localhost:1456/v1/codex/run -d '{"model":"gpt-5.4","prompt":"hello"}'` retorna 200 com resposta
+- `podman ps` mostra container `codex-sidecar` healthy
+- Canal Codex tipo 57 com `backend=sdk` faz relay via sidecar
+
+### Phase 06: Login Explícito + Armazenamento Licença (SDK-02)
+
+**Goal:** Fluxo de login onde admin cola authorization code ou importa JSON.
+Credenciais armazenadas em `data/codex/license.json`. Refresh automático.
+
+**Requirements mapped:** SDK-02
+
+**Scope:**
+- Página no admin dashboard: `/admin/codex-auth`
+  - Campo "Authorization Code": colar URL do OAuth redirect (já existe flow)
+  - Botão "Importar JSON": upload de `{access_token, refresh_token, account_id}`
+  - Status: mostra email, expired, last_refresh
+- Go handler: `POST /api/codex/auth` — valida e persiste em `data/codex/license.json`
+- Reuso da goroutine `codex_credential_refresh_task.go` para refresh
+- Sidecar Python lê `data/codex/license.json` para autenticar chamadas SDK
+- **NUNCA** faz fallback silencioso para `~/.codex/auth.json`
+
+**Verification:**
+- Colar authorization code → status mostra email
+- Token expira → refresh automático
+- `cat data/codex/license.json` mostra `{access_token, refresh_token, account_id, email, expired, last_refresh}`
+- Remover `~/.codex/auth.json` → sidecar continua funcionando
+
+### Phase 07: Dashboard Usage/Saldo (SDK-03)
+
+**Goal:** Gráfico de consumo do mês no admin frontend, dados do `wham/usage`.
+
+**Requirements mapped:** SDK-03
+
+**Scope:**
+- Frontend: componente React `CodexUsagePanel` no admin
+  - Gráfico de barras: consumo diário (tokens)
+  - Cards: total requests, tokens, custo estimado (USD), dias restantes
+- Backend: endpoint `GET /api/channel/:id/codex/usage/parsed`
+  - Parseia resposta JSON do `wham/usage` upstream
+  - Retorna: `{daily_usage: [{date, tokens, requests}], total_tokens, total_requests, estimated_cost, cycle_days_left}`
+- Reuso do handler existente `controller/codex_usage.go`
+
+**Verification:**
+- Admin abre `/admin/codex-usage` → gráfico renderiza
+- Dados batem com `curl chatgpt.com/backend-api/wham/usage` direto
+- Canal sem licença → mostra "Configure licença primeiro"
+
+### Phase 08: Channel Coexistence + Validação (SDK-04)
+
+**Goal:** Flag `backend=sdk|relay` no canal tipo 57. Ambos coexistem.
+Validação end-to-end de todos os fluxos.
+
+**Requirements mapped:** SDK-04
+
+**Scope:**
+- Model: campo `CodexBackend` no `Channel.Other` ou `Channel.Setting`
+- Admin UI: dropdown "Backend" no formulário de canal Codex (relay/sdk)
+- Router: `GetRequestURL()` no adaptor codex decide rota baseado no backend
+- Teste end-to-end:
+  - Canal `relay` → funciona como antes (HTTP `/backend-api/codex/responses`)
+  - Canal `sdk` → proxyia para sidecar Python
+  - Ambos simultâneos → sem interferência
+
+**Verification:**
+- Criar canal A (relay) + canal B (sdk) → ambos respondem
+- Logs mostram rotas diferentes (A → chatgpt.com, B → localhost:1456)
+- Nenhum canal existente quebrou
+
+---
+
+## Summary
+
+| # | Phase | Requirements | Status |
+|---|-------|-------------|--------|
+| 05 | Sidecar Python + HTTP Bridge | SDK-01 | ⏳ Not Started |
+| 06 | Login Explícito + Licença | SDK-02 | ⏳ Not Started |
+| 07 | Dashboard Usage/Saldo | SDK-03 | ⏳ Not Started |
+| 08 | Channel Coexistence + Validação | SDK-04 | ⏳ Not Started |
+
+**4 phases | 4 requirements mapped | All covered ✓**
 
 ---
 
 ## Next
 
-- [ ] Push `feat/pt-native` for router-ai-atius (pending approval)
-- [ ] Push upstream for new-api-docs-v1 PT changes (pending)
-- [ ] Cloudflare cache purge (manual, or wait TTL ~24h)
-- [ ] Run Phase 05: CF purge CLI
-- [ ] Run Phase 06: APX + VIS toolkit
-- [ ] Run Phase 07: Classic PT
-- [ ] Run Phase 08: Verification + audit
+- [ ] `/gsd-discuss-phase 05` — gather context for Phase 05 (Sidecar Python)
+- [ ] Run Phase 05: Sidecar Python + HTTP Bridge
+- [ ] Run Phase 06: Login Explícito + Licença
+- [ ] Run Phase 07: Dashboard Usage/Saldo
+- [ ] Run Phase 08: Channel Coexistence + Validação

@@ -1,0 +1,4 @@
+[submodule "docs/atius-router-docs"]
+	path = docs/atius-router-docs
+	url = https://github.com/giovannimnz/new-api-docs-v1
+	branch = main

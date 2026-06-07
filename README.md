@@ -177,6 +177,16 @@ docker run --name new-api -d --restart always \
 | ❓ FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
 | 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
 
+### Atius Docs Convergence
+
+The docs site now lives as a submodule at `docs/atius-router-docs/`.
+
+```bash
+git submodule update --init --recursive
+```
+
+Legacy standalone checkout `/home/ubuntu/docker/Atius/atius-router-docs` remains only as a migration source until the cutover phases finish.
+
 ---
 
 ## ✨ Key Features

@@ -34,11 +34,29 @@
 
 ### Safety
 
-- [ ] **SDK-04**: Channel coexistence sem breaking. Campo `backend` no canal
-  tipo 57 com valores `relay` (padrão, HTTP `/backend-api/codex/responses`
-  atual) ou `sdk` (roteia para o sidecar Python). Ambos coexistem no mesmo
-  tipo de canal. Admin escolhe backend via dropdown no formulário de canal.
-  Canais existentes mantêm comportamento `relay` inalterado.
+- [ ] **SDK-04**: Channel coexistence sem breaking. Canal tipo 57 com
+  flag `backend` em `relay` (padrão, HTTP `/backend-api/codex/responses`
+  atual). 100% Go nativo, sem sidecar Python. Admin configura via
+  formulário de canal. Canais existentes mantêm comportamento inalterado.
+
+---
+
+## Planned Requirements — v2.15 Docs Convergence
+
+- [ ] **DOCS-01**: A documentação deixa de existir como repo de runtime separado
+  em `/home/ubuntu/docker/Atius/atius-router-docs` e passa a viver dentro do
+  repo principal `router-ai-atius` em `docs/atius-router-docs/` como submodule
+  canônico. A fase deve cobrir a mecânica de checkout/update, impacto no fluxo
+  de upstream sync e como o `router-ai-atius` referencia esse submodule no dia a dia.
+
+- [ ] **DOCS-02**: O cutover preserva branding Atius, logo SVG válida, PT-BR,
+  e rotas críticas (`/pt/`, `/pt/docs/`, `/pt/docs/skills/`, `/en/`). Runtime,
+  Apache, build e deploy deixam de depender do repo standalone anterior.
+
+- [ ] **DOCS-03**: `~/GitHub/omni-srv-admin` passa a ser a fonte de gestão do
+  sync/rebrand/patch/deploy/rollback da documentação integrada. O destino do
+  remote separado `atius-router-docs` (arquivar, remover, manter apenas como
+  espelho transitório) deve ficar definido e documentado.
 
 ---
 
@@ -68,6 +86,9 @@
 | SDK-02 | 02 | Login explícito + storage licença |
 | SDK-03 | 03 | Dashboard usage/saldo |
 | SDK-04 | 04 | Channel coexistence |
+| DOCS-01 | 09 | Docs source integrado ao repo principal |
+| DOCS-02 | 09 | Cutover runtime/deploy sem repo standalone |
+| DOCS-03 | 09 | Gestão via omni-srv-admin + destino do remote separado |
 
 ---
 

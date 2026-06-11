@@ -237,6 +237,7 @@ Legacy standalone checkout `/home/ubuntu/docker/Atius/atius-router-docs` remains
 - 🔄 **OpenAI Compatible → Google Gemini**
 - 🔄 **Google Gemini → OpenAI Compatible** - Text only, function calling not supported yet
 - 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - In development
+- 🔬 **OpenAI Chat Completions → Codex Responses** — traduz `/v1/chat/completions` para Responses API Codex nativamente (Go)
 - 🔄 **Thinking-to-content functionality**
 
 **Reasoning Effort Support:**
@@ -280,7 +281,8 @@ Legacy standalone checkout `/home/ubuntu/docker/Atius/atius-router-docs` remains
 | 💬 Claude | Messages format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/createmessage) |
 | 🌐 Gemini | Google Gemini format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/gemini/geminirelayv1beta) |
 | 🔧 Dify | ChatFlow mode | - |
-| 🎯 Custom upstream | Supports configuring legally authorized upstream endpoints | - |
+|| 🔧 Custom upstream | Supports configuring legally authorized upstream endpoints | - |
+|| 🔬 Codex (Go Native) | Codex Pro via OpenAI-compatible `/v1/chat/completions` and `/v1/responses` | 100% Go, zero sidecar |
 
 ### 📡 Supported Interfaces
 
@@ -297,6 +299,7 @@ Legacy standalone checkout `/home/ubuntu/docker/Atius/atius-router-docs` remains
 - [Realtime Conversation (Realtime)](https://docs.newapi.pro/en/docs/api/ai-model/realtime/createrealtimesession)
 - [Claude Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/createmessage)
 - [Google Gemini Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/gemini/geminirelayv1beta)
+- **🧬 Codex (Responses)** — `/v1/responses` + `/v1/chat/completions` via Chat → Responses translation
 
 </details>
 

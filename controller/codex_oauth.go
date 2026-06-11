@@ -140,10 +140,25 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "missing authorization code"})
 		return
 	}
-	if strings.TrimSpace(state) == "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "missing state in input"})
+
+	session := sessions.Default(c)
+	expectedState, _ := session.Get(codexOAuthSessionKey(channelID, "state")).(string)
+	verifier, _ := session.Get(codexOAuthSessionKey(channelID, "verifier")).(string)
+	if strings.TrimSpace(expectedState) == "" || strings.TrimSpace(verifier) == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "oauth flow not started or session expired"})
 		return
 	}
+	// If user-provided state exists, verify it matches session (backward compat with full URL paste).
+	// Otherwise use session state (simplified flow — user pastes only the code).
+	effectiveState := expectedState
+	if strings.TrimSpace(state) != "" {
+		if state != expectedState {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "state mismatch"})
+			return
+		}
+		effectiveState = state
+	}
+	_ = effectiveState // state verified server-side via session
 
 	channelProxy := ""
 	if channelID > 0 {
@@ -161,18 +176,6 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 			return
 		}
 		channelProxy = ch.GetSetting().Proxy
-	}
-
-	session := sessions.Default(c)
-	expectedState, _ := session.Get(codexOAuthSessionKey(channelID, "state")).(string)
-	verifier, _ := session.Get(codexOAuthSessionKey(channelID, "verifier")).(string)
-	if strings.TrimSpace(expectedState) == "" || strings.TrimSpace(verifier) == "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "oauth flow not started or session expired"})
-		return
-	}
-	if state != expectedState {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "state mismatch"})
-		return
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)

@@ -13,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -108,51 +107,11 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 	return request, nil
 }
 
-// isSDKBackend returns true when the channel is configured to use the SDK sidecar.
-func isSDKBackend(info *relaycommon.RelayInfo) bool {
-	return info != nil && info.ChannelOtherSettings.CodexBackend == "sdk"
-}
-
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
-	if isSDKBackend(info) {
-		bodyBytes, err := io.ReadAll(requestBody)
-		if err != nil {
-			return nil, err
-		}
-		sidecarURL := "http://codex-sidecar:1456"
-		client, err := service.NewProxyHttpClient(info.ChannelSetting.Proxy)
-		if err != nil {
-			return nil, err
-		}
-		ctx := c.Request.Context()
-		statusCode, respBody, err := service.ProxyCodexSDKRequest(ctx, client, sidecarURL, bodyBytes)
-		if err != nil {
-			return nil, err
-		}
-		// Return a synthetic http.Response so DoResponse can process it
-		return &http.Response{
-			StatusCode: statusCode,
-			Body:       io.NopCloser(strings.NewReader(string(respBody))),
-			Header: http.Header{
-				"Content-Type": []string{"application/json"},
-			},
-		}, nil
-	}
 	return channel.DoApiRequest(a, c, info, requestBody)
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
-	if isSDKBackend(info) {
-		// SDK sidecar returns {final_response, usage, thread_id} — not OpenAI Responses format.
-		// Read the body and forward it as-is to the client.
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return nil, types.NewError(readErr, types.ErrorCodeInternalError)
-		}
-		c.Data(resp.StatusCode, "application/json", body)
-		return nil, nil
-	}
-
 	if info.RelayMode != relayconstant.RelayModeResponses && info.RelayMode != relayconstant.RelayModeResponsesCompact {
 		return nil, types.NewError(errors.New("codex channel: endpoint not supported"), types.ErrorCodeInvalidRequest)
 	}
@@ -176,11 +135,6 @@ func (a *Adaptor) GetChannelName() string {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	// SDK backend — route to local sidecar instead of chatgpt.com
-	if info != nil && info.ChannelOtherSettings.CodexBackend == "sdk" {
-		return "http://codex-sidecar:1456/v1/codex/run", nil
-	}
-
 	if info.RelayMode != relayconstant.RelayModeResponses && info.RelayMode != relayconstant.RelayModeResponsesCompact {
 		return "", errors.New("codex channel: only /v1/responses and /v1/responses/compact are supported")
 	}

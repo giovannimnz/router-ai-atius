@@ -75,7 +75,7 @@ export const CHANNEL_TYPES = {
   54: 'DoubaoVideo',
   55: 'Sora',
   56: 'Replicate',
-  57: 'Codex',
+  57: 'OpenAI Codex OAuth',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
@@ -387,7 +387,7 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   33: 'Format: Ak|Sk|Region',
   50: 'Format: AccessKey|SecretKey (or just ApiKey if upstream is New API)',
   51: 'Format: Access Key ID|Secret Access Key',
-  57: 'Paste Codex OAuth JSON credential (access_token / refresh_token / account_id)',
+  57: 'OAuth — generated via Codex OAuth authorization flow. No manual key needed.',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

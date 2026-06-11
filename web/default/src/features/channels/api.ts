@@ -46,6 +46,42 @@ const channelActionConfig = (
   skipErrorHandler: true,
 })
 
+export type CodexDeviceAuthStartResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    session_id: string
+    verification_url: string
+    user_code: string
+    expires_in: number
+  }
+}
+
+export type CodexDeviceAuthPollResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    status: 'pending' | 'complete'
+    key?: string
+    email?: string
+    account_id?: string
+    expires_at?: string
+    last_refresh?: string
+  }
+}
+
+export type CodexDeviceAuthUploadResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    key: string
+    email?: string
+    account_id?: string
+    expires_at?: string
+    last_refresh?: string
+  }
+}
+
 export type CodexOAuthStartResponse = {
   success: boolean
   message?: string
@@ -71,6 +107,15 @@ export type CodexUsageResponse = {
   message?: string
   upstream_status?: number
   data?: Record<string, unknown>
+}
+
+export type CodexModelsResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    models: string[]
+    source: 'static' | 'upstream'
+  }
 }
 
 export type CodexCredentialRefreshResponse = {
@@ -295,6 +340,39 @@ export async function startCodexOAuth(): Promise<CodexOAuthStartResponse> {
   return res.data
 }
 
+// ── Device Auth ──
+
+export async function startCodexDeviceAuth(): Promise<CodexDeviceAuthStartResponse> {
+  const res = await api.post(
+    '/api/channel/codex/oauth/device/start',
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function pollCodexDeviceAuth(
+  sessionId: string
+): Promise<CodexDeviceAuthPollResponse> {
+  const res = await api.post(
+    `/api/channel/codex/oauth/device/poll?session_id=${sessionId}`,
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function uploadCodexDeviceAuthJSON(
+  json: string
+): Promise<CodexDeviceAuthUploadResponse> {
+  const res = await api.post(
+    '/api/channel/codex/oauth/device/upload',
+    { json },
+    channelActionConfig()
+  )
+  return res.data
+}
+
 export async function completeCodexOAuth(
   input: string
 ): Promise<CodexOAuthCompleteResponse> {
@@ -312,6 +390,17 @@ export async function refreshCodexCredential(
   const res = await api.post(
     `/api/channel/${channelId}/codex/refresh`,
     {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function fetchCodexModels(
+  key: string
+): Promise<CodexModelsResponse> {
+  const res = await api.post(
+    '/api/channel/codex/models',
+    { key },
     channelActionConfig()
   )
   return res.data

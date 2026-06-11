@@ -1,72 +1,47 @@
----
+|---
 gsd_state_version: 1.0
-milestone: v2.14
-milestone_name: Codex SDK Transformer
-status: executing
-last_updated: "2026-06-06T21:54:49.114Z"
-last_activity: 2026-06-06 -- Phase 06 planning complete
+milestone: v2.16
+milestone_name: Codex Device Auth + Real Models + Branding
+status: in_progress
+last_updated: 2026-06-07T21:15:00Z
+last_activity: 2026-06-07 -- Phase 10 planned
 progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 2
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 1
   completed_plans: 1
-  percent: 25
+  percent: 0
 ---
 
 # STATE.md
 
 **Project:** Atius AI Router
-**Current milestone:** v2.14 — Codex SDK Transformer
-**Status:** Ready to execute
+**Current milestone:** v2.16 — Codex Device Auth + Real Models + Branding
+**Status:** Plan created, awaiting execution
 
-## Current Position
-
-Phase: 06
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-06 -- Phase 06 planning complete
-
-## v2.12 Progress (CLOSED ✅)
+## v2.14 Progress (CLOSED ✅)
 
 | Phase | Status | Date |
 |---|---|---|
-| 01 — pt Locale Registration (Go + React SPA) | ✅ Complete | 2026-06-05 |
-| 02 — pt Fumadocs i18n (Docs) | ✅ Complete | 2026-06-05 |
-| 03 — PT Docs Bugfixes (hreflang + guide) | ✅ Complete | 2026-06-05 |
-| 04 — Prod Docs Bugfixes (Apache + logo + lang order) | ✅ Complete | 2026-06-06 |
+| 05 — Codex Go Native SDK (SDK-01/02/03/04) | ✅ Complete | 2026-06-07 |
 
-## v2.14 Progress (ACTIVE 🔵)
+## v2.16 Progress (ACTIVE 🔵)
 
 | Phase | Status | Date |
 |---|---|---|
-| 05 — Sidecar Python + HTTP Bridge (SDK-01) | ✅ Complete | 2026-06-06 |
-| 06 — Login Explícito + Armazenamento Licença (SDK-02) | 📋 Planned | 2026-06-06 |
-| 07 — Dashboard Usage/Saldo (SDK-03) | ⏳ Not Started | — |
-| 08 — Channel Coexistence + Validação (SDK-04) | ⏳ Not Started | — |
+| 10 — Device Auth + Real Models + Branding | 📋 Planned | 2026-06-07 |
 
-## ⚡ EXECUTION ORDER
+## Execution Order
 
-🟡 1. **Phase 05** (sidecar Python) ← primeiro (foundation — sem sidecar nada funciona)
-🟡 2. **Phase 06** (login + licença) ← depende do sidecar existente (SDK precisa autenticar)
-🟢 3. **Phase 07** (usage dashboard) ← paralelizável com 06 (só precisa do wham/usage endpoint)
-🟢 4. **Phase 08** (coexistence + validação) ← último, integra tudo
-
-**Porquê esta ordem:**
-
-- Phase 05 antes: o sidecar é o core. Sem ele, não tem o que autenticar nem testar.
-- Phase 06 depende de 05: o fluxo de login escreve `data/codex/license.json` que o sidecar lê.
-- Phase 07 é parcialmente independente: o endpoint `wham/usage` já existe no relay HTTP.
-  Pode ser desenvolvido em paralelo com 06 se quiser.
-
-- Phase 08 fecha: valida coexistência relay/sdk, testa fluxo completo.
-
-## Summary
-
-v2.12 (pt i18n) shipped ✅. v2.14 (Codex SDK Transformer) adds a Python sidecar
-that bridges the router Go → Codex SDK, with explicit login (Hermes-style),
-usage dashboard, and channel coexistence. 4 phases, 4 requirements, 1:1 mapping.
+1. T1 — Rename: Codex OAuth → OpenAI Codex OAuth (fast, isolated)
+2. T2 — Backend: Device Auth JSON upload endpoint
+3. T3 — Frontend: Device Auth Upload UI (primary)
+4. T4 — Frontend: PKCE Callback Paste (secondary, existing code kept)
+5. T5 — Backend: Real model fetching
+6. T6 — Frontend: Auto-load models after auth
+7. T7 — Integration test + deploy
 
 ## Last Activity
 
-2026-06-06: Phase 06 planned. UI contract, research, and execution plan created.
-Next step: execute Phase 06 implementation from `06-PLAN.md`.
+2026-06-07: Phase 10 planned. Device auth upload (primary) + PKCE paste (secondary).
+Cloudflare blocks server-to-server device auth — must use `codex login --device-auth` client-side.

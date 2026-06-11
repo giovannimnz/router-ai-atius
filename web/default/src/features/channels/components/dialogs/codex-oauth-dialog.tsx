@@ -16,12 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Copy, Check, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { tryPrettyJson } from '@/lib/utils'
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,11 +46,10 @@ export function CodexOAuthDialog({
   onKeyGenerated,
 }: CodexOAuthDialogProps) {
   const { t } = useTranslation()
-  const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
 
   const [state, setState] = useState({
     authorizeUrl: '',
-    callbackUrl: '',
+    authCode: '',
     isStarting: false,
     isCompleting: false,
   })
@@ -60,18 +58,12 @@ export function CodexOAuthDialog({
     if (!open) {
       setState({
         authorizeUrl: '',
-        callbackUrl: '',
+        authCode: '',
         isStarting: false,
         isCompleting: false,
       })
     }
   }, [open])
-
-  const canCopyAuthorizeUrl = Boolean(state.authorizeUrl && !state.isStarting)
-  const canComplete = useMemo(
-    () => Boolean(state.callbackUrl.trim()) && !state.isCompleting,
-    [state.callbackUrl, state.isCompleting]
-  )
 
   const handleStart = async () => {
     setState((prev) => ({ ...prev, isStarting: true }))
@@ -91,7 +83,6 @@ export function CodexOAuthDialog({
         window.open(url, '_blank', 'noopener,noreferrer')
         toast.success(t('Opened authorization page'))
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.warn('Failed to open authorization page:', error)
         toast.warning(t('Please manually copy and open the authorization link'))
       }
@@ -105,10 +96,10 @@ export function CodexOAuthDialog({
   }
 
   const handleComplete = async () => {
-    if (!state.callbackUrl.trim()) return
+    if (!state.authCode.trim()) return
     setState((prev) => ({ ...prev, isCompleting: true }))
     try {
-      const res = await completeCodexOAuth(state.callbackUrl.trim())
+      const res = await completeCodexOAuth(state.authCode.trim())
       if (!res.success) {
         throw new Error(res.message || 'OAuth failed')
       }
@@ -130,12 +121,12 @@ export function CodexOAuthDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-2xl'>
+      <DialogContent className='sm:max-w-xl'>
         <DialogHeader>
           <DialogTitle>{t('Codex Authorization')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Generate a Codex OAuth credential and paste it into the channel key field.'
+              'Authorize the router to use your Codex Pro subscription.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -144,7 +135,7 @@ export function CodexOAuthDialog({
           <Alert>
             <AlertDescription>
               {t(
-                '1) Click "Open authorization page" and complete login. 2) Your browser may redirect to localhost (it is OK if the page does not load). 3) Copy the full URL from the address bar and paste it below. 4) Click "Generate credential".'
+                '1) Click "Open authorization page" and log into your OpenAI account. 2) After login, the browser redirects to a page that fails to load — this is normal. 3) From the address bar URL, locate &p=arameter code=... and copy ONLY the code value. 4) Paste it below and click "Generate credential".'
               )}
             </AlertDescription>
           </Alert>
@@ -158,43 +149,24 @@ export function CodexOAuthDialog({
               )}
               {t('Open authorization page')}
             </Button>
-
-            <Button
-              type='button'
-              variant='outline'
-              disabled={!canCopyAuthorizeUrl}
-              onClick={async () => {
-                if (!state.authorizeUrl) return
-                await copyToClipboard(state.authorizeUrl)
-              }}
-              aria-label={t('Copy authorization link')}
-              title={t('Copy authorization link')}
-            >
-              {copiedText === state.authorizeUrl ? (
-                <Check className='mr-2 h-4 w-4 text-green-600' />
-              ) : (
-                <Copy className='mr-2 h-4 w-4' />
-              )}
-              {t('Copy authorization link')}
-            </Button>
           </div>
 
           <div className='space-y-2'>
-            <div className='text-sm font-medium'>{t('Callback URL')}</div>
+            <div className='text-sm font-medium'>{t('Authorization code')}</div>
             <Input
-              value={state.callbackUrl}
+              value={state.authCode}
               onChange={(e) =>
-                setState((prev) => ({ ...prev, callbackUrl: e.target.value }))
+                setState((prev) => ({ ...prev, authCode: e.target.value }))
               }
               placeholder={t(
-                'Paste the full callback URL (includes code & state)'
+                'Paste the code parameter from the URL'
               )}
               autoComplete='off'
               spellCheck={false}
             />
             <div className='text-muted-foreground text-xs'>
               {t(
-                'Tip: The generated key is a JSON credential including access_token / refresh_token / account_id.'
+                'Find code=... in the address bar after login. Only the value, not the full URL.'
               )}
             </div>
           </div>
@@ -209,11 +181,16 @@ export function CodexOAuthDialog({
           >
             {t('Cancel')}
           </Button>
-          <Button onClick={handleComplete} disabled={!canComplete}>
+          <Button
+            onClick={handleComplete}
+            disabled={!state.authCode.trim() || state.isCompleting}
+          >
             {state.isCompleting && (
               <Loader2 className='mr-2 h-4 w-4 animate-spin' />
             )}
-            {state.isCompleting ? t('Generating...') : t('Generate credential')}
+            {state.isCompleting
+              ? t('Generating...')
+              : t('Generate credential')}
           </Button>
         </DialogFooter>
       </DialogContent>

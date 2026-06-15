@@ -360,6 +360,7 @@ Resultado:
 - Smoke OpenAI/Anthropic SDK sem `ATIUS_ROUTER_TOKEN`: exit 2 esperado, sem importar SDK nem chamar rede.
 - Smoke embeddings e routing matrix sem `ATIUS_ROUTER_TOKEN`: exit 2 esperado.
 - Smoke real com token operacional via ambiente efemero `uv`: OpenAI SDK `MiniMax-M3` OK, Anthropic SDK `MiniMax-M3` OK, OpenAI SDK `gpt-5.5` OK com `ATIUS_ROUTER_STREAM=1`.
+- Middleware `model-detailed-hotfix` usa fila anti-rate-limit por provider/model-family por padrao. Quando a fila atua, validar os headers `X-Atius-Rate-Queue`, `X-Atius-Rate-Queue-Wait-Ms` e `X-Atius-Rate-Retry-Count`.
 - Secret scan em `tools`, `scripts`, `tests`, docs e Phase 18 sem hits.
 - Em 2026-06-15, `scripts/router-model-battery.py --token-id 8 --rate-requests 20 --rate-delay 0.2` validou MiniMax-M3 com 20/20 OK e embeddings `embo-01` roteando via `http://127.0.0.1:3001/v1`, bloqueado por upstream `429 rate limit exceeded(RPM)`.
 - Em 2026-06-15, `uv run --with openai --with anthropic python scripts/smoke-routing-matrix.py` validou o dominio publico `https://router.atius.com.br`: catalogos OpenAI/Anthropic OK, OpenAI SDK OK, Anthropic SDK OK, Codex OAuth `gpt-5.5` OK, embeddings `embo-01` roteando mas bloqueados por upstream `429`.

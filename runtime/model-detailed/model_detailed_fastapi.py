@@ -10,9 +10,14 @@ Usage:
     uvicorn model_detailed_fastapi:app --host 0.0.0.0 --port 3001 --workers 4
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
+import asyncio
+import fcntl
+import time as _time
 from contextlib import asynccontextmanager
 
 import httpx
@@ -188,6 +193,34 @@ PORT = int(os.environ.get("MIDDLEWARE_PORT", 3001))
 BACKEND_URL = os.environ.get("NEWAPI_BACKEND_URL", "http://localhost:3000")
 TIMEOUT = int(os.environ.get("BACKEND_TIMEOUT", 60))
 
+# Provider send queue. It spaces requests before they reach NewAPI/upstream and
+# retries only transient rate/high-load responses. It cannot bypass provider
+# quota or a fully overloaded upstream cluster.
+RATE_QUEUE_ENABLED = os.environ.get("ATIUS_RATE_QUEUE_ENABLED", "1").lower() not in {"0", "false", "no", "off"}
+RATE_QUEUE_STATE_DIR = os.environ.get("ATIUS_RATE_QUEUE_STATE_DIR", "/tmp/atius-router-rate-queue")
+RATE_QUEUE_MAX_WAIT = float(os.environ.get("ATIUS_RATE_QUEUE_MAX_WAIT", "45"))
+RATE_QUEUE_MAX_RETRIES = int(os.environ.get("ATIUS_RATE_QUEUE_MAX_RETRIES", "2"))
+RATE_QUEUE_RETRY_MAX_SLEEP = float(os.environ.get("ATIUS_RATE_QUEUE_RETRY_MAX_SLEEP", "10"))
+RATE_QUEUE_TRANSIENT_STATUS = {429, 502, 503, 504, 529}
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+RATE_QUEUE_INTERVALS = {
+    "minimax-chat": _env_float("ATIUS_RATE_QUEUE_MINIMAX_CHAT_INTERVAL", 1.5),
+    "minimax-embeddings": _env_float("ATIUS_RATE_QUEUE_MINIMAX_EMBEDDINGS_INTERVAL", 5.0),
+    "deepseek-chat": _env_float("ATIUS_RATE_QUEUE_DEEPSEEK_CHAT_INTERVAL", 0.5),
+    "codex-chat": _env_float("ATIUS_RATE_QUEUE_CODEX_CHAT_INTERVAL", 0.5),
+    "openai-embeddings": _env_float("ATIUS_RATE_QUEUE_OPENAI_EMBEDDINGS_INTERVAL", 1.0),
+    "default-chat": _env_float("ATIUS_RATE_QUEUE_DEFAULT_CHAT_INTERVAL", 0.25),
+    "embeddings": _env_float("ATIUS_RATE_QUEUE_DEFAULT_EMBEDDINGS_INTERVAL", 1.0),
+}
+
 # Docs auth credentials (fallback if session auth fails)
 DOCS_USERNAME = os.environ.get("DOCS_USERNAME", "admin")
 DOCS_PASSWORD = os.environ.get("DOCS_PASSWORD", "atius2024")
@@ -222,9 +255,223 @@ async def get_http_client() -> httpx.AsyncClient:
 
 
 # ==============================================================================
+# Provider rate queue / retry helpers
+# ==============================================================================
+
+def _rate_queue_provider(path: str, payload: dict | None) -> str | None:
+    """Return the provider queue bucket for a model request."""
+    if not RATE_QUEUE_ENABLED or not isinstance(payload, dict):
+        return None
+
+    clean_path = path.lstrip("/").lower()
+    if clean_path not in {"v1/chat/completions", "v1/messages", "v1/responses", "v1/embeddings"}:
+        return None
+
+    model = str(payload.get("model") or "")
+    if not model:
+        return None
+    model_l = model.lower()
+
+    if clean_path == "v1/embeddings":
+        if model == "embo-01":
+            return "minimax-embeddings"
+        if model_l.startswith("text-embedding-"):
+            return "openai-embeddings"
+        return "embeddings"
+
+    if model_l.startswith("minimax-"):
+        return "minimax-chat"
+    if model_l.startswith("deepseek-"):
+        return "deepseek-chat"
+    if model_l.startswith("gpt-"):
+        return "codex-chat"
+    return "default-chat"
+
+
+def _rate_queue_interval(provider: str | None) -> float:
+    if not provider:
+        return 0.0
+    return max(0.0, RATE_QUEUE_INTERVALS.get(provider, RATE_QUEUE_INTERVALS["default-chat"]))
+
+
+def _rate_queue_lock_path(provider: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9_.-]+", "-", provider).strip("-") or "default"
+    return os.path.join(RATE_QUEUE_STATE_DIR, f"{safe}.lock")
+
+
+def _acquire_rate_queue_slot_sync(provider: str) -> int:
+    """Acquire a cross-worker provider slot and return total queue wait in ms."""
+    interval = _rate_queue_interval(provider)
+    if interval <= 0:
+        return 0
+
+    os.makedirs(RATE_QUEUE_STATE_DIR, mode=0o700, exist_ok=True)
+    lock_path = _rate_queue_lock_path(provider)
+    started = _time.monotonic()
+
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        lock_file.seek(0)
+        raw = lock_file.read().strip()
+        try:
+            last_sent_at = float(raw) if raw else 0.0
+        except ValueError:
+            last_sent_at = 0.0
+
+        now = _time.time()
+        wait_s = max(0.0, last_sent_at + interval - now)
+        if (_time.monotonic() - started) + wait_s > RATE_QUEUE_MAX_WAIT:
+            raise TimeoutError(f"rate queue wait exceeded {RATE_QUEUE_MAX_WAIT}s for {provider}")
+
+        if wait_s:
+            _time.sleep(wait_s)
+
+        lock_file.seek(0)
+        lock_file.truncate()
+        lock_file.write(f"{_time.time():.6f}\n")
+        lock_file.flush()
+        os.fsync(lock_file.fileno())
+
+    return int((_time.monotonic() - started) * 1000)
+
+
+async def _acquire_rate_queue_slot(provider: str | None) -> int:
+    if not provider:
+        return 0
+    return await asyncio.to_thread(_acquire_rate_queue_slot_sync, provider)
+
+
+def _response_text(response: httpx.Response) -> str:
+    try:
+        return response.text
+    except Exception:
+        try:
+            return response.content.decode("utf-8", errors="replace")
+        except Exception:
+            return ""
+
+
+def _response_payload_retryable(response: httpx.Response) -> bool:
+    try:
+        data = response.json()
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+
+    base_resp = data.get("base_resp")
+    if isinstance(base_resp, dict):
+        status_code = base_resp.get("status_code")
+        status_msg = str(base_resp.get("status_msg") or "").lower()
+        return status_code == 1002 and "rate limit" in status_msg
+
+    error = data.get("error")
+    if isinstance(error, dict):
+        message = str(error.get("message") or "").lower()
+        return "rate limit" in message or "high load" in message
+
+    return False
+
+
+def _is_retryable_upstream_response(response: httpx.Response) -> bool:
+    if response.status_code == 200:
+        return _response_payload_retryable(response)
+    if response.status_code not in RATE_QUEUE_TRANSIENT_STATUS:
+        return False
+
+    text = _response_text(response).lower()
+    non_retryable = (
+        "usage limit",
+        "insufficient balance",
+        "insufficient quota",
+        "quota exceeded",
+        "model_not_found",
+        "invalid token",
+        "invalid key",
+        "unauthorized",
+        "forbidden",
+    )
+    if any(marker in text for marker in non_retryable):
+        return False
+
+    retryable = (
+        "rate limit",
+        "too many",
+        "high load",
+        "overload",
+        "temporar",
+        "try again",
+        "retry",
+        "timeout",
+        "capacity",
+    )
+    return response.status_code in {502, 503, 504, 529} or any(marker in text for marker in retryable)
+
+
+def _retry_delay(response: httpx.Response, provider: str | None, attempt: int) -> float:
+    retry_after = response.headers.get("retry-after")
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), RATE_QUEUE_RETRY_MAX_SLEEP)
+        except ValueError:
+            pass
+
+    interval = max(_rate_queue_interval(provider), 0.25)
+    return min(interval * (attempt + 1), RATE_QUEUE_RETRY_MAX_SLEEP)
+
+
+def _rate_queue_response_headers(meta: dict) -> dict[str, str]:
+    provider = meta.get("provider")
+    if not provider:
+        return {}
+    return {
+        "X-Atius-Rate-Queue": provider,
+        "X-Atius-Rate-Queue-Wait-Ms": str(meta.get("wait_ms", 0)),
+        "X-Atius-Rate-Retry-Count": str(meta.get("retries", 0)),
+    }
+
+
+async def _request_backend_with_rate_queue(
+    client: httpx.AsyncClient,
+    *,
+    method: str,
+    url: str,
+    path: str,
+    headers: dict,
+    content: bytes | None,
+    payload: dict | None,
+) -> tuple[httpx.Response, dict]:
+    provider = _rate_queue_provider(path, payload)
+    meta = {"provider": provider or "", "wait_ms": 0, "retries": 0}
+    attempts = max(0, RATE_QUEUE_MAX_RETRIES) + 1 if provider else 1
+
+    for attempt in range(attempts):
+        if provider:
+            try:
+                meta["wait_ms"] += await _acquire_rate_queue_slot(provider)
+            except TimeoutError as exc:
+                raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+        response = await client.request(
+            method=method,
+            url=url,
+            headers=headers,
+            content=content,
+        )
+
+        if attempt + 1 >= attempts or not _is_retryable_upstream_response(response):
+            return response, meta
+
+        meta["retries"] += 1
+        await asyncio.sleep(_retry_delay(response, provider, attempt))
+
+    return response, meta
+
+
+# ==============================================================================
 # Session Cookie Auth (NEW - replaces Basic Auth for docs)
 # ==============================================================================
-import hmac, hashlib, base64, struct, time as _time
+import hmac, hashlib, base64, struct
 
 SESSION_SECRET = os.environ.get(
     "SESSION_SECRET",
@@ -905,28 +1152,36 @@ async def create_embeddings(request: Request):
         payload = None
 
     try:
-        response = await client.post(
-            f"{BACKEND_URL}/v1/embeddings",
+        response, queue_meta = await _request_backend_with_rate_queue(
+            client,
+            method="POST",
+            url=f"{BACKEND_URL}/v1/embeddings",
+            path="v1/embeddings",
             headers=headers,
             content=body if body else None,
+            payload=payload,
         )
         response_headers = {}
         skip_resp = {"transfer-encoding", "content-encoding", "content-length"}
         for key, value in response.headers.items():
             if key.lower() not in skip_resp:
                 response_headers[key] = value
+        response_headers.update(_rate_queue_response_headers(queue_meta))
 
         if payload and payload.get("model") == "embo-01":
             try:
                 upstream_data = response.json()
                 openai_data = _openai_embedding_response(payload, upstream_data)
                 if openai_data is not None:
-                    return JSONResponse(content=openai_data, headers={"X-Embeddings-Adapter": "minimax-embo-01"})
+                    ok_headers = dict(response_headers)
+                    ok_headers["X-Embeddings-Adapter"] = "minimax-embo-01"
+                    return JSONResponse(content=openai_data, headers=ok_headers)
 
                 base_resp = upstream_data.get("base_resp")
                 if isinstance(base_resp, dict) and base_resp.get("status_code") not in (None, 0):
                     return JSONResponse(
                         status_code=_embedding_error_status(upstream_data),
+                        headers=response_headers,
                         content={
                             "error": {
                                 "message": base_resp.get("status_msg", "MiniMax embeddings upstream error"),
@@ -1150,18 +1405,31 @@ async def proxy_request(path: str, request: Request):
     client = await get_http_client()
     body = await request.body()
     headers = _proxy_request_headers(request)
+    payload = None
+    if request.method in {"POST", "PUT", "PATCH"} and body:
+        try:
+            parsed = json.loads(body)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            payload = None
+
     try:
-        response = await client.request(
+        response, queue_meta = await _request_backend_with_rate_queue(
+            client,
             method=request.method,
             url=f"{BACKEND_URL}/{path}",
+            path=path,
             headers=headers,
             content=body if body else None,
+            payload=payload,
         )
         response_headers = {}
         skip_resp = {"transfer-encoding", "content-encoding", "content-length"}
         for key, value in response.headers.items():
             if key.lower() not in skip_resp:
                 response_headers[key] = value
+        response_headers.update(_rate_queue_response_headers(queue_meta))
 
         # Strip thinking blocks from non-streaming Anthropic /v1/messages and /v1/chat
         # Streaming SSE responses (transfer-encoding: chunked) are passed through unchanged

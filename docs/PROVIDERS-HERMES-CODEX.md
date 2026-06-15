@@ -35,6 +35,8 @@ Grafia correta: `Compatible` com hífen no nome do channel e `Embeddings` para a
 - Embeddings: `POST /v1/embeddings`
 - Management/CLI: `bin/clianything providers --all`, `bin/clianything embeddings`, `bin/clianything models --from-channels`, `bin/clianything channel phase19-apply --execute`
 
+O middleware `model-detailed-hotfix` usa fila anti-rate-limit por provider/model-family nos endpoints `POST /v1/chat/completions`, `POST /v1/responses`, `POST /v1/messages` e `POST /v1/embeddings`. Os headers `X-Atius-Rate-Queue`, `X-Atius-Rate-Queue-Wait-Ms` e `X-Atius-Rate-Retry-Count` indicam o bucket aplicado, espera acumulada e retries. A fila reduz burst local, mas nao bypassa quota ou saturacao persistente do upstream.
+
 ## Modelos ativos hoje
 
 - `MiniMax-M3`

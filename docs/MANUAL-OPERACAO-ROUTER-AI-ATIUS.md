@@ -84,8 +84,30 @@ Regras praticas:
 - `model-detailed-hotfix` converte OpenAI-Compatible para Claude Messages quando o channel final e Anthropic-Compatible.
 - `/v1/models` sem token deve retornar 401. Isso nao indica falha.
 - DeepSeek roteia para os modelos `deepseek-v4-flash` e `deepseek-v4-pro`; se o upstream retornar `402 Insufficient Balance`, o roteamento local esta funcionando e o bloqueio e financeiro.
-- MiniMax embeddings pode retornar `429` por rate limit upstream; isso nao deve ser mascarado como erro local do router.
+- MiniMax embeddings passa pela fila anti-rate-limit do middleware, mas ainda pode retornar `429` quando o upstream bloquear por quota/RPM persistente; isso nao deve ser mascarado como erro local do router.
 - `MiniMax - OpenAI-Compatible` usa `base_url=https://api.minimax.io` no NewAPI local; nao usar `/v1` nesse campo porque o backend ja monta o path OpenAI-compatible.
+
+## Fila anti-rate-limit do middleware
+
+O `model-detailed-hotfix` tem fila local por familia de provider/modelo antes de encaminhar para o NewAPI e para os upstreams. Ela reduz rajadas concorrentes e repete apenas respostas transitorias de rate/high-load, como `429`, `529`, `502`, `503` e `504`, sem retryar erros de quota, balance, token invalido ou modelo inexistente.
+
+Padrao em 2026-06-15:
+
+- `MiniMax-M3` e demais modelos `minimax-*`: bucket `minimax-chat`, intervalo `1.5s`.
+- `deepseek-*`: bucket `deepseek-chat`, intervalo `0.5s`.
+- `gpt-*` via Codex/OpenAI: bucket `codex-chat`, intervalo `0.5s`.
+- `embo-01`: bucket `minimax-embeddings`, intervalo `5.0s`.
+- `text-embedding-*`: bucket `openai-embeddings`, intervalo `1.0s`.
+- Max retry transitorio: `2`.
+- Max espera de fila: `45s`.
+
+Headers de diagnostico retornados quando a fila atua:
+
+- `X-Atius-Rate-Queue`
+- `X-Atius-Rate-Queue-Wait-Ms`
+- `X-Atius-Rate-Retry-Count`
+
+Isto nao garante que nunca ocorrera `429`/`529`: se o provider estiver sem quota, com RPM ja excedido antes da chamada, ou com cluster persistentemente indisponivel, o router preserva a falha upstream depois de espaçar e retryar.
 
 ## Hermes
 

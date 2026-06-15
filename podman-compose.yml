@@ -45,3 +45,22 @@ services:
     restart: unless-stopped
     depends_on:
       - router-ai-atius
+    environment:
+      NEWAPI_BACKEND_URL: http://localhost:3000
+      NEW_API_INTERNAL_URL: http://localhost:3000
+      ROUTER_URL: http://localhost:3000
+      BACKEND_TIMEOUT: "60"
+      MIDDLEWARE_PORT: "3001"
+      OPENAPI_SPEC_PATH: /app/docs/openapi.json
+      STATIC_FILES_PATH: /app/static
+      ATIUS_RATE_QUEUE_ENABLED: "1"
+      ATIUS_RATE_QUEUE_STATE_DIR: /tmp/atius-router-rate-queue
+      ATIUS_RATE_QUEUE_MAX_WAIT: "45"
+      ATIUS_RATE_QUEUE_MAX_RETRIES: "2"
+      ATIUS_RATE_QUEUE_MINIMAX_CHAT_INTERVAL: "1.5"
+      ATIUS_RATE_QUEUE_MINIMAX_EMBEDDINGS_INTERVAL: "5.0"
+      ATIUS_RATE_QUEUE_DEEPSEEK_CHAT_INTERVAL: "0.5"
+      ATIUS_RATE_QUEUE_CODEX_CHAT_INTERVAL: "0.5"
+      ATIUS_RATE_QUEUE_OPENAI_EMBEDDINGS_INTERVAL: "1.0"
+    volumes:
+      - /home/ubuntu/GitHub/containers/router-ai-atius/runtime/model-detailed/model_detailed_fastapi.py:/app/model_detailed_fastapi.py:ro

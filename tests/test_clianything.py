@@ -522,6 +522,68 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
 
         self.assertEqual(cleaned["content"], [{"type": "text", "text": "OK"}])
 
+    def test_rate_queue_provider_maps_model_families(self):
+        self.assertEqual(
+            model_detailed._rate_queue_provider("v1/chat/completions", {"model": "MiniMax-M3"}),
+            "minimax-chat",
+        )
+        self.assertEqual(
+            model_detailed._rate_queue_provider("v1/messages", {"model": "deepseek-v4-flash"}),
+            "deepseek-chat",
+        )
+        self.assertEqual(
+            model_detailed._rate_queue_provider("v1/chat/completions", {"model": "gpt-5.5"}),
+            "codex-chat",
+        )
+        self.assertEqual(
+            model_detailed._rate_queue_provider("v1/embeddings", {"model": "embo-01"}),
+            "minimax-embeddings",
+        )
+        self.assertEqual(
+            model_detailed._rate_queue_provider("v1/embeddings", {"model": "text-embedding-3-small"}),
+            "openai-embeddings",
+        )
+        self.assertIsNone(model_detailed._rate_queue_provider("v1/models", {"model": "MiniMax-M3"}))
+
+    def test_rate_queue_retry_classification_avoids_quota_retries(self):
+        class FakeResponse:
+            def __init__(self, status_code, text="", data=None, headers=None):
+                self.status_code = status_code
+                self.text = text
+                self.content = text.encode("utf-8")
+                self.headers = headers or {}
+                self._data = data
+
+            def json(self):
+                if self._data is None:
+                    raise ValueError("not json")
+                return self._data
+
+        self.assertTrue(
+            model_detailed._is_retryable_upstream_response(
+                FakeResponse(529, "The server cluster is currently under high load. Please retry.")
+            )
+        )
+        self.assertFalse(
+            model_detailed._is_retryable_upstream_response(
+                FakeResponse(429, "The usage limit has been reached")
+            )
+        )
+        self.assertTrue(
+            model_detailed._is_retryable_upstream_response(
+                FakeResponse(200, data={"base_resp": {"status_code": 1002, "status_msg": "rate limit exceeded(RPM)"}})
+            )
+        )
+
+    def test_rate_queue_headers_are_added_without_secrets(self):
+        headers = model_detailed._rate_queue_response_headers(
+            {"provider": "minimax-chat", "wait_ms": 1500, "retries": 2}
+        )
+
+        self.assertEqual(headers["X-Atius-Rate-Queue"], "minimax-chat")
+        self.assertEqual(headers["X-Atius-Rate-Queue-Wait-Ms"], "1500")
+        self.assertEqual(headers["X-Atius-Rate-Retry-Count"], "2")
+
     def test_smoke_embeddings_helpers_cover_payload_shape_and_redaction(self):
         payload = smoke_embeddings.build_embedding_payload(
             model="embo-01",

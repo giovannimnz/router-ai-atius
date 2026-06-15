@@ -1,0 +1,556 @@
+#!/usr/bin/env python3
+"""Unit tests for CLIAnything helper behavior.
+
+These tests stay local: no Podman, no database, no network.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+import unittest
+import types
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = REPO_ROOT / "tools" / "clianything.py"
+MODEL_DETAILED_PATH = REPO_ROOT / "runtime" / "model-detailed" / "model_detailed_fastapi.py"
+SMOKE_EMBEDDINGS_PATH = REPO_ROOT / "scripts" / "smoke-embeddings.py"
+
+
+def load_clianything():
+    spec = importlib.util.spec_from_file_location("clianything_under_test", MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load {MODULE_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_model_detailed():
+    spec = importlib.util.spec_from_file_location("model_detailed_under_test", MODEL_DETAILED_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load {MODEL_DETAILED_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except ModuleNotFoundError:
+        install_model_detailed_stubs()
+        spec = importlib.util.spec_from_file_location("model_detailed_under_test", MODEL_DETAILED_PATH)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+    return module
+
+
+def install_model_detailed_stubs():
+    if "httpx" not in sys.modules:
+        httpx_stub = types.ModuleType("httpx")
+
+        class _AsyncClient:
+            def __init__(self, *args, **kwargs):
+                self.is_closed = False
+
+            async def aclose(self):
+                self.is_closed = True
+
+        class _Timeout:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        class _Limits:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        httpx_stub.AsyncClient = _AsyncClient
+        httpx_stub.Timeout = _Timeout
+        httpx_stub.Limits = _Limits
+        httpx_stub.TimeoutException = type("TimeoutException", (Exception,), {})
+        httpx_stub.RequestError = type("RequestError", (Exception,), {})
+        sys.modules["httpx"] = httpx_stub
+
+    if "fastapi" not in sys.modules:
+        fastapi_stub = types.ModuleType("fastapi")
+
+        class _HTTPException(Exception):
+            def __init__(self, status_code=None, detail=None, headers=None):
+                super().__init__(detail)
+                self.status_code = status_code
+                self.detail = detail
+                self.headers = headers or {}
+
+        class _Request:
+            def __init__(self, *args, **kwargs):
+                self.headers = {}
+                self.query_params = {}
+                self.url = types.SimpleNamespace(path="/")
+
+        class _FastAPI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def get(self, *args, **kwargs):
+                def decorator(func):
+                    return func
+
+                return decorator
+
+            def post(self, *args, **kwargs):
+                def decorator(func):
+                    return func
+
+                return decorator
+
+            def api_route(self, *args, **kwargs):
+                def decorator(func):
+                    return func
+
+                return decorator
+
+            def add_middleware(self, *args, **kwargs):
+                return None
+
+            def mount(self, *args, **kwargs):
+                return None
+
+        def _identity(*args, **kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
+
+        fastapi_stub.FastAPI = _FastAPI
+        fastapi_stub.Request = _Request
+        fastapi_stub.HTTPException = _HTTPException
+        fastapi_stub.Depends = lambda *args, **kwargs: None
+        fastapi_stub.Cookie = lambda *args, **kwargs: None
+        sys.modules["fastapi"] = fastapi_stub
+
+        responses_stub = types.ModuleType("fastapi.responses")
+
+        class _BaseResponse:
+            def __init__(self, *args, **kwargs):
+                self.content = kwargs.get("content")
+                self.status_code = kwargs.get("status_code", 200)
+                self.media_type = kwargs.get("media_type")
+                self.headers = kwargs.get("headers", {})
+
+        responses_stub.JSONResponse = _BaseResponse
+        responses_stub.Response = _BaseResponse
+        responses_stub.RedirectResponse = _BaseResponse
+        responses_stub.HTMLResponse = _BaseResponse
+        sys.modules["fastapi.responses"] = responses_stub
+
+        middleware_stub = types.ModuleType("fastapi.middleware")
+        cors_stub = types.ModuleType("fastapi.middleware.cors")
+        cors_stub.CORSMiddleware = object
+        sys.modules["fastapi.middleware"] = middleware_stub
+        sys.modules["fastapi.middleware.cors"] = cors_stub
+
+        security_stub = types.ModuleType("fastapi.security")
+        security_stub.HTTPBasic = lambda *args, **kwargs: None
+        security_stub.HTTPBasicCredentials = type("HTTPBasicCredentials", (), {})
+        sys.modules["fastapi.security"] = security_stub
+
+        static_stub = types.ModuleType("fastapi.staticfiles")
+        class _StaticFiles:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        static_stub.StaticFiles = _StaticFiles
+        sys.modules["fastapi.staticfiles"] = static_stub
+
+
+def load_smoke_embeddings():
+    spec = importlib.util.spec_from_file_location("smoke_embeddings_under_test", SMOKE_EMBEDDINGS_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load {SMOKE_EMBEDDINGS_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+cli = load_clianything()
+model_detailed = load_model_detailed()
+smoke_embeddings = load_smoke_embeddings()
+
+
+class RedactionTests(unittest.TestCase):
+    def test_redact_value_sensitive_columns(self):
+        cases = [
+            ("key", "test-key-value"),
+            ("password", "test-password"),
+            ("access_token", "test-access-token"),
+            ("client_secret", "test-client-secret"),
+            ("secret", "test-secret"),
+            ("header_override", '{"Authorization":"Bearer test-token"}'),
+            ("private_data", '{"credential":"test"}'),
+            ("api_key", "test-api-key"),
+        ]
+
+        for column, value in cases:
+            with self.subTest(column=column):
+                self.assertEqual(cli.redact_value(column, value), "<redacted>")
+
+    def test_redact_value_preserves_empty_values(self):
+        self.assertIsNone(cli.redact_value("password", None))
+        self.assertEqual(cli.redact_value("password", ""), "")
+
+    def test_redact_rows_redacts_option_value_for_secret_key(self):
+        rows = [
+            {
+                "id": 1,
+                "key": "openai_api_key",
+                "value": "test-secret-value",
+                "name": "Visible Name",
+            }
+        ]
+
+        redacted = cli.redact_rows(rows)
+
+        self.assertEqual(redacted[0]["key"], "<redacted>")
+        self.assertEqual(redacted[0]["value"], "<redacted>")
+        self.assertEqual(redacted[0]["name"], "Visible Name")
+
+    def test_redact_json_for_api_payloads(self):
+        payload = {
+            "ok": True,
+            "data": {
+                "access_token": "test-access-token",
+                "client_secret": "test-client-secret",
+                "nested": [{"password": "test-password"}],
+            },
+        }
+
+        redacted = cli.redact_json(payload)
+
+        self.assertTrue(redacted["ok"])
+        self.assertEqual(redacted["data"]["access_token"], "<redacted>")
+        self.assertEqual(redacted["data"]["client_secret"], "<redacted>")
+        self.assertEqual(redacted["data"]["nested"][0]["password"], "<redacted>")
+
+    def test_redact_text_for_non_json_api_bodies(self):
+        body = "Bearer " + "testtoken123456 " + "password" + "=plaintext " + "sk-" + "testtoken1234567890"
+
+        redacted = cli.redact_text(body)
+
+        self.assertIn("Bearer <redacted>", redacted)
+        self.assertIn("password=<redacted>", redacted)
+        self.assertIn("sk-redacted", redacted)
+        self.assertNotIn("testtoken123456", redacted)
+        self.assertNotIn("plaintext", redacted)
+
+    def test_emit_json_redacts_rows_before_printing(self):
+        rows = [{"id": 1, "key": "provider_api_key", "value": "test-secret"}]
+
+        # Capture by temporarily replacing stdout instead of invoking any live command.
+        from io import StringIO
+
+        original_stdout = sys.stdout
+        try:
+            sys.stdout = StringIO()
+            cli.emit(rows, "json")
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = original_stdout
+
+        parsed = json.loads(output)
+        self.assertEqual(parsed[0]["key"], "<redacted>")
+        self.assertEqual(parsed[0]["value"], "<redacted>")
+
+
+class ReadOnlyGuardTests(unittest.TestCase):
+    def test_ensure_read_only_allows_expected_prefixes(self):
+        allowed = [
+            "select 1",
+            "WITH q AS (select 1) select * from q",
+            "show server_version",
+            "explain select * from channels",
+            "/* comment */ -- another comment\n select count(*) from channels",
+        ]
+
+        for sql in allowed:
+            with self.subTest(sql=sql):
+                cli.ensure_read_only(sql)
+
+    def test_ensure_read_only_blocks_mutating_prefixes(self):
+        blocked = [
+            "insert into channels(id) values (1)",
+            "update channels set priority = 0",
+            "delete from channels",
+            "drop table channels",
+            "alter table channels add column test int",
+            "truncate channels",
+            "create table test(id int)",
+            "grant select on channels to public",
+            "revoke select on channels from public",
+            "copy channels to stdout",
+            "call refresh_channels()",
+            "do $$ begin end $$",
+            "vacuum channels",
+            "reindex table channels",
+        ]
+
+        for sql in blocked:
+            with self.subTest(sql=sql):
+                with self.assertRaises(cli.CliError):
+                    cli.ensure_read_only(sql)
+
+    def test_ensure_read_only_blocks_mutating_verb_inside_allowed_query(self):
+        blocked = [
+            "select * from channels; update channels set priority = 0",
+            "with q as (delete from channels returning *) select * from q",
+            "explain drop table channels",
+        ]
+
+        for sql in blocked:
+            with self.subTest(sql=sql):
+                with self.assertRaises(cli.CliError):
+                    cli.ensure_read_only(sql)
+
+
+class ParserAndIdentifierTests(unittest.TestCase):
+    def test_parse_key_values_accepts_values_with_equals(self):
+        parsed = cli.parse_key_values(["priority=0", "base_url=https://example.test/a=b", "enabled=true"])
+
+        self.assertEqual(
+            parsed,
+            {
+                "priority": "0",
+                "base_url": "https://example.test/a=b",
+                "enabled": "true",
+            },
+        )
+
+    def test_parse_key_values_rejects_invalid_items(self):
+        invalid = ["priority", "=0"]
+
+        for item in invalid:
+            with self.subTest(item=item):
+                with self.assertRaises(cli.CliError):
+                    cli.parse_key_values([item])
+
+    def test_parse_key_values_last_duplicate_wins(self):
+        self.assertEqual(cli.parse_key_values(["priority=1", "priority=0"]), {"priority": "0"})
+
+    def test_quote_ident_accepts_simple_postgres_identifiers(self):
+        self.assertEqual(cli.quote_ident("channels"), '"channels"')
+        self.assertEqual(cli.quote_ident("usage_tracking_1"), '"usage_tracking_1"')
+        self.assertEqual(cli.quote_ident("_private"), '"_private"')
+
+    def test_quote_ident_rejects_invalid_identifiers(self):
+        invalid = ["", "1channels", "channel-name", "public.channels", "channels;drop", "has space"]
+
+        for name in invalid:
+            with self.subTest(name=name):
+                with self.assertRaises(cli.CliError):
+                    cli.quote_ident(name)
+
+    def test_normalize_resource_accepts_canonical_names_and_aliases(self):
+        self.assertEqual(cli.normalize_resource("channels").table, "channels")
+        self.assertEqual(cli.normalize_resource("channel").table, "channels")
+        self.assertEqual(cli.normalize_resource("providers").table, "channels")
+        self.assertEqual(cli.normalize_resource("usage-tracking").table, "usage_tracking")
+        self.assertEqual(cli.normalize_resource("group").table, "prefill_groups")
+        self.assertEqual(cli.normalize_resource("tasks-log").table, "tasks")
+
+    def test_normalize_resource_rejects_unknown_resource(self):
+        with self.assertRaises(cli.CliError):
+            cli.normalize_resource("not-a-resource")
+
+
+class EndpointCoverageTests(unittest.TestCase):
+    def _manifest_entry(self, **overrides):
+        entry = {
+            "group": "test",
+            "name": "test-endpoint",
+            "method": "GET",
+            "path": "/api/test",
+            "doc": "test.mdx",
+            "classification": "read-only",
+            "cli_command": "clianything endpoint invoke GET /api/test",
+            "safe_default": True,
+            "requires_auth": True,
+            "notes": "unit fixture",
+        }
+        entry.update(overrides)
+        return entry
+
+    def test_management_docs_and_manifest_are_complete(self):
+        endpoints, docs_without_ops = cli.parse_management_docs()
+        entries = cli.load_endpoint_manifest()
+        if hasattr(cli, "coverage_rows"):
+            _rows, problems = cli.coverage_rows(entries, endpoints)
+            missing = []
+            extra = []
+        else:
+            payload = cli.render_coverage_payload()
+            problems = payload["problems"]
+            missing = payload["missing_from_manifest"]
+            extra = payload["extra_in_manifest"]
+
+        self.assertEqual(len(endpoints), 158)
+        self.assertEqual([item["doc"] for item in docs_without_ops], ["auth.mdx"])
+        self.assertEqual(len(entries), 158)
+        self.assertEqual(problems, [])
+        self.assertEqual(missing, [])
+        self.assertEqual(extra, [])
+
+    def test_manifest_entries_have_required_contract(self):
+        entries = cli.load_endpoint_manifest()
+        required = {
+            "group",
+            "name",
+            "method",
+            "path",
+            "doc",
+            "classification",
+            "cli_command",
+            "safe_default",
+            "requires_auth",
+            "notes",
+        }
+
+        for entry in entries:
+            with self.subTest(endpoint=f"{entry.get('method')} {entry.get('path')}"):
+                self.assertTrue(required.issubset(entry))
+                self.assertIn(entry["classification"], cli.ENDPOINT_CLASSIFICATIONS)
+                self.assertIsInstance(entry["requires_auth"], bool)
+
+    def test_validate_manifest_rejects_generic_api_wrapper_variants(self):
+        entries = [
+            self._manifest_entry(
+                classification="api-action",
+                cli_command="clianything api GET /api/channel/test/{id}",
+            )
+        ]
+
+        problems = cli.validate_endpoint_manifest(entries)
+
+        self.assertTrue(any("api-action exige cli_command tipado" in item for item in problems))
+        self.assertTrue(any("wrapper generico nao conta como paridade" in item for item in problems))
+
+    def test_manifest_request_match_handles_templates_and_query(self):
+        self.assertTrue(cli.endpoint_template_matches("/api/channel/test/{id}", "/api/channel/test/3"))
+        self.assertFalse(cli.endpoint_template_matches("/api/channel/test/{id}", "/api/channel/test/3/extra"))
+        entry = cli.find_manifest_entry_for_request("GET", "/api/channel/test/3?probe=1")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["path"], "/api/channel/test/{id}")
+
+
+class Phase19ProviderRoutingTests(unittest.TestCase):
+    def test_write_channel_from_source_key_preview_is_secret_safe(self):
+        sql = cli.write_channel_from_source_key(
+            source_id=2,
+            name="DeepSeek - Anthropic-Compatible",
+            type_value=14,
+            base_url="https://api.deepseek.com/anthropic",
+            models="deepseek-v4-flash,deepseek-v4-pro",
+            group="default",
+            priority=0,
+            weight=0,
+            status=1,
+        )
+
+        self.assertIn("select", sql.lower())
+        self.assertIn("c.key", sql)
+        self.assertIn("DeepSeek - Anthropic-Compatible", sql)
+        self.assertIn("https://api.deepseek.com/anthropic", sql)
+        self.assertNotIn("sample-secret-value", sql)
+
+    def test_phase19_actions_skip_openai_embeddings_without_key(self):
+        actions = cli.build_phase19_provider_actions(None)
+        labels = [label for _resource, _sql, label in actions]
+
+        self.assertTrue(any("DeepSeek Anthropic-compatible" in label for label in labels))
+        self.assertFalse(any("OpenAI embeddings" in label for label in labels))
+
+    def test_embeddings_overview_sql_targets_embeddings_channels(self):
+        sql = cli.build_embeddings_overview_sql()
+
+        self.assertIn("Embeddings", sql)
+        self.assertIn("embo-01", sql)
+        self.assertIn("text-embedding-3-small", sql)
+        self.assertIn("text-embedding-3-large", sql)
+        self.assertIn("enabled_abilities", sql)
+
+    def test_enrich_openai_models_response_anthropic_uses_deepseek_allowlist(self):
+        payload = {
+            "data": [
+                {"id": "deepseek-v4-flash", "supported_endpoint_types": ["openai"]},
+                {"id": "deepseek-v4-beta", "supported_endpoint_types": ["openai"]},
+                {"id": "MiniMax-M3", "supported_endpoint_types": ["openai"]},
+            ]
+        }
+
+        enriched = model_detailed.enrich_openai_models_response_anthropic(payload)
+        ids = [item["id"] for item in enriched["data"]]
+
+        self.assertIn("deepseek-v4-flash", ids)
+        self.assertIn("MiniMax-M3", ids)
+        self.assertNotIn("deepseek-v4-beta", ids)
+
+    def test_normalise_embedding_input_preserves_query_and_db(self):
+        body_query, should_query = model_detailed._normalise_embedding_input(
+            {"model": "embo-01", "input": "hello"}
+        )
+        body_db, should_db = model_detailed._normalise_embedding_input(
+            {"model": "embo-01", "input": "hello", "type": "db"}
+        )
+
+        self.assertTrue(should_query)
+        self.assertEqual(body_query["type"], "query")
+        self.assertEqual(body_query["input"], ["hello"])
+        self.assertTrue(should_db)
+        self.assertEqual(body_db["type"], "db")
+        self.assertEqual(body_db["input"], ["hello"])
+
+    def test_strip_thinking_blocks_removes_anthropic_thinking_payloads(self):
+        payload = {
+            "content": [
+                {"type": "thinking", "thinking": "internal chain"},
+                {"type": "text", "text": "<think>\ninternal chain\n</think>\n\nOK"},
+            ]
+        }
+
+        cleaned = json.loads(model_detailed.strip_thinking_blocks(json.dumps(payload).encode("utf-8")))
+
+        self.assertEqual(cleaned["content"], [{"type": "text", "text": "OK"}])
+
+    def test_smoke_embeddings_helpers_cover_payload_shape_and_redaction(self):
+        payload = smoke_embeddings.build_embedding_payload(
+            model="embo-01",
+            input_text="hello",
+            embedding_type="db",
+        )
+        self.assertEqual(payload["type"], "db")
+        self.assertEqual(payload["input"], "hello")
+
+        openai_payload = smoke_embeddings.build_embedding_payload(
+            model="text-embedding-3-small",
+            input_text="hello",
+            openai_dimensions=1536,
+        )
+        self.assertNotIn("type", openai_payload)
+        self.assertEqual(openai_payload["dimensions"], 1536)
+
+        self.assertEqual(smoke_embeddings.assert_embedding_vector_shape([1.0, 2.0, 3.0], 3, "embo-01"), 3)
+        with self.assertRaises(ValueError):
+            smoke_embeddings.assert_embedding_vector_shape(["x"], 1, "embo-01")
+
+        scrubbed = smoke_embeddings._scrub(
+            "GroupId=123 Authorization=Bearer abc ATIUS_ROUTER_TOKEN=secret",
+            ["secret", "abc"],
+        )
+        self.assertNotIn("secret", scrubbed)
+        self.assertNotIn("abc", scrubbed)
+        self.assertNotIn("GroupId", scrubbed)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,488 +1,153 @@
-<div align="center">
+# router-ai-atius — podman deployment (AT IUS AI Router)
 
-![new-api](/web/default/public/logo.png)
+Estado do deployment do `router-ai-atius` no ATIUS-SRV-1 após migração
+Docker → Podman (Phase 17 do projeto omni-srv-admin).
 
-# New API
+Governanca/admin local: `omni-srv-admin`, em
+`/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router/`.
 
-🍥 **Next-Generation LLM Gateway and AI Asset Management System**
+## Status
 
-<p align="center">
-  <a href="./README.zh_CN.md">简体中文</a> |
-  <a href="./README.zh_TW.md">繁體中文</a> |
-  <strong>English</strong> |
-  <a href="./README.fr.md">Français</a> |
-  <a href="./README.ja.md">日本語</a>
-</p>
+- **Migrado:** 2026-06-04 (precedente, recriado 2026-06-11)
+- **Re-baselined:** 2026-06-12 (compose file versionado aqui)
+- **Container runtime:** podman 4.9.3 (rootless, network=host via pod)
+- **Pod name:** `atius-ai-router` (id: `9ffed7fe58c8239c5cbc8b3c254842f9558a680379a7c8329234888b01d349e3`)
+- **Containers no pod:** 4 user + 1 infra pause = **5 containers total**
+- **Docker (legado):** nenhum container router-ai-atius ativo (intencional)
 
-<p align="center">
-  <a href="https://raw.githubusercontent.com/Calcium-Ion/new-api/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Calcium-Ion/new-api?color=brightgreen" alt="license">
-  </a><!--
-  --><a href="https://github.com/Calcium-Ion/new-api/releases/latest">
-    <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
-  </a><!--
-  --><a href="https://hub.docker.com/r/CalciumIon/new-api">
-    <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
-  </a><!--
-  --><a href="https://goreportcard.com/report/github.com/Calcium-Ion/new-api">
-    <img src="https://goreportcard.com/badge/github.com/Calcium-Ion/new-api" alt="GoReportCard">
-  </a>
-</p>
+## Containers
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/20180" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-  <br>
-  <a href="https://hellogithub.com/repository/QuantumNous/new-api" target="_blank">
-    <img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=539ac4217e69431684ad4a0bab768811&claim_uid=tbFPfKIDHpc4TzR" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a><!--
-  --><a href="https://www.producthunt.com/products/new-api/launches/new-api?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-new-api" target="_blank" rel="noopener noreferrer">
-    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1047693&theme=light&t=1769577875005" alt="New API - All-in-one AI asset management gateway. | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a>
-</p>
+| Nome | Imagem | Função | Porta (host) |
+|------|--------|--------|--------------|
+| `router-ai-atius` | `ghcr.io/giovannimnz/router-ai-atius:latest` | Backend Go (new-api) | 3000 |
+| `model-detailed-hotfix` | `localhost/router-ai-atius-model-detailed:latest` | FastAPI model proxy (SSO proxy) | 3001/3300 |
+| `postgres` | `docker.io/library/postgres:15-alpine` | DB (DBRouterAiAtius) | (interno) |
+| `redis` | `docker.io/library/redis:7-alpine` | Cache | (interno) |
+| `<pod-id>-infra` | `localhost/podman-pause:4.9.3-0` | Network namespace holder (podman) | n/a |
 
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-key-features">Key Features</a> •
-  <a href="#-deployment">Deployment</a> •
-  <a href="#-documentation">Documentation</a> •
-  <a href="#-help-support">Help</a>
-</p>
+## Network / Portas
 
-</div>
+O pod usa **network=host** (todos containers compartilham net ns via
+infra pause). Bind mounts do **infra container**:
+- `3000:3000` → `router-ai-atius` (UI/API)
+- `3001:3001` → `model-detailed-hotfix` (FastAPI)
+- `3300:3001` → alias Apache proxy → `model-detailed-hotfix`
 
-## 📝 Project Description
+Domínios públicos (via Apache):
+- `https://router.atius.com.br/` → `127.0.0.1:3000`
+- `https://docs.router.atius.com.br/` → mesmo upstream
+- (sem proxy separado pro model-detailed ainda)
 
-> [!IMPORTANT]
-> - This project is intended solely for lawful and authorized AI API gateway, organization-level authentication, multi-model management, usage analytics, cost accounting, and private deployment scenarios.
-> - Users must lawfully obtain upstream API keys, accounts, model services, and interface permissions, and must comply with upstream terms of service and applicable laws and regulations.
-> - Users should ensure their use complies with upstream terms of service and applicable laws and regulations.
-> - When providing generative AI services to the public, users should comply with applicable regulatory requirements and fulfill all filing, licensing, content safety, real-name verification, log retention, tax, and upstream authorization obligations required by their jurisdiction.
+## Volumes críticos
 
----
+| Tipo | Source (host) | Destination (ctr) | Conteúdo |
+|------|---------------|-------------------|----------|
+| bind | `/home/ubuntu/GitHub/containers/router-ai-atius/data` | `/data` | codex-home, logs, migrations, pg_backup, scalar, static |
+| bind | `/home/ubuntu/GitHub/containers/router-ai-atius/logs` | `/app/logs` | oneapi-*.log, auto-sync-deploy.log |
+| volume | `pgdata` (podman) | `/var/lib/postgresql/data` | Postgres data |
 
-## 🤝 Trusted Partners
-
-<p align="center">
-  <em>No particular order</em>
-</p>
-
-<p align="center">
-  <a href="https://www.cherry-ai.com/" target="_blank">
-    <img src="./docs/images/cherry-studio.png" alt="Cherry Studio" height="80" />
-  </a><!--
-  --><a href="https://github.com/iOfficeAI/AionUi/" target="_blank">
-    <img src="./docs/images/aionui.png" alt="Aion UI" height="80" />
-  </a><!--
-  --><a href="https://bda.pku.edu.cn/" target="_blank">
-    <img src="./docs/images/pku.png" alt="Peking University" height="80" />
-  </a><!--
-  --><a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud" height="80" />
-  </a><!--
-  --><a href="https://www.aliyun.com/" target="_blank">
-    <img src="./docs/images/aliyun.png" alt="Alibaba Cloud" height="80" />
-  </a><!--
-  --><a href="https://io.net/" target="_blank">
-    <img src="./docs/images/io-net.png" alt="IO.NET" height="80" />
-  </a>
-</p>
-
----
-
-## 🙏 Special Thanks
-
-<p align="center">
-  <a href="https://www.jetbrains.com/?from=new-api" target="_blank">
-    <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" width="120" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>Thanks to <a href="https://www.jetbrains.com/?from=new-api">JetBrains</a> for providing free open-source development license for this project</strong>
-</p>
-
----
-
-## 🚀 Quick Start
-
-### Using Docker Compose (Recommended)
+## Verificação
 
 ```bash
-# Clone the project
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+# Status do pod
+podman pod inspect atius-ai-router
+# Esperado: State=Running, NumContainers=5
 
-# Edit docker-compose.yml configuration
-nano docker-compose.yml
+# Containers
+podman ps --filter pod=atius-ai-router
+# Esperado: 5 linhas (infra, postgres, redis, router-ai-atius, model-detailed-hotfix)
 
-# Start the service
-docker-compose up -d
+# Backend responde
+curl -sI http://localhost:3000/api/status | head -1
+# Esperado: HTTP/1.1 200 OK
+
+# Model-detailed responde
+curl -sI http://localhost:3001/health | head -1
+# Esperado: HTTP/1.1 200 OK
+
+# Domínio público
+curl -sI https://router.atius.com.br/api/status | head -1
+# Esperado: HTTP/2 200
 ```
 
-<details>
-<summary><strong>Using Docker Commands</strong></summary>
+## CLIAnything
+
+O deploy agora tem um CLI operacional para gestao sem frontend:
 
 ```bash
-# Pull the latest image
-docker pull calciumion/new-api:latest
-
-# Using SQLite (default)
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-
-# Using MySQL
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+bin/clianything status
+bin/clianything coverage --strict
+bin/clianything providers --all
+bin/clianything resources
 ```
 
-> **💡 Tip:** `-v ./data:/data` will save data in the `data` folder of the current directory, you can also change it to an absolute path like `-v /your/custom/path:/data`
+Principais garantias:
 
-</details>
+- `create`, `update` e `delete` sao dry-run por padrao.
+- Escrita real exige `--execute`.
+- Antes de qualquer escrita real, o CLI faz backup data-only da tabela em
+  `backups/clianything/`.
+- Campos sensiveis sao redigidos por padrao.
+- `coverage --strict` valida 158 endpoints administrativos documentados contra
+  `tools/clianything_endpoints.json`.
+- `endpoint`, `channel`, `model`, `option`, `ratio`, `token`, `log`, `task` e
+  `vendor` cobrem acoes do frontend/API sem depender do navegador.
 
----
+Manuais:
 
-🎉 After deployment is complete, visit `http://localhost:3000` to start using!
+- `docs/CLIANYTHING.md`
+- `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md`
+- `docs/PROVIDERS-HERMES-CODEX.md`
 
-> [!WARNING]
-> When operating this project as a public generative AI service or API resale service, users should first complete all required filing, licensing, content safety, real-name verification, log retention, tax, payment, and upstream authorization obligations.
+## Restart / Recovery
 
-📖 For more deployment methods, please refer to [Deployment Guide](https://docs.newapi.pro/en/docs/installation)
-
----
-
-## 📚 Documentation
-
-<div align="center">
-
-### 📖 [Official Documentation](https://docs.newapi.pro/en/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
-
-</div>
-
-**Quick Navigation:**
-
-| Category | Link |
-|------|------|
-| 🚀 Deployment Guide | [Installation Documentation](https://docs.newapi.pro/en/docs/installation) |
-| ⚙️ Environment Configuration | [Environment Variables](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables) |
-| 📡 API Documentation | [API Documentation](https://docs.newapi.pro/en/docs/api) |
-| ❓ FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-
----
-
-## ✨ Key Features
-
-> For detailed features, please refer to [Features Introduction](https://docs.newapi.pro/en/docs/guide/wiki/basic-concepts/features-introduction)
-
-### 🎨 Core Functions
-
-| Feature | Description |
-|------|------|
-| 🎨 New UI | Modern user interface design |
-| 🌍 Multi-language | Supports Simplified Chinese, Traditional Chinese, English, French, Japanese |
-| 🔄 Data Compatibility | Fully compatible with the original One API database |
-| 📈 Data Dashboard | Visual console and statistical analysis |
-| 🔒 Permission Management | Token grouping, model restrictions, user management |
-
-### 💰 Authorized Usage Accounting and Billing
-
-- ✅ Internal top-up and quota allocation for lawful authorized scenarios (EPay, Stripe)
-- ✅ Organization-level per-request, usage-based, and cache-hit cost accounting
-- ✅ Cache billing statistics for OpenAI, Azure, DeepSeek, Claude, Qwen, and supported models
-- ✅ Flexible billing policies for internal management or authorized enterprise customers
-
-### 🔐 Authorization and Security
-
-- 😈 Discord authorization login
-- 🤖 LinuxDO authorization login
-- 📱 Telegram authorization login
-- 🔑 OIDC unified authentication
-- 🔍 Key quota query usage (with [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool))
-
-### 🚀 Advanced Features
-
-**API Format Support:**
-- ⚡ [OpenAI Responses](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-response)
-- ⚡ [OpenAI Realtime API](https://docs.newapi.pro/en/docs/api/ai-model/realtime/create-realtime-session) (including Azure)
-- ⚡ [Claude Messages](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message)
-- ⚡ [Google Gemini](https://doc.newapi.pro/en/api/google-gemini-chat)
-- 🔄 [Rerank Models](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank) (Cohere, Jina)
-
-**Intelligent Routing:**
-- ⚖️ Channel weighted random
-- 🔄 Automatic retry on failure
-- 🚦 User-level model rate limiting
-
-**Format Conversion:**
-- 🔄 **OpenAI Compatible ⇄ Claude Messages**
-- 🔄 **OpenAI Compatible → Google Gemini**
-- 🔄 **Google Gemini → OpenAI Compatible** - Text only, function calling not supported yet
-- 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - In development
-- 🔄 **Thinking-to-content functionality**
-
-**Reasoning Effort Support:**
-
-<details>
-<summary>View detailed configuration</summary>
-
-**OpenAI series models:**
-- `o3-mini-high` - High reasoning effort
-- `o3-mini-medium` - Medium reasoning effort
-- `o3-mini-low` - Low reasoning effort
-- `gpt-5-high` - High reasoning effort
-- `gpt-5-medium` - Medium reasoning effort
-- `gpt-5-low` - Low reasoning effort
-
-**Claude thinking models:**
-- `claude-3-7-sonnet-20250219-thinking` - Enable thinking mode
-
-**Google Gemini series models:**
-- `gemini-2.5-flash-thinking` - Enable thinking mode
-- `gemini-2.5-flash-nothinking` - Disable thinking mode
-- `gemini-2.5-pro-thinking` - Enable thinking mode
-- `gemini-2.5-pro-thinking-128` - Enable thinking mode with thinking budget of 128 tokens
-- You can also append `-low`, `-medium`, or `-high` to any Gemini model name to request the corresponding reasoning effort (no extra thinking-budget suffix needed).
-
-</details>
-
----
-
-## 🤖 Model Support
-
-> For details, please refer to [API Documentation - Gateway Interface](https://docs.newapi.pro/en/docs/api)
-
-| Model Type | Description | Documentation |
-|---------|------|------|
-| 🤖 OpenAI-Compatible | OpenAI compatible models | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/createchatcompletion) |
-| 🤖 OpenAI Responses | OpenAI Responses format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/createresponse) |
-| 🎨 Midjourney-Proxy | [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) | [Documentation](https://doc.newapi.pro/api/midjourney-proxy-image) |
-| 🎵 Suno-API | [Suno API](https://github.com/Suno-API/Suno-API) | [Documentation](https://doc.newapi.pro/api/suno-music) |
-| 🔄 Rerank | Cohere, Jina | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/rerank/creatererank) |
-| 💬 Claude | Messages format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/createmessage) |
-| 🌐 Gemini | Google Gemini format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/gemini/geminirelayv1beta) |
-| 🔧 Dify | ChatFlow mode | - |
-| 🎯 Custom upstream | Supports configuring legally authorized upstream endpoints | - |
-
-### 📡 Supported Interfaces
-
-<details>
-<summary>View complete interface list</summary>
-
-- [Chat Interface (Chat Completions)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/createchatcompletion)
-- [Response Interface (Responses)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/createresponse)
-- [Image Interface (Image)](https://docs.newapi.pro/en/docs/api/ai-model/images/openai/post-v1-images-generations)
-- [Audio Interface (Audio)](https://docs.newapi.pro/en/docs/api/ai-model/audio/openai/create-transcription)
-- [Video Interface (Video)](https://docs.newapi.pro/en/docs/api/ai-model/audio/openai/createspeech)
-- [Embedding Interface (Embeddings)](https://docs.newapi.pro/en/docs/api/ai-model/embeddings/createembedding)
-- [Rerank Interface (Rerank)](https://docs.newapi.pro/en/docs/api/ai-model/rerank/creatererank)
-- [Realtime Conversation (Realtime)](https://docs.newapi.pro/en/docs/api/ai-model/realtime/createrealtimesession)
-- [Claude Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/createmessage)
-- [Google Gemini Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/gemini/geminirelayv1beta)
-
-</details>
-
----
-
-## 🚢 Deployment
-
-> [!TIP]
-> **Latest Docker image:** `calciumion/new-api:latest`
-
-### 📋 Deployment Requirements
-
-| Component | Requirement |
-|------|------|
-| **Local database** | SQLite (Docker must mount `/data` directory)|
-| **Remote database** | MySQL ≥ 5.7.8 or PostgreSQL ≥ 9.6 |
-| **Container engine** | Docker / Docker Compose |
-
-### ⚙️ Environment Variable Configuration
-
-<details>
-<summary>Common environment variable configuration</summary>
-
-| Variable Name | Description | Default Value |
-|--------|------|--------|
-| `SESSION_SECRET` | Session secret (required for multi-machine deployment) | - |
-| `CRYPTO_SECRET` | Encryption secret (required for Redis) | - |
-| `SQL_DSN` | Database connection string | - |
-| `REDIS_CONN_STRING` | Redis connection string | - |
-| `STREAMING_TIMEOUT` | Streaming timeout (seconds) | `300` |
-| `STREAM_SCANNER_MAX_BUFFER_MB` | Max per-line buffer (MB) for the stream scanner; increase when upstream sends huge image/base64 payloads | `64` |
-| `MAX_REQUEST_BODY_MB` | Max request body size (MB, counted **after decompression**; prevents huge requests/zip bombs from exhausting memory). Exceeding it returns `413` | `32` |
-| `AZURE_DEFAULT_API_VERSION` | Azure API version | `2025-04-01-preview` |
-| `ERROR_LOG_ENABLED` | Error log switch | `false` |
-| `PYROSCOPE_URL` | Pyroscope server address | - |
-| `PYROSCOPE_APP_NAME` | Pyroscope application name | `new-api` |
-| `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope basic auth user | - |
-| `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope basic auth password | - |
-| `PYROSCOPE_MUTEX_RATE` | Pyroscope mutex sampling rate | `5` |
-| `PYROSCOPE_BLOCK_RATE` | Pyroscope block sampling rate | `5` |
-| `HOSTNAME` | Hostname tag for Pyroscope | `new-api` |
-
-📖 **Complete configuration:** [Environment Variables Documentation](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables)
-
-</details>
-
-### 🔧 Deployment Methods
-
-<details>
-<summary><strong>Method 1: Docker Compose (Recommended)</strong></summary>
+Container restart é gerenciado pelo systemd unit `pod-atius-ai-router.service`
+(gerado por `podman generate systemd --new --files`).
 
 ```bash
-# Clone the project
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+# Reiniciar pod inteiro
+systemctl --user restart pod-atius-ai-router.service
 
-# Edit configuration
-nano docker-compose.yml
+# Reiniciar 1 container específico
+podman restart router-ai-atius
 
-# Start service
-docker-compose up -d
+# Logs
+podman logs router-ai-atius --tail 50
+podman logs model-detailed-hotfix --tail 50
 ```
 
-</details>
+## Recriar do zero (apenas se pod sumir)
 
-<details>
-<summary><strong>Method 2: Docker Commands</strong></summary>
-
-**Using SQLite:**
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+podman-compose up -d
+# OU (se podman-compose bug, ver script manual abaixo)
+bash scripts/recreate-pod.sh
 ```
 
-**Using MySQL:**
-```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-```
+O script `scripts/recreate-pod.sh` faz o equivalente manual
+(`podman pod create` + 4x `podman run --pod`).
 
-> **💡 Path explanation:**
-> - `./data:/data` - Relative path, data saved in the data folder of the current directory
-> - You can also use absolute path, e.g.: `/your/custom/path:/data`
+## Histórico
 
-</details>
+- **2026-06-04** — Migração inicial Docker → Podman (5 containers).
+  Vault: `60-LOGS/2026-06-04-atius-router-podman-cutover.md` (precedente).
+- **2026-06-11** — Recriação do pod durante Phase 17 (rollback jenkins não
+  afetou router-ai-atius). Compose atualizado para refletir imagem
+  `ghcr.io/giovannimnz/router-ai-atius:latest` (substituiu
+  `calciumion/new-api:latest`).
+- **2026-06-12** — `podman-compose.yml` versionado neste diretório como
+  source of truth pra re-deploy. Adicionado `model-detailed` (estava
+  rodando no pod mas não estava no compose file original).
+- **2026-06-12** — `docs/PODMAN.md` com notas de migração + lessons learned.
 
-<details>
-<summary><strong>Method 3: BaoTa Panel</strong></summary>
+## References
 
-1. Install BaoTa Panel (≥ 9.2.0 version)
-2. Search for **New-API** in the application store
-3. One-click installation
-
-📖 [Tutorial with images](./docs/BT.md)
-
-</details>
-
-### ⚠️ Multi-machine Deployment Considerations
-
-> [!WARNING]
-> - **Must set** `SESSION_SECRET` - Otherwise login status inconsistent
-> - **Shared Redis must set** `CRYPTO_SECRET` - Otherwise data cannot be decrypted
-
-### 🔄 Channel Retry and Cache
-
-**Retry configuration:** `Settings → Operation Settings → General Settings → Failure Retry Count`
-
-**Cache configuration:**
-- `REDIS_CONN_STRING`: Redis cache (recommended)
-- `MEMORY_CACHE_ENABLED`: Memory cache
-
----
-
-## 🔗 Related Projects
-
-### Upstream Projects
-
-| Project | Description |
-|------|------|
-| [One API](https://github.com/songquanpeng/one-api) | Original project base |
-| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney interface support |
-
-### Supporting Tools
-
-| Project | Description |
-|------|------|
-| [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool) | Key quota query tool |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API high-performance optimized version |
-
----
-
-## 💬 Help Support
-
-### 📖 Documentation Resources
-
-| Resource | Link |
-|------|------|
-| 📘 FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-| 🐛 Issue Feedback | [Issue Feedback](https://docs.newapi.pro/en/docs/support/feedback-issues) |
-| 📚 Complete Documentation | [Official Documentation](https://docs.newapi.pro/en/docs) |
-
-### 🤝 Contribution Guide
-
-Welcome all forms of contribution!
-
-- 🐛 Report Bugs
-- 💡 Propose New Features
-- 📝 Improve Documentation
-- 🔧 Submit Code
-
----
-
-## 📜 License
-
-This project is licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE).
-
-Additional terms under AGPLv3 Section 7 apply. Modified versions must preserve
-the author attribution notice `Frontend design and development by New API
-contributors.` in the appropriate legal notices and in any prominent about,
-legal, footer, or attribution location presented by the user interface.
-
-Modified versions that present a user interface must also preserve a visible
-link to the original project: <https://github.com/QuantumNous/new-api>.
-
-This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api) (MIT License).
-
-If your organization's policies do not permit the use of AGPLv3-licensed software, or if you wish to avoid the open-source obligations of AGPLv3, please contact us at: [support@quantumnous.com](mailto:support@quantumnous.com)
-
----
-
-## 🌟 Star History
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Calcium-Ion/new-api&type=Date)](https://star-history.com/#Calcium-Ion/new-api&Date)
-
-</div>
-
----
-
-<div align="center">
-
-### 💖 Thank you for using New API
-
-If this project is helpful to you, welcome to give us a ⭐️ Star！
-
-**[Official Documentation](https://docs.newapi.pro/en/docs)** • **[Issue Feedback](https://github.com/Calcium-Ion/new-api/issues)** • **[Latest Release](https://github.com/Calcium-Ion/new-api/releases)**
-
-<sub>Built with ❤️ by QuantumNous</sub>
-
-</div>
+- Vault: `20-PROJETOS/21-PROJETOS-ATIVOS/atius-router/router-ai-atius-panorama-fork-2026-06-01.md`
+- Vault: `60-LOGS/2026-06-11-podman-migration-3srv-parcial.md` (Phase 17 partial)
+- Vault: `61-Incidents/2026-06-07-router-ai-atius-prune-sem-backup-previo.md` (LIÇÃO)
+- Phase plan: `/home/ubuntu/.planning/phases/17-podman-migration-3srv/17-01-PLAN.md`
+- Source compose atual: `/home/ubuntu/GitHub/containers/router-ai-atius/podman-compose.yml`
+- Admin config: `/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router/`
+- Fork GHCR: `https://github.com/giovannimnz/router-ai-atius`

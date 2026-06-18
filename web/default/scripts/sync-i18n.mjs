@@ -208,8 +208,8 @@ function isLikelyUntranslated({ locale, baseValue, value }) {
   if (locale === 'ja' || locale === 'zh') return true
   if (locale === 'ru') return true
 
-  // For fr/vi: still useful but noisier; keep it conservative.
-  if (locale === 'fr' || locale === 'vi') return /\b(the|and|or|to|with|please)\b/i.test(s)
+  // For fr/pt/vi: still useful but noisier; keep it conservative.
+  if (locale === 'fr' || locale === 'pt' || locale === 'vi') return /\b(the|and|or|to|with|please)\b/i.test(s)
 
   return false
 }

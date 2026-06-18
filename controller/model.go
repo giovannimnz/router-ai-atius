@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,6 +17,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/modelcatalog"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -111,41 +111,14 @@ func init() {
 }
 
 func channelOwnerName(channelType int) string {
-	apiType, success := common.ChannelType2APIType(channelType)
-	if !success {
-		return strings.ToLower(constant.GetChannelTypeName(channelType))
-	}
-	adaptor := relay.GetAdaptor(apiType)
-	if adaptor == nil {
-		return strings.ToLower(constant.GetChannelTypeName(channelType))
-	}
-	adaptor.Init(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{
-		ChannelType: channelType,
-	}})
-	if name := strings.TrimSpace(adaptor.GetChannelName()); name != "" {
-		return name
-	}
-	return strings.ToLower(constant.GetChannelTypeName(channelType))
+	return modelcatalog.ChannelOwnerName(channelType)
 }
 
 func getPreferredModelOwners(modelNames []string, groups []string) map[string]string {
-	channelTypes, err := model.GetPreferredModelOwnerChannelTypes(modelNames, groups)
+	owners, err := modelcatalog.PreferredOwnerNames(modelNames, groups)
 	if err != nil {
-		common.SysLog(fmt.Sprintf("GetPreferredModelOwnerChannelTypes error: %v", err))
+		common.SysLog(fmt.Sprintf("PreferredOwnerNames error: %v", err))
 		return map[string]string{}
-	}
-
-	ownerByChannelType := make(map[int]string)
-	owners := make(map[string]string, len(channelTypes))
-	for modelName, channelType := range channelTypes {
-		owner, ok := ownerByChannelType[channelType]
-		if !ok {
-			owner = channelOwnerName(channelType)
-			ownerByChannelType[channelType] = owner
-		}
-		if owner != "" {
-			owners[modelName] = owner
-		}
 	}
 	return owners
 }
@@ -167,6 +140,57 @@ func buildOpenAIModel(modelName string, ownerByModel map[string]string) dto.Open
 	}
 	oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
 	return oaiModel
+}
+
+func catalogEntriesForModels(modelNames []string, ownerByModel map[string]string) []dto.ModelCatalogEntry {
+	pricings := model.GetPricing()
+	pricingByModel := make(map[string]model.Pricing, len(pricings))
+	for _, pricing := range pricings {
+		pricingByModel[pricing.ModelName] = pricing
+	}
+
+	entries := make([]dto.ModelCatalogEntry, 0, len(modelNames))
+	for _, modelName := range modelNames {
+		if pricing, ok := pricingByModel[modelName]; ok {
+			entries = append(entries, modelcatalog.BuildCatalogEntry(pricing, ownerByModel))
+			continue
+		}
+		baseModel := buildOpenAIModel(modelName, ownerByModel)
+		entries = append(entries, modelcatalog.BuildCatalogEntryForModel(modelName, baseModel.OwnedBy, baseModel.SupportedEndpointTypes))
+	}
+	modelcatalog.SortEntries(entries)
+	return entries
+}
+
+func buildOpenAIModelFromCatalog(entry dto.ModelCatalogEntry) dto.OpenAIModels {
+	modelItem := buildOpenAIModel(entry.ModelName, map[string]string{entry.ModelName: entry.OwnedBy})
+	modelItem.Name = entry.Name
+	modelItem.Provider = entry.Provider
+	modelItem.SupportedEndpointTypes = entry.SupportedEndpointTypes
+	modelItem.SupportedEndpointTypeLabels = entry.SupportedEndpointTypeLabels
+	modelItem.EndpointRoutes = entry.EndpointRoutes
+	modelItem.Pricing = entry.Pricing
+	modelItem.InputPrice = entry.InputPrice
+	modelItem.OutputPrice = entry.OutputPrice
+	modelItem.QuotaType = entry.QuotaType
+	modelItem.BillingMode = entry.BillingMode
+	modelItem.BillingExpr = entry.BillingExpr
+	modelItem.PricingVersion = entry.PricingVersion
+	modelItem.EnableGroups = entry.EnableGroups
+	return modelItem
+}
+
+func buildAnthropicModelFromCatalog(entry dto.ModelCatalogEntry) dto.AnthropicModel {
+	return dto.AnthropicModel{
+		ID:            entry.ModelName,
+		CreatedAt:     time.Unix(1626777600, 0).UTC().Format(time.RFC3339),
+		DisplayName:   entry.ModelName,
+		Type:          "model",
+		APIFormat:     "anthropic",
+		InputPrice:    entry.InputPrice,
+		OutputPrice:   entry.OutputPrice,
+		EndpointTypes: entry.SupportedEndpointTypes,
+	}
 }
 
 type modelListGroups struct {
@@ -272,34 +296,26 @@ func ListModels(c *gin.Context, modelType int) {
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
 	}
-	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
-	for _, modelName := range userModelNames {
-		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
-	}
+	catalogEntries := catalogEntriesForModels(userModelNames, ownerByModel)
 
 	switch modelType {
 	case constant.ChannelTypeAnthropic:
-		useranthropicModels := make([]dto.AnthropicModel, len(userOpenAiModels))
-		for i, model := range userOpenAiModels {
-			useranthropicModels[i] = dto.AnthropicModel{
-				ID:          model.Id,
-				CreatedAt:   time.Unix(int64(model.Created), 0).UTC().Format(time.RFC3339),
-				DisplayName: model.Id,
-				Type:        "model",
+		useranthropicModels := make([]dto.AnthropicModel, 0, len(catalogEntries))
+		for _, entry := range catalogEntries {
+			if !modelcatalog.IsAnthropicCapable(entry) {
+				continue
 			}
+			useranthropicModels = append(useranthropicModels, buildAnthropicModelFromCatalog(entry))
 		}
 		c.JSON(200, gin.H{
-			"data":     useranthropicModels,
-			"first_id": useranthropicModels[0].ID,
-			"has_more": false,
-			"last_id":  useranthropicModels[len(useranthropicModels)-1].ID,
+			"data": useranthropicModels,
 		})
 	case constant.ChannelTypeGemini:
-		userGeminiModels := make([]dto.GeminiModel, len(userOpenAiModels))
-		for i, model := range userOpenAiModels {
+		userGeminiModels := make([]dto.GeminiModel, len(catalogEntries))
+		for i, entry := range catalogEntries {
 			userGeminiModels[i] = dto.GeminiModel{
-				Name:        model.Id,
-				DisplayName: model.Id,
+				Name:        entry.ModelName,
+				DisplayName: entry.ModelName,
 			}
 		}
 		c.JSON(200, gin.H{
@@ -307,10 +323,12 @@ func ListModels(c *gin.Context, modelType int) {
 			"nextPageToken": nil,
 		})
 	default:
+		userOpenAiModels := make([]dto.OpenAIModels, 0, len(catalogEntries))
+		for _, entry := range catalogEntries {
+			userOpenAiModels = append(userOpenAiModels, buildOpenAIModelFromCatalog(entry))
+		}
 		c.JSON(200, gin.H{
-			"success": true,
-			"data":    userOpenAiModels,
-			"object":  "list",
+			"data": userOpenAiModels,
 		})
 	}
 }

@@ -16,14 +16,13 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 type listModelsResponse struct {
-	Success bool               `json:"success"`
-	Data    []dto.OpenAIModels `json:"data"`
-	Object  string             `json:"object"`
+	Data []dto.OpenAIModels `json:"data"`
 }
 
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
@@ -136,14 +135,131 @@ func decodeListModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var payload listModelsResponse
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
-	require.True(t, payload.Success)
-	require.Equal(t, "list", payload.Object)
 
 	ids := make(map[string]struct{}, len(payload.Data))
 	for _, item := range payload.Data {
 		ids[item.Id] = struct{}{}
 	}
 	return ids
+}
+
+func decodeListModelsPayload(t *testing.T, recorder *httptest.ResponseRecorder) ([]dto.OpenAIModels, map[string]interface{}) {
+	t.Helper()
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var raw map[string]interface{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &raw))
+	require.ElementsMatch(t, []string{"data"}, mapKeys(raw))
+
+	var payload listModelsResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	return payload.Data, raw
+}
+
+func decodeAnthropicModelsPayload(t *testing.T, recorder *httptest.ResponseRecorder) ([]dto.AnthropicModel, map[string]interface{}) {
+	t.Helper()
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var raw map[string]interface{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &raw))
+	require.ElementsMatch(t, []string{"data"}, mapKeys(raw))
+
+	var payload struct {
+		Data []dto.AnthropicModel `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	return payload.Data, raw
+}
+
+func mapKeys(raw map[string]interface{}) []string {
+	keys := make([]string, 0, len(raw))
+	for key := range raw {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func modelIDs(models []dto.OpenAIModels) []string {
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.Id)
+	}
+	return ids
+}
+
+func anthropicModelIDs(models []dto.AnthropicModel) []string {
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		ids = append(ids, model.ID)
+	}
+	return ids
+}
+
+func withSelfUseModeEnabled(t *testing.T) {
+	t.Helper()
+
+	original := operation_setting.SelfUseModeEnabled
+	operation_setting.SelfUseModeEnabled = true
+	t.Cleanup(func() {
+		operation_setting.SelfUseModeEnabled = original
+	})
+}
+
+func setupRepresentativeModelListFixture(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&[]model.Channel{
+		{Id: 1, Type: constant.ChannelTypeMiniMax, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - OpenAI-Compatible"},
+		{Id: 2, Type: constant.ChannelTypeDeepSeek, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "DeepSeek - OpenAI-Compatible"},
+		{Id: 3, Type: constant.ChannelTypeCodex, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "OpenAI Codex OAuth"},
+		{Id: 4, Type: constant.ChannelTypeMiniMax, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - Embeddings"},
+		{Id: 5, Type: constant.ChannelTypeOpenAI, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "OpenAI - Embeddings"},
+		{Id: 6, Type: constant.ChannelTypeAnthropic, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - Anthropic-Compatible"},
+		{Id: 7, Type: constant.ChannelTypeAnthropic, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "DeepSeek - Anthropic-Compatible"},
+	}).Error)
+
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "text-embedding-3-small", ChannelId: 5, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.5", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "gpt-5.4-mini", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "deepseek-v4-flash", ChannelId: 2, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.7", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "embo-01", ChannelId: 4, Enabled: true},
+		{Group: "default", Model: "gpt-5.3-codex-spark", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "MiniMax-M3", ChannelId: 6, Enabled: true},
+		{Group: "default", Model: "deepseek-v4-pro", ChannelId: 2, Enabled: true},
+		{Group: "default", Model: "text-embedding-3-large", ChannelId: 5, Enabled: true},
+		{Group: "default", Model: "gpt-5.5", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.5-highspeed", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "gpt-5.4", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.7", ChannelId: 6, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.5-highspeed", ChannelId: 6, Enabled: true},
+		{Group: "default", Model: "MiniMax-M2.5", ChannelId: 6, Enabled: true},
+		{Group: "default", Model: "deepseek-v4-pro", ChannelId: 7, Enabled: true},
+		{Group: "default", Model: "deepseek-v4-flash", ChannelId: 7, Enabled: true},
+	}).Error)
+
+	require.NoError(t, db.Create(&[]model.Model{
+		{ModelName: "embo-01", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
+		{ModelName: "text-embedding-3-large", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
+		{ModelName: "text-embedding-3-small", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
+	}).Error)
+	model.InvalidatePricingCache()
+	return db
+}
+
+func requestListModels(t *testing.T, target string, modelType int) *httptest.ResponseRecorder {
+	t.Helper()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, target, nil)
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+
+	ListModels(ctx, modelType)
+	return recorder
 }
 
 func pricingByModelName(pricings []model.Pricing) map[string]model.Pricing {
@@ -241,4 +357,94 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	require.NotContains(t, ids, "zz-token-tiered-empty-expr-model")
 	require.NotContains(t, ids, "zz-token-tiered-missing-expr-model")
 	require.NotContains(t, ids, "zz-token-unpriced-model")
+}
+
+func TestListModelsPayloadShapeAndPublicFields(t *testing.T) {
+	setupRepresentativeModelListFixture(t)
+
+	recorder := requestListModels(t, "/v1/models", constant.ChannelTypeOpenAI)
+	models, raw := decodeListModelsPayload(t, recorder)
+
+	assert.NotContains(t, raw, "object")
+	assert.NotContains(t, raw, "success")
+	require.NotEmpty(t, models)
+	for _, modelItem := range models {
+		assert.Equal(t, "model", modelItem.Object)
+		assert.NotEmpty(t, modelItem.Id)
+		assert.NotZero(t, modelItem.Created)
+		assert.NotEmpty(t, modelItem.OwnedBy)
+		assert.NotNil(t, modelItem.SupportedEndpointTypes)
+		assert.NotNil(t, modelItem.Pricing)
+	}
+
+	var itemMaps struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &itemMaps))
+	for _, modelItem := range itemMaps.Data {
+		assert.NotContains(t, modelItem, "pricing_source")
+		assert.NotContains(t, modelItem, "pricing_estimated")
+	}
+}
+
+func TestListModelsRepresentativeOrder(t *testing.T) {
+	setupRepresentativeModelListFixture(t)
+
+	recorder := requestListModels(t, "/v1/models", constant.ChannelTypeOpenAI)
+	models, _ := decodeListModelsPayload(t, recorder)
+
+	require.Equal(t, []string{
+		"MiniMax-M2.7",
+		"MiniMax-M2.5-highspeed",
+		"MiniMax-M2.5",
+		"deepseek-v4-pro",
+		"deepseek-v4-flash",
+		"gpt-5.5",
+		"gpt-5.4",
+		"gpt-5.4-mini",
+		"gpt-5.3-codex-spark",
+		"MiniMax-M3",
+		"embo-01",
+		"text-embedding-3-large",
+		"text-embedding-3-small",
+	}, modelIDs(models))
+}
+
+func TestListModelsAnthropicPayloadAndOrder(t *testing.T) {
+	setupRepresentativeModelListFixture(t)
+
+	recorder := requestListModels(t, "/v1/models?api_format=anthropic", constant.ChannelTypeAnthropic)
+	models, raw := decodeAnthropicModelsPayload(t, recorder)
+
+	assert.NotContains(t, raw, "object")
+	assert.NotContains(t, raw, "success")
+	assert.NotContains(t, raw, "first_id")
+	assert.NotContains(t, raw, "last_id")
+	assert.NotContains(t, raw, "has_more")
+	require.Equal(t, []string{
+		"MiniMax-M2.7",
+		"MiniMax-M2.5-highspeed",
+		"MiniMax-M2.5",
+		"deepseek-v4-pro",
+		"deepseek-v4-flash",
+		"MiniMax-M3",
+	}, anthropicModelIDs(models))
+	for _, modelItem := range models {
+		assert.Equal(t, "model", modelItem.Type)
+		assert.Equal(t, "anthropic", modelItem.APIFormat)
+		assert.NotEmpty(t, modelItem.EndpointTypes)
+	}
+}
+
+func TestListModelsAnthropicEmptyPayload(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	setupModelListControllerTestDB(t)
+
+	recorder := requestListModels(t, "/v1/models?api_format=anthropic", constant.ChannelTypeAnthropic)
+	models, raw := decodeAnthropicModelsPayload(t, recorder)
+
+	assert.NotContains(t, raw, "first_id")
+	assert.NotContains(t, raw, "last_id")
+	assert.NotContains(t, raw, "has_more")
+	require.Empty(t, models)
 }

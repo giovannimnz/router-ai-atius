@@ -1,214 +1,155 @@
-# INTEGRATIONS.md - External Services & Integrations
+# INTEGRATIONS — Atius AI Router
 
-## Visão Geral
+## AI Providers (Relay Channels)
 
-O NewAPI atua como um **gateway centralizado** para múltiplos provedores de LLM, integrando-se com serviços externos e fornecendo uma API compatível OpenAI para consumidores internos.
+The gateway relays requests to 40+ upstream AI providers via channel adapters in `relay/channel/`:
 
-## Integrações com Providers de LLM
+### Major Providers
 
-### DeepSeek
+| Channel | Dir | Type | Streaming | Notes |
+|---------|-----|------|-----------|-------|
+| OpenAI | `relay/channel/openai/` | OpenAI-compatible | Yes | Base adapter |
+| Claude | `relay/channel/claude/` | Anthropic | Yes | |
+| Gemini | `relay/channel/gemini/` | Google | Yes | |
+| AWS Bedrock | `relay/channel/aws/` | AWS | Yes | |
+| MiniMax | `relay/channel/minimax/` | MiniMax | Yes | Atius uses this |
+| DeepSeek | `relay/channel/deepseek/` | DeepSeek | Yes | |
+| Ollama | `relay/channel/ollama/` | Local | Yes | |
+| Azure OpenAI | `relay/channel/openai/` | Azure | Yes | |
 
-| Item | Detalhe |
-|---|---|
-| **URL Base** | `https://api.deepseek.com` |
-| **API Keys** | 3 chaves rotativas (`DEEPSEAK_API_KEY_1/2/3`) |
-| **Modelos** | DeepSeek-R1, DeepSeek-V3.2-Exp |
-| **Sync Script** | `integration/scripts/sync_deepseak_channels.py` |
+### Additional Providers
 
-### Qwen (Alibaba Cloud)
-
-| Item | Detalhe |
-|---|---|
-| **Modelos** | Qwen3-Max, Qwen3-VL-Plus, Qwen3-Coder-Plus |
-| **Config** | Gerenciada via UI admin do NewAPI |
-| **Use Cases** | Geral/Reasoning, Visão/Multimodal, Coding Longo |
-
-### Kimi (Moonshot AI)
-
-| Item | Detalhe |
-|---|---|
-| **Modelo** | Kimi-K2-Instruct-0905 |
-| **Use Case** | Coding Diário |
-| **Config** | Gerenciada via UI admin do NewAPI |
-
-### MiniMax
-
-| Item | Detalhe |
-|---|---|
-| **URL Base** | `https://api.minimax.io` (região global, sem `/v1` — o new-api adiciona) |
-| **API Key** | `MINIMAX_API_KEY` no `~/.zshrc` (formato `sk-cp-*`, Token Plan) |
-| **Channel ID** | 42 |
-| **Channel Type** | 1 (OpenAI Compatible) |
-| **Modelos** | MiniMax-M2.7, MiniMax-M2.5 |
-| **Vendor ID** | 4 (MiniMax) |
-| **Token Plan** | Weekly quota: 4.500 tokens para modelos M*, 350 images, 700 music, etc. |
-| **Bruno Tests** | `integration/bruno-tests/minimax/` |
-
-#### Pricing Pay-as-you-go (referência)
-
-| Modelo | Input (/1M) | Output (/1M) | Cache Read (/1M) | Cache Write (/1M) |
-|---|---|---|---|---|
-| MiniMax-M2.7 | $0.30 | $1.20 | $0.06 | $0.375 |
-| MiniMax-M2.5 | $0.30 | $1.20 | $0.03 | $0.375 |
-
-#### Pricing no NewAPI (ratios)
-
-| Modelo | ModelRatio | CompletionRatio |
-|---|---|---|
-| MiniMax-M2.7 | 0.15 | 4 |
-| MiniMax-M2.5 | 0.15 | 4 |
-
-- **ModelRatio** = `input_price / 2` (mesma fórmula do DeepSeek: $0.28 → 0.14)
-- **CompletionRatio** = `output_price / input_price` (1.2 / 0.3 = 4.0)
-
-#### Endpoint /v1/models enriquecido (middleware)
-
-O middleware `model_detailed.py` adiciona metadata aos modelos MiniMax no `GET /v1/models`:
-
-```json
-{
-  "id": "MiniMax-M2.7",
-  "name": "MiniMax M2.7",
-  "context_length": 245760,
-  "top_provider": { "max_completion_tokens": 50000 },
-  "pricing": {
-    "prompt": "0.0000003",
-    "completion": "0.0000012",
-    "prompt_cache_hit": "0.00000006",
-    "prompt_cache_miss": "0.000000375"
-  }
-}
+```
+relay/channel/
+├── ai360
+├── ali (Alibaba)
+├── baidu / baidu_v2 (Baidu)
+├── cohere
+├── coze
+├── dify
+├── jimeng (Jimeng)
+├── jina
+├── lingyiwanwu (Lingyi Wanwu / Kimi)
+├── mistral
+├── mokaai
+├── moonshot
+├── openrouter
+├── palm (Google PaLM)
+├── perplexity
+├── replicate
+├── siliconflow
+├── codex (OpenAI Codex)
+├── cloudflare
+└── (more)
 ```
 
-#### Notas importantes
+---
 
-- O Token Plan usa a região **global** (`api.minimax.io`), não a China (`api.minimaxi.com`)
-- O base_url no channel **não deve** ter `/v1` (o new-api adiciona automaticamente)
-- O modelo MiniMax-M1 **não** está incluído no Token Plan atual
-- O tipo de canal recomendado é **OpenAI Compatible (type 1)**, não Anthropic, pois retorna conteúdo de forma mais consistente (thinking tokens inclusos)
+## External APIs
 
-## Integrações Internas (Arquitetura)
+### OAuth Providers
 
-### PostgreSQL
+| Provider | File | Protocol | Scopes |
+|----------|------|----------|--------|
+| GitHub | `oauth/github.go` | OAuth 2.0 | `user:email` |
+| Discord | `oauth/discord.go` | OAuth 2.0 | — |
+| OIDC | `oauth/oidc.go` | OpenID Connect | — |
+| LinuxDO | `oauth/linuxdo.go` | OAuth 2.0 | — |
+| Custom | `oauth/generic.go` | OAuth 2.0 | Configurable |
+| WeChat | `controller/oauth.go` (WeChatAuth) | WeChat OAuth | — |
+| Telegram | `controller/oauth.go` (TelegramLogin) | Bot API | — |
+| Codex | `controller/codex_oauth.go` | OpenAI OAuth | — |
 
-| Item | Detalhe |
-|---|---|
-| **Imagem** | `postgres:15-alpine` |
-| **Host:Port** | `localhost:8746` (local), `atius-srv-1:8746` (via VPN) |
-| **Database** | `newapi` |
-| **Usuário** | `admin` |
-| **Persistência** | `./data/postgres_data/` |
-| **Healthcheck** | `pg_isready` a cada 10s |
+### Payment Providers
 
-### Open-WebUI
+| Provider | File | Notes |
+|----------|------|-------|
+| epay | `go-epay` (Calcium-Ion/go-epay) | Main payment gateway |
+| Stripe | `controller/stripe.go` | Credit card payments |
+| Creem | `controller/creem.go` | Credit card payments |
+| Waffo | `controller/waffo.go` | — |
+| Waffo Pancake | `controller/waffo_pancake.go` | — |
 
-| Item | Detalhe |
-|---|---|
-| **Tipo** | Consumidor da API NewAPI |
-| **Auth** | Via `OPENWEBUI_LITELLM_KEY` (deve alinhar com `NEWAPI_ADMIN_TOKEN`) |
-| **Endpoint** | `http://localhost:3300/v1/models` |
-| **Protocolo** | OpenAI-compatible REST API |
+---
 
-### OpenClaw
+## Databases
 
-| Item | Detalhe |
-|---|---|
-| **Tipo** | Consumidor da API NewAPI |
-| **Auth** | Bearer token compartilhado |
+| DB | Driver | Usage |
+|----|--------|-------|
+| SQLite | `glebarez/sqlite` | Default, local dev |
+| MySQL | `gorm.io/driver/mysql` | Production |
+| PostgreSQL | `gorm.io/driver/postgres` | Production |
+| Redis | `go-redis/redis/v8` | Cache, rate limiting |
 
-### SearXNG
+### Auth-Related Tables
 
-| Item | Detalhe |
-|---|---|
-| **Tipo** | Motor de busca self-hosted |
-| **Config** | `integration/searxng/settings.yml` |
-| **Uso** | Search-engine middleware para grounding de LLMs |
+- `users` — username, password (bcrypt), email, role, status, group
+- `tokens` — API keys with quota tracking
+- `oauth_bindings` — OAuth provider → user mapping
+- `passkeys` — WebAuthn credentials (credential_id, public_key)
+- `two_fa` — TOTP secrets
+- `custom_oauth_providers` — DB-driven OAuth provider configs
+- `options` — Key-value store for all settings (password_login_enabled, etc.)
 
-### Whisper.cpp
+---
 
-| Item | Detalhe |
-|---|---|
-| **Tipo** | Speech-to-Text local |
-| **Local** | `integration/whisper.cpp/` |
-| **Uso** | Transcrição de áudio para input de LLM |
+## Authentication Providers
 
-## Scripts de Integração
+### Built-in (env vars)
 
-| Script | Função |
-|---|---|
-| `sync_deepseak_channels.py` | Sincroniza canais/channels do DeepSeek no NewAPI |
-| `sync_openrouter_channels.py` | Sincroniza canais do OpenRouter |
-| `sync_iflow_channel_keys.py` | Sincroniza chaves de canais iFlow |
-| `normalize_models_real_only.py` | Normaliza catálogo de modelos (formato real only) |
-| `test_all_models.sh` | Testa todos os modelos configurados |
-| `bruno-tests/minimax/` | Testes Bruno para MiniMax-M2.7 e M2.5 |
-| `update_api_keys.sh` | Atualiza API keys |
-| `update_newapi_safe.sh` | Atualização segura do NewAPI |
-| `verify_stack.sh` | Verifica saúde do stack completo |
-| `backup_integration_state.sh` | Backup do estado de integração |
+| Provider | Env vars |
+|----------|---------|
+| GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` |
+| Discord | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` |
+| OIDC | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_AUTH_URL`, `OIDC_TOKEN_URL`, `OIDC_USERINFO_URL` |
+| LinuxDO | `LINUXDO_CLIENT_ID`, `LINUXDO_CLIENT_SECRET` |
+| Telegram | `TELEGRAM_BOT_TOKEN` |
 
-## Middleware Model Enrichment
+### DB-driven (admin-configurable)
 
-O middleware `model-detailed` (porta 3300) intercepta `GET /v1/models` e enriquece os modelos com metadata (nome, contexto, pricing).
+| Provider | Config source |
+|----------|--------------|
+| Custom OAuth | `custom_oauth_providers` table |
 
-| Config | Valor |
-|---|---|
-| **Arquivo** | `integration/middleware/model_detailed.py` |
-| **Porta** | 3001 (interna) → 3300 (exposta) |
-| **Backend** | `http://new-api:3000` |
-| **Modelos enriquecidos** | deepseek-chat, deepseek-reasoner, MiniMax-M2.7, MiniMax-M2.5 |
+### Auth Methods
 
-### Lógica de Pricing
+| Method | Backend | Frontend |
+|--------|---------|----------|
+| Password | `controller/user.go:Login` | `api.ts:login()` |
+| OAuth (6+ providers) | `controller/oauth.go:HandleOAuth` | `useOAuthLogin` hook |
+| Passkey/WebAuthn | `controller/passkey.go` | `lib/passkey.ts`, `passkey/api.ts` |
+| 2FA/TOTP | `controller/user.go:Verify2FALogin` | `api.ts:login2fa()` |
+| Turnstile | `middleware/turnstile-check.go` | `useTurnstile` hook |
 
-Os preços são por **token individual** (não por milhão):
+---
 
-| Provedor | Modelo | Prompt | Completion | Cache Hit |
-|---|---|---|---|---|
-| DeepSeek | deepseek-chat | $0.00000028 | $0.00000042 | $0.000000028 |
-| DeepSeek | deepseek-reasoner | $0.00000028 | $0.00000042 | $0.000000028 |
-| MiniMax | MiniMax-M2.7 | $0.0000003 | $0.0000012 | $0.00000006 |
-| MiniMax | MiniMax-M2.5 | $0.0000003 | $0.0000012 | $0.00000003 |
+## Webhooks
 
-MiniMax adiciona também `prompt_cache_miss` ($0.000000375) pois possui caching write separado.
+| Endpoint | Handler | Purpose |
+|----------|---------|---------|
+| `POST /api/waffo-pancake/webhook/:env` | `controller.WaffoPancakeWebhook` | Waffo Pancake payment webhook |
+| `POST /api/user/epay/notify` | `controller.EpayNotify` | epay payment notification |
 
-## Middleware Search-Engine
+---
 
-| Config | Valor |
-|---|---|
-| `MODEL_QUEUE_LANES` | `auto` |
-| `RATE_LIMIT_RETRIES` | `2` |
-| `RATE_LIMIT_BACKOFF_S` | `1.0` |
-| `ENABLE_REASONING_STREAM_COMPAT` | `true` |
-| `REASONING_STREAM_COMPAT_MODELS` | `deepseek-r1` |
+## Third-Party Services
 
-## Redes Docker
+| Service | Package | Purpose |
+|---------|---------|---------|
+| Cloudflare Turnstile | — | Bot protection on login/register |
+| Grafana Pyroscope | `grafana/pyroscope-go` | Continuous profiling |
+| Prometheus | `prometheus/client_golang` | Metrics |
+| S3/MinIO | `github.com/minio/minio-go/v7` | File storage |
+| Go profiling | `net/http/pprof` | CPU/memory via `common/pprof.go` |
 
-| Rede | Tipo | Serviços |
-|---|---|---|
-| `newapi-internal` | Internal | `new-api`, `db-newapi` |
-| `atius-shared` | External | `new-api` (alias: `litellm`) — compartilhada com outros serviços do ecossistema Atius |
+---
 
-## Tokens & Autenticação
+## Key Integration Points
 
-| Token | Uso |
-|---|---|
-| `NEWAPI_ADMIN_TOKEN` | Token admin principal (sk-vXqh...) |
-| `LITELLM_MASTER_KEY` | Alias para `NEWAPI_ADMIN_TOKEN` (compatibilidade) |
-| `DEEPSEAK_API_KEY_1/2/3` | Chaves da API DeepSeek |
-| `MINIMAX_API_KEY` | Token Plan MiniMax (formato `sk-cp-*`, no `~/.zshrc`) |
-
-## Arquivos de Configuração de Integração
-
-| Arquivo | Descrição |
-|---|---|
-| `integration/.env` | Variáveis unificadas (NewAPI + Middleware) |
-| `integration/docker-compose.yml` | Compose com redes internas + externas |
-| `integration/Models_gsd.json` | Catálogo de modelos |
-| `integration/GUIA_MUDANCA_CHAVES_API.md` | Guia de mudança de chaves de API |
-| `integration/searxng/settings.yml` | Configuração do SearXNG |
-
-## Consumidores Conhecidos
-
-1. **Open-WebUI** — Interface de chat para LLMs
-2. **OpenClaw** — Agente de IA
-3. **Search-Engine middleware** — Proxy de busca com rate limiting
+1. **OAuth callback URL**: `{SERVER_ADDRESS}/api/oauth/{provider}` — must be registered in provider's app settings
+2. **Telegram OAuth**: Uses `SERVER_ADDRESS/api/oauth/telegram/login` — bot-based auth
+3. **WeChat OAuth**: Uses QR code flow — `{SERVER_ADDRESS}/api/oauth/wechat`
+4. **Custom OAuth**: `redirect_uri` = `{SERVER_ADDRESS}/api/oauth/{slug}`
+5. **epay IPN**: `{SERVER_ADDRESS}/api/user/epay/notify` — HTTP callback for payment confirmation
+6. **Redis**: Used for rate limiting counters and caching (no session storage — cookie-only)
+7. **MinIO**: S3-compatible object storage for uploaded files

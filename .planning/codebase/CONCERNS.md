@@ -1,201 +1,141 @@
-# CONCERNS.md - Technical Debt, Risks & Code Concerns
+# CONCERNS — Atius Monorepo
 
-## Visão Geral
+> Mapeado a partir do código real em `/home/ubuntu/GitHub/atius/`. Atualizado: 2026-06-02.
 
-Este documento identifica preocupações técnicas, riscos e áreas de atenção no codebase NewAPI. As preocupações são organizadas por severidade: **HIGH** (risco imediato), **MEDIUM** (risco potencial), **LOW** (melhorias).
+## Technical Debt
 
----
+### Database Schema Churn
+- 40+ migrations em sequência (V1..V40)
+- Múltiplos renames de tabelas/colunas (V34, V36, V37, V38, V39)
+- `user_account_exchange` → `user_account` (V34)
+- `user_account_config_conta_id` → `account_id` (V37)
+- `user_strategies` → `user_account_strategies` (V39)
+- **Concern**: Renames frequentes indicam falta de upfront design. Cada rename quebra queries existentes e requer migration roll-out.
 
-## HIGH — Riscos Críticos
+### Dual Database Pools
+- `conexao.js` mantém pool PostgreSQL + pool MySQL simultaneamente
+- Não está claro qual dado está em qual DB
+- **Concern**: Confusão sobre data ownership. MySQL pode ser legado não documentado.
 
-### 1. Credenciais Expostas em `.env`
+### Python Queue System (conexao.py)
+- Threading-based queue system para DB writes
+- `_table_queues` + `_table_locks` + threading
+- Não usa async Python (não usa `asyncpg` no async path)
+- **Concern**: Threading em código production. Preferir async/await com `asyncpg`.
 
-| Arquivo | `integration/.env` |
-|---|---|
-| **Problema** | API keys e tokens estão em texto puro no repositório |
-| **Evidência** | `DEEPSEAK_API_KEY_1=sk-e80eaa8c55ef4eeb84488294f6d21724` e 2 chaves adicionais visíveis |
-| **Evidência** | `NEWAPI_ADMIN_TOKEN=sk-vXqhMUmQEAzBOw64yOR8ViddrZBSrK8OrhoDwxHkLOEWYXpQ` exposto |
-| **Risco** | Acesso não autorizado a APIs pagas e ao gateway admin |
-| **Recomendação** | Usar Docker secrets ou vault externo; adicionar `.env` ao `.gitignore` |
+### Monorepo Cross-Reference
+- `ecosystem.config.js` referencia `HORISTIC_ROOT` (outro repo em `/home/ubuntu/GitHub/horistic`)
+- Backend código em atius/ mas executado de horistic/ (cwd)
+- **Concern**: Strong coupling entre atius e horistic. Mudar horistic quebra atius.
 
-### 2. Credenciais PostgreSQL Fracas
+### Browser Automation (MEXC)
+- `nodriver` + `playwright-extra` coexistindo
+- Não está claro qual é primary para qual task
+- MEXC bypass mechanism é frágil (baseado em session cookies + browser automation)
+- **Concern**: Anti-bot bypass pode quebrar a qualquer update do MEXC. Manutenção contínua.
 
-| Arquivo | `.env`, `integration/.env` |
-|---|---|
-| **Problema** | Usuário `admin` e senha `password123` são credenciais padrão |
-| **Evidência** | `POSTGRES_USER=admin` / `POSTGRES_PASSWORD=password123` |
-| **Risco** | Acesso direto ao banco via porta 8746 exposta |
-| **Recomendação** | Alterar para credenciais fortes e únicas |
+### Legacy Express + Fastify
+- API usa Fastify (moderno) mas WebSocket handlers usam Express raw
+- Duas abstrações coexistindo
+- **Concern**: Inconsistência de middleware. Auth middleware não cobre WS path.
 
-### 3. PostgreSQL Exposto na Porta 8746
+## Known Bugs / Fragile Areas
 
-| Arquivo | `docker-compose.yml` |
-|---|---|
-| **Problema** | Porta do banco exposta ao host (`8746:5432`) |
-| **Evidência** | `ports: - "8746:5432"` |
-| **Risco** | Ataque direto ao banco se a porta 8746 for acessível externamente |
-| **Recomendação** | Remover mapeamento de porta se não necessário; usar rede Docker interna |
+### DB Queue Deadlock
+- `enqueue_db_operation` em `conexao.js` tenta prevenir deadlocks mas usa threading lock simples
+- Se o operation fn throw, queue pode ficar stuck
+- **Known**: `enqueue_db_operation` usa `result_holder` com threading event — não há timeout
 
-### 4. `sslmode=disable` no DSN
+### MEXC Session Recovery
+- `sessionHealer` é fragile — tenta recover broken sessions
+- Se MEXC muda estrutura de cookies, session recovery falha silently
+- **Known**: MEXC anti-bot detection evolves constantly
 
-| Arquivo | `.env`, `integration/.env` |
-|---|---|
-| **Problema** | Conexão ao banco sem SSL |
-| **Evidência** | `SQL_DSN=postgres://admin:password123@db-newapi:5432/newapi?sslmode=disable` |
-| **Risco** | Dados trafegam em texto puro (mitigado por rede Docker interna, mas ainda vulnerável) |
-| **Recomendação** | Habilitar SSL se o banco for acessível externamente |
+### Position Sync Race
+- `positionSync.js` sincroniza posições entre exchange e DB
+- Race condition possible se múltiplos webhooks chegam simultaneamente
+- **Concern**: Webhook handler em `webhookSignals.js` não serializa por account
 
-### 5. Sem `.gitignore` para Arquivos Sensíveis
+### API Memory Leaks
+- `axios` não configura `maxSockets` ou `maxTotalSockets`
+- Sem connection pool limits configurados
+- **Concern**: Long-running process pode leak connections
 
-| Arquivo | Raiz do projeto |
-|---|---|
-| **Problema** | `.env` e `data/` podem ser commitados acidentalmente |
-| **Evidência** | Nenhum `.gitignore` encontrado no projeto |
-| **Risco** | Vazamento de credenciais via git |
-| **Recomendação** | Criar `.gitignore` com `.env`, `data/`, `backups/`, `.planning/` |
+### WebSocket Reconnection
+- Binance WebSocket (`websocketApi.js`) não tem automatic reconnection backoff
+- Se exchange disconnects, reconnect pode loop rapidamente
+- **Concern**: Não há circuit breaker
 
-### 6. Arquivo Legacy `one-api.db`
+## Security Concerns
 
-| Arquivo | `data/one-api.db` |
-|---|---|
-| **Problema** | SQLite legado coexistindo com PostgreSQL |
-| **Evidência** | Arquivo presente em `data/one-api.db` |
-| **Risco** | Confusão sobre qual banco é a fonte da verdade; dados des sincronizados |
-| **Recomendação** | Verificar se ainda é usado; remover se for resíduo de migração |
+### Secrets in Env
+- Exchange API keys, DB credentials, Telegram tokens todos em `.env`
+- `.env` não commitado mas acessível a quem tem acesso ao FS
+- **Concern**: Compartilhamento de `.env` entre devs é arriscado
 
----
+### MEXC Cookie Storage
+- `mexc_browser_session` table storeia cookies sensíveis (session cookies)
+- Não está claro se cookies são encryptados
+- **Concern**: Se DB é comprometido, todos os MEXC sessions são comprometidos
 
-## MEDIUM — Riscos Potenciais
+### No Rate Limiting on Webhook
+- `webhookSignals.js` (port 8099) accepts signals sem authentication apparent
+- Qualquer um pode enviar sinais que disparam trades
+- **Concern**: Webhook deve ter authentication (API key ou HMAC signature)
 
-### 7. Sem Healthcheck para NewAPI
+### Password Storage
+- bcrypt usado (bom) mas salt rounds não especificado
+- **Check**: verificar `bcrypt` rounds config em `backend/server/routes/auth/index.js`
 
-| Arquivo | `docker-compose.yml` |
-|---|---|
-| **Problema** | PostgreSQL tem healthcheck, mas NewAPI não |
-| **Evidência** | `healthcheck` definido apenas em `db-newapi` |
-| **Risco** | NewAPI pode estar indisponível sem que o Docker detecte |
-| **Recomendação** | Adicionar healthcheck com `curl -f http://localhost:3000/health` |
+## Performance Concerns
 
-### 8. Imagem Docker sem Pin de Versão
+### PM2 Fork Mode
+- 7 processos em fork mode — nenhum usa cluster
+- `atius-web` (Next.js) é single-threaded
+- **Concern**: Não aproveita multi-core. Next.js production build é Node.js que pode usar cluster.
 
-| Arquivo | `docker-compose.yml` |
-|---|---|
-| **Problema** | Usa `calciumion/new-api:latest` sem versão específica |
-| **Evidência** | `image: calciumion/new-api:latest` |
-| **Risco** | Updates automáticos podem introduzir breaking changes |
-| **Recomendação** | Pinar versão específica (ex: `calciumion/new-api:0.5.0`) |
+### No Redis Cache
+- Sistema usa PostgreSQL para state mas não tem Redis
+- Session data, cache de rates, etc. vai direto no DB
+- **Concern**: DB becomes bottleneck under load
 
-### 9. Scripts sem Validação de Input
+### Large Backend Tree
+- `backend/exchanges/` tem 11K+ arquivos (probavelmente node_modules ou artifacts)
+- `backend/` principal: 66 arquivos em `core/`, 11791 em `exchanges/`
+- **Concern**: Build, test, and deploy operations são lentos
 
-| Arquivo | `management.sh`, `backup-restore.sh` |
-|---|---|
-| **Problema** | Scripts aceitam input do usuário sem validação |
-| **Evidência** | `read -p "Digite o nome completo do arquivo..." BACKUP_FILE` sem sanitização |
-| **Risco** | Path traversal ou execução de comandos via input malicioso |
-| **Recomendação** | Validar e sanitizar inputs do usuário |
+### Database Connection Limits
+- `pg` pool default pode não ser suficiente para 7 PM2 apps
+- **Check**: `conexao.js` pool size config
 
-### 10. Dependência de Rede Externa sem Fallback
+## Performance Bottlenecks
 
-| Arquivo | `integration/docker-compose.yml` |
-|---|---|
-| **Problema** | Rede `atius-shared` é externa e pode não existir |
-| **Evidência** | `atius-shared: external: true` |
-| **Risco** | Falha no deploy se a rede externa não estiver configurada |
-| **Recomendação** | Documentar pré-requisitos ou criar rede automaticamente |
+### MEXC Browser Automation
+- nodriver + playwright rodando em headless Chrome para cada operation
+- Isso é I/O-bound e memory-heavy
+- **Concern**: Scaling horizontally é complexo (precisa um browser por instance)
 
-### 11. Sem Rotação Automática de API Keys
+### Backtest (divap_backtest.py)
+- vectorbt backtest pode ser memory-intensive para grandes datasets
+- Não há mention de limiting dataset size
+- **Concern**: Backtest pode OOM em symbols com muitos candles
 
-| Arquivo | `integration/.env` |
-|---|---|
-| **Problema** | 3 chaves DeepSeek manuais sem automação de rotação |
-| **Evidência** | `DEEPSEAK_API_KEY_1/2/3` fixas no `.env` |
-| **Risco** | Chaves expiram (uma já expira em 2026-04-13) e serviço para |
-| **Recomendação** | Automatizar rotação ou alertar antes da expiração |
+## Open Questions
 
-### 12. Comentários Indicando Chave Expirada
+1. **MySQL usage**: Qual dado está em MySQL vs PostgreSQL? Por que dual pool?
+2. **Redis**: Há server Redis no ecossistema? Não está no package.json deps
+3. **MEXC automation resilience**: O que acontece quando MEXC muda anti-bot?
+4. **Multi-tenant**: Sistema suporta múltiplos usuários ou é single-tenant?
+5. **Backup strategy**: Como backups de PostgreSQL são feitos? Há schedule?
+6. **Horistic coupling**: Por que ecosystem.config.js referencia HORISTIC_ROOT?
 
-| Arquivo | `integration/.env` |
-|---|---|
-| **Problema** | Comentário `giovannimunizds - Expires on 2026-04-13` |
-| **Evidência** | Próximo às chaves DeepSeek |
-| **Risco** | Chave pode expirar e causar interrupção |
-| **Recomendação** | Renovar antes da expiração; configurar alertas |
+## Fragile Areas (Summary)
 
----
-
-## LOW — Melhorias e Boas Práticas
-
-### 13. Sem Testes Automatizados
-
-| Arquivo | Todo o projeto |
-|---|---|
-| **Problema** | Nenhum teste automatizado (unitário, integração, E2E) |
-| **Evidência** | Apenas scripts manuais de verificação |
-| **Risco** | Regressões não detectadas |
-| **Recomendação** | Adicionar `test_all_models.sh` como cron job ou CI step |
-
-### 14. Sem CI/CD Pipeline
-
-| Arquivo | Todo o projeto |
-|---|---|
-| **Problema** | Deploys são manuais via scripts |
-| **Evidência** | Nenhum `.github/workflows/`, `Jenkinsfile`, etc. |
-| **Risco** | Inconsistência entre ambientes; deploys esquecem steps |
-| **Recomendação** | Pipeline simples para validar health pós-deploy |
-
-### 15. Duplicação entre `docker-compose.yml`
-
-| Arquivo | Raiz vs `integration/` |
-|---|---|
-| **Problema** | Dois arquivos `docker-compose.yml` com definições similares |
-| **Evidência** | Ambos definem `new-api` e `db-newapi` com configs quase idênticas |
-| **Risco** | Divergência entre configs causa comportamento inconsistente |
-| **Recomendação** | Unificar em um único arquivo ou usar overrides |
-
-### 16. Scripts em Português e Inglês Misturados
-
-| Arquivo | Vários scripts |
-|---|---|
-| **Problema** | Mensagens em português, variáveis em inglês |
-| **Evidência** | `echo "Aplicação NewAPI iniciada com sucesso!"` vs `set -e`, `SCRIPT_DIR` |
-| **Risco** | Confusão para colaboradores não lusófonos |
-| **Recomendação** | Padronizar idioma (sugestão: inglês para código, português para UX) |
-
-### 17. Sem Logging Estruturado
-
-| Arquivo | `data/logs/` |
-|---|---|
-| **Problema** | Logs da aplicação não são estruturados (JSON) |
-| **Evidência** | Diretório `data/logs/` existe mas sem formato definido |
-| **Risco** | Dificuldade de análise e monitoramento |
-| **Recomendação** | Configurar logging em JSON se o NewAPI suportar |
-
-### 18. Sem Backup Automatizado
-
-| Arquivo | `backup-restore.sh` |
-|---|---|
-| **Problema** | Backup é manual via script interativo |
-| **Evidência** | Menu interativo sem opção de agendamento |
-| **Risco** | Perda de dados se backup for esquecido |
-| **Recomendação** | Cron job para backup diário do PostgreSQL |
-
----
-
-## Resumo por Categoria
-
-| Categoria | HIGH | MEDIUM | LOW |
-|---|---|---|---|
-| **Segurança** | 4 | 0 | 0 |
-| **Infraestrutura** | 1 | 3 | 2 |
-| **Código** | 0 | 2 | 3 |
-| **Operacional** | 0 | 2 | 3 |
-| **Total** | **5** | **7** | **8** |
-
-## Ações Imediatas Recomendadas
-
-1. **Criar `.gitignore`** para proteger `.env`, `data/`, `backups/`
-2. **Alterar credenciais PostgreSQL** para senhas fortes
-3. **Remover/verificar `data/one-api.db`** legado
-4. **Adicionar healthcheck** ao serviço NewAPI
-5. **Pinar versão** da imagem `calciumion/new-api`
-6. **Configurar alerta** para expiração de chaves DeepSeek (2026-04-13)
+| Area | Risk | Impact |
+|------|------|--------|
+| MEXC browser automation | HIGH | Trading stops |
+| DB queue threading | MEDIUM | Data inconsistency |
+| Webhook auth | HIGH | Unauthorized trades |
+| PM2 fork mode (Next.js) | MEDIUM | Performance under load |
+| Dual DB pools | LOW | Confusion |
+| Schema churn | MEDIUM | Migration bugs |

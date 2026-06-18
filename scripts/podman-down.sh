@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # podman-down.sh — stop and remove the stack
 #
-# Rebrand v2.11: stops the router-ai-atius podman-compose stack.
-#
 # Usage:
-#   ./scripts/podman-down.sh            # stop + remove (preserves data/, pg_data)
+#   ./scripts/podman-down.sh            # stop + remove (preserves data/)
 #   ./scripts/podman-down.sh --volumes # also drop the pg_data volume
 
 set -euo pipefail

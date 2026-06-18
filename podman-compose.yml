@@ -1,198 +1,66 @@
-# router-ai-atius — Podman compose (v2.11.1 rebrand)
-#
-# Drop-in equivalent of docker-compose.yml that runs natively on rootless
-# Podman (no docker daemon required). Same service layout, same ports,
-# same data paths — the only differences are:
-#
-#   - "version" is dropped (Compose Spec 1.0+, no longer required).
-#   - `podman-compose` is the orchestrator; the project is run with:
-#       podman-compose -f podman-compose.yml up -d
-#   - For native systemd integration, use podman/quadlets/* (preferred
-#     for production; survives reboots and integrates with logind).
-#   - All commands are compatible with `docker compose` as well, since
-#     podman-compose reads the same Compose Spec and Docker/Podman are
-#     CLI-compatible for the operations we use here.
-#
-# Rebrand v2.11 (new-api → router-ai-atius):
-#   - container new-api         → router-ai-atius
-#   - container db-newapi       → router-ai-atius-db
-#   - container redis-newapi    → router-ai-atius-redis
-#   - container model-detailed  → router-ai-atius-model-detailed
-#   - network new-api-network   → atius-ai-router_internal
-#   - DB name newapi            → DBRouterAiAtius
-#   - Host port 3301            → 3030 (frees 3000 for pm2web)
-#   - Image tag :v2.11.1-rebrand  → :latest (this file ships with :latest;
-#     run prepare-images to build/pull-and-tag :latest before podman up)
-#
-# Why :latest?
-#   - Operators deploying a fresh prod don't have to know the version
-#     number; "latest" is whatever the registry says is the most recent
-#     stable build.
-#   - Mirrors the Docker community convention (`docker run foo:latest`).
-#   - The compose file stays a single, versionless artifact.
-#   - Override per-host with ROUTER_AI_ATIUS_VERSION=<tag> when you want
-#     a specific version pinned (see scripts/podman-prepare-images.sh).
-#
-# How to populate :latest before ./scripts/podman-up.sh:
-#
-#   Option A — build from source (preferred for prod with custom patches):
-#     podman build -t ghcr.io/giovannimnz/router-ai-atius:latest .
-#
-#   Option B — pull from GHCR (default tag is :latest):
-#     podman pull ghcr.io/giovannimnz/router-ai-atius:latest
-#
-#   Option C — pin a specific version, pulled and re-tagged :latest:
-#     ROUTER_AI_ATIUS_VERSION=v2.11.1-rebrand \
-#       ./scripts/podman-prepare-images.sh
-#
-#   Option D — use the helper script (auto-detects best option):
-#     ./scripts/podman-prepare-images.sh
-#
-# Quick Start:
-#   1. ./scripts/podman-prepare-images.sh   (build/pull :latest)
-#   2. ./scripts/podman-up.sh               (starts detached)
-#   3. curl http://localhost:3030/api/status (verify)
-#
-# Migration from Docker:
-#   ./scripts/podman-migrate-from-docker.sh   (one-shot)
+# POD: router-ai-stack (postgres + redis + router + model-detailed)
+# Infra container shares host network namespace (podman pod infra).
+
+pods:
+  router-ai-stack:
+    hostnetwork: true
+    infra_port_bindings:
+      - "3000:3000"
+      - "3001:3001"
+      - "3300:3001"
 
 services:
-  router-ai-atius:
-    # :latest is the canonical tag — populate it before `podman up`.
-    # See header comments and scripts/podman-prepare-images.sh.
-    # Override with ROUTER_AI_ATIUS_VERSION=<pin> to lock a specific build.
-    image: ghcr.io/giovannimnz/router-ai-atius:latest
-    container_name: router-ai-atius
-    restart: always
-    command: --log-dir /app/logs
-    ports:
-      - "3030:3000"  # host 3030 → container 3000 (Apache fronts 443)
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    env_file:
-      - .env
-    environment:
-      - TZ=America/Sao_Paulo
-      - LANG=pt_BR.UTF-8
-      - ERROR_LOG_ENABLED=true
-      - BATCH_UPDATE_ENABLED=true
-      - NODE_NAME=router-ai-atius-podman
-      - TRUST_PROXY=true
-    depends_on:
-      router-ai-atius-redis:
-        condition: service_healthy
-      router-ai-atius-db:
-        condition: service_healthy
-    networks:
-      - atius-ai-router_internal
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  router-ai-atius-model-detailed:
-    build:
-      context: ./integration/middleware
-      dockerfile: Dockerfile.fastapi
-    image: router-ai-atius-model-detailed:local
-    container_name: router-ai-atius-model-detailed
-    restart: always
-    environment:
-      - MIDDLEWARE_PORT=3001
-      - NEWAPI_BACKEND_URL=http://router-ai-atius:3000
-      - NEW_API_INTERNAL_URL=http://router-ai-atius:3000
-      - BACKEND_TIMEOUT=60
-    env_file:
-      - .env
-    ports:
-      - "3300:3001"  # host 3300 → container 3001 (FastAPI uvicorn)
-    volumes:
-      - ./integration/middleware/static:/app/static:ro
-      - ./integration/middleware/docs:/app/docs:ro
-      - ./integration/middleware/scalar:/app/scalar:ro
-    depends_on:
-      router-ai-atius:
-        condition: service_healthy
-    networks:
-      - atius-ai-router_internal
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:3001/health | grep -o '\"status\":\"healthy\"' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # new-api-docs-v1 (Atius-branded documentation site)
-  # Serves /docs/* (with i18n redirect /docs -> /en/docs).
-  # Mounted internally on port 3003, exposed only via Apache.
-  # The build reads NEXT_PUBLIC_NEW_API_URL via ATIUS_NEWAPI_BASE_URL below
-  # so the "Try it" buttons in the rendered OpenAPI docs point to
-  # https://router.atius.com.br (our upstream) instead of the upstream
-  # docs site.
-  router-ai-atius-docs:
-    build:
-      context: ./integration/docs
-      dockerfile: Dockerfile
-    image: router-ai-atius-docs:local
-    container_name: router-ai-atius-docs
-    restart: always
-    environment:
-      - ATIUS_NEWAPI_BASE_URL=https://router.atius.com.br
-    networks:
-      - atius-ai-router_internal
-    expose:
-      - "3003"
-    depends_on:
-      router-ai-atius:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3003/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-
-  router-ai-atius-redis:
-    image: docker.io/library/redis:7-alpine
-    container_name: router-ai-atius-redis
-    restart: always
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
-    env_file:
-      - .env
-    networks:
-      - atius-ai-router_internal
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  router-ai-atius-db:
+  postgres:
     image: docker.io/library/postgres:15-alpine
-    container_name: router-ai-atius-db
-    restart: always
-    env_file:
-      - .env
+    pod: router-ai-stack
+    container_name: postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-DBRouterAiAtius}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    pod: router-ai-stack
+    container_name: redis
+    restart: unless-stopped
+
+  router-ai-atius:
+    image: ghcr.io/giovannimnz/router-ai-atius:latest
+    pod: router-ai-stack
+    container_name: router-ai-atius
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
     volumes:
-      - pg_data:/var/lib/postgresql/data
-    networks:
-      - atius-ai-router_internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-DBRouterAiAtius}"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      - /home/ubuntu/GitHub/containers/router-ai-atius/data:/data
+      - /home/ubuntu/GitHub/containers/router-ai-atius/logs:/app/logs
 
-volumes:
-  pg_data:
-
-networks:
-  atius-ai-router_internal:
-    driver: bridge
-    name: atius-ai-router_internal
+  model-detailed:
+    image: localhost/router-ai-atius-model-detailed:latest
+    pod: router-ai-stack
+    container_name: model-detailed
+    restart: unless-stopped
+    depends_on:
+      - router-ai-atius
+    environment:
+      NEWAPI_BACKEND_URL: http://localhost:3000
+      NEW_API_INTERNAL_URL: http://localhost:3000
+      ROUTER_URL: http://localhost:3000
+      BACKEND_TIMEOUT: "60"
+      MIDDLEWARE_PORT: "3001"
+      OPENAPI_SPEC_PATH: /app/docs/openapi.json
+      STATIC_FILES_PATH: /app/static
+      ATIUS_RATE_QUEUE_ENABLED: "1"
+      ATIUS_RATE_QUEUE_STATE_DIR: /tmp/atius-router-rate-queue
+      ATIUS_RATE_QUEUE_MAX_WAIT: "45"
+      ATIUS_RATE_QUEUE_MAX_RETRIES: "2"
+      ATIUS_RATE_QUEUE_MINIMAX_CHAT_INTERVAL: "1.5"
+      ATIUS_RATE_QUEUE_MINIMAX_EMBEDDINGS_INTERVAL: "5.0"
+      ATIUS_RATE_QUEUE_DEEPSEEK_CHAT_INTERVAL: "0.5"
+      ATIUS_RATE_QUEUE_CODEX_CHAT_INTERVAL: "0.5"
+      ATIUS_RATE_QUEUE_OPENAI_EMBEDDINGS_INTERVAL: "1.0"
+    volumes:
+      - /home/ubuntu/GitHub/containers/router-ai-atius/runtime/model-detailed/model_detailed_fastapi.py:/app/model_detailed_fastapi.py:ro

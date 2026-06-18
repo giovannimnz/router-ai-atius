@@ -1,106 +1,104 @@
-# router-ai-atius — Docker Compose (rebrand v2.11.1)
+# router-ai-atius Docker Compose — rebrand v2.11.0
 #
-# Legacy compose for users who prefer Docker over Podman. Production
-# is on Podman (see podman-compose.yml + docs/PODMAN.md). This file
-# is kept for parity and for hosts without Podman installed.
-#
-# Rebrand v2.11 (new-api → router-ai-atius):
-#   - container new-api         → router-ai-atius
-#   - container db-newapi       → router-ai-atius-db
-#   - container model-detailed  → router-ai-atius-model-detailed
-#   - network newapi-internal   → atius-ai-router_internal
-#   - DB name newapi            → DBRouterAiAtius
-#   - Host port 3301            → 3030
-#   - Image tag :local          → :latest
-#
-# Quick Start:
-#   1. cp .env.example .env  (edit secrets)
+# Quick Start (produção):
+#   1. cp .env.example .env  (ou use existing .env)
 #   2. docker compose up -d
-#   3. curl http://localhost:3030/api/status
+#   3. Acesse via domínio https://router.atius.com.br (apache proxy)
+#      OU direto: http://localhost:3030
 #
-# Migration to Podman (one-shot):
-#   ./scripts/podman-migrate-from-docker.sh
+# Database: Postgres 15 (single instance, persiste em ./db-data)
+# Image:    ghcr.io/giovannimnz/router-ai-atius:v2.11.0-rebrand.20260602
+# DB name:  DBRouterAiAtius (era: newapi)
+# Network:  atius-ai-router_internal (era: router-ai-atius-internal)
+# Port:     3030→3000 (evita conflito com pm2web em 3000)
+#
+# Replaces the legacy "new-api" container name and "newapi" database.
+# The legacy `newapi` database is preserved on the same Postgres server
+# for 14 days as a rollback safety net (cron reminder: 2026-06-16 09:00).
+#
+# Ver Obsidian:
+#   - 60-LOGS/2026-06-02-rebrand-router-ai-atius.md
+#   - 21.03-Decisoes-Arquitetura/2026-06-02-router-ai-atius-port-scheme.md
+#   - 61-Incidents/2026-06-02-rebrand-v2.11-pg-hba-blocker.md
+#
+# ⚠️  IMPORTANT: Change all default passwords before deploying to production!
 
 services:
   router-ai-atius:
-    # :latest is canonical. To pin a specific build, override the
-    # `image:` field or pre-pull the version you want and re-tag.
-    image: ghcr.io/giovannimnz/router-ai-atius:latest
+    image: ghcr.io/giovannimnz/router-ai-atius:v2.11.0-rebrand.20260602
     container_name: router-ai-atius
     restart: always
     command: --log-dir /app/logs
     ports:
-      - "3030:3000"  # host 3030 → container 3000 (Apache fronts 443)
-    env_file:
-      - .env
-    environment:
-      - TZ=America/Sao_Paulo
-      - LANG=pt_BR.UTF-8
-      - NODE_NAME=router-ai-atius
-      - TRUST_PROXY=true
-      - ERROR_LOG_ENABLED=true
-      - BATCH_UPDATE_ENABLED=true
+      - "3030:3000"  # era 3000:3000, mudou pra 3030 (libera 3000 pro pm2web)
     volumes:
       - ./data:/data
       - ./logs:/app/logs
+    environment:
+      - SQL_DSN=postgresql://admin:${POSTGRES_PASSWORD}@router-ai-atius-db:5432/DBRouterAiAtius?sslmode=disable
+      - REDIS_CONN_STRING=redis://:${REDIS_PASSWORD}@router-ai-atius-redis:6379
+      - TZ=America/Sao_Paulo
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - NODE_NAME=router-ai-atius-node-1
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TRUST_PROXY=true
+    depends_on:
+      router-ai-atius-redis:
+        condition: service_started
+      router-ai-atius-db:
+        condition: service_healthy
     networks:
       - atius-ai-router_internal
-      - atius-shared
     healthcheck:
-      test: ["CMD", "wget", "-O-", "-q", "http://localhost:3000/api/status"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-
-  router-ai-atius-model-detailed:
-    build:
-      context: ./integration/middleware
-      dockerfile: Dockerfile.fastapi
-    image: router-ai-atius-model-detailed:latest
-    container_name: router-ai-atius-model-detailed
-    restart: always
-    environment:
-      - MIDDLEWARE_PORT=3001
-      - NEWAPI_BACKEND_URL=http://router-ai-atius:3000
-      - NEW_API_INTERNAL_URL=http://router-ai-atius:3000
-      - BACKEND_TIMEOUT=60
-    env_file:
-      - .env
-    ports:
-      - "3300:3001"  # host 3300 → container 3001 (FastAPI uvicorn)
-    volumes:
-      - ./integration/middleware/static:/app/static:ro
-      - ./integration/middleware/docs:/app/docs:ro
-    networks:
-      - atius-ai-router_internal
-      - atius-shared
-    depends_on:
-      router-ai-atius:
-        condition: service_healthy
 
   router-ai-atius-db:
     image: postgres:15-alpine
     container_name: router-ai-atius-db
     restart: always
-    env_file:
-      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-DBRouterAiAtius}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: DBRouterAiAtius
+      TZ: America/Sao_Paulo
     volumes:
       - ./db-data:/var/lib/postgresql/data
     networks:
       - atius-ai-router_internal
+    ports:
+      - "5432:5432"  # Exposed for host-side pg_dump/pg_restore
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-DBRouterAiAtius}"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d DBRouterAiAtius"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  router-ai-atius-model-detailed:
+    image: ghcr.io/giovannimnz/router-ai-atius-model-detailed:latest
+    container_name: router-ai-atius-model-detailed
+    restart: always
+    ports:
+      - "3300:3000"  # host:container — FastAPI uvicorn
+    networks:
+      - atius-ai-router_internal
+
+  router-ai-atius-redis:
+    image: redis:latest
+    container_name: router-ai-atius-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    networks:
+      - atius-ai-router_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
 
 networks:
   atius-ai-router_internal:
-    internal: true
-  atius-shared:
-    external: true
+    driver: bridge

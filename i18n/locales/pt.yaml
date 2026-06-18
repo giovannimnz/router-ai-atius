@@ -42,7 +42,7 @@ token.exhausted_cannot_enable: Cota do token esgotada e não pode ser habilitada
 token.invalid: Token inválido
 token.not_provided: Token não fornecido
 token.expired: Este token expirou
-token.exhausted: Cota deste token está esgotada TokenStatusExhausted[sk-{{.Prefix}}***{{.Suffix}}]
+token.exhausted: 'Cota deste token está esgotada: sk-{{.Prefix}}***{{.Suffix}}'
 token.status_unavailable: Status deste token está indisponível
 token.db_error: Token inválido, erro na consulta do banco de dados, por favor contate
   o administrador
@@ -233,7 +233,7 @@ oauth.trust_level_low: Nível de confiança do Linux DO não atende ao mínimo e
   pelo administrador
 redeem.failed: Resgate falhou, por favor tente novamente mais tarde
 user.create_default_token_error: Falha ao criar token padrão
-common.uuid_duplicate: Por favor retry, o sistema gerou um UUID duplicado!
+common.uuid_duplicate: 'Por favor, tente novamente, o sistema gerou um UUID duplicado!'
 common.invalid_input: Entrada inválida
 distributor.invalid_request: 'Requisição inválida: {{.Error}}'
 distributor.invalid_channel_id: ID de canal inválido

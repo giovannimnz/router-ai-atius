@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -22,6 +23,16 @@ var (
 	// Covers: CJK Unified Ideographs, CJK Extension A, CJK Symbols/Punctuation, Halfwidth/Fullwidth Forms.
 	cjkRegex = regexp.MustCompile(`[\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}\x{3000}-\x{303f}\x{ff00}-\x{ffef}]`)
 )
+
+const LocalLogContentLimit = 2048
+
+// LocalLogPreview limits log-only content unless debug logging is enabled.
+func LocalLogPreview(content string) string {
+	if DebugEnabled || len(content) <= LocalLogContentLimit {
+		return content
+	}
+	return fmt.Sprintf("%s... [truncated, original_length=%d, limit=%d]", content[:LocalLogContentLimit], len(content), LocalLogContentLimit)
+}
 
 func GetStringIfEmpty(str string, defaultValue string) string {
 	if str == "" {

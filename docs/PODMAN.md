@@ -1,240 +1,103 @@
-# router-ai-atius — Podman (rebrand v2.11.1)
+# router-ai-atius — Notas de Migração Podman
 
-The full stack runs natively on **rootless Podman** with no Docker daemon
-required. This is the production-recommended deployment for the ATIUS
-mesh (no privilege escalation, runs in user systemd, native cgroups v2,
-image-compatible with Docker registries).
+Este doc captura lições + workarounds aplicados na migração
+Docker → Podman do `router-ai-atius` (precedente 2026-06-04, re-baselined 2026-06-12).
 
-> **Rebrand v2.11:** container names, service names, db name, host port,
-> image tag, and env vars all changed from the legacy new-api layout.
-> See [[#rebrand-v211-changes]] below for the full mapping.
+## Contexto
 
-## Layout
+- **Servidor:** ATIUS-SRV-1 (10.1.1.1 / 137.131.190.161)
+- **Runtime origem:** Docker 29.3.0
+- **Runtime destino:** Podman 3.4.4 (rootless, user=ubuntu uid=1000)
+- **Stack:** 4 user containers (router-ai-atius, model-detailed, redis, postgres) + 1 infra pause (k8s.gcr.io/pause:3.5)
+- **Data migração inicial:** 2026-06-04
+- **Re-baseline:** 2026-06-12 (compose versionado + recovery script)
 
-```
-podman-compose.yml                              # drop-in for podman-compose
-podman/
-├── quadlets/                                   # systemd-managed pods
-│   ├── router-ai-atius-new-api.container       # Go AI gateway
-│   ├── router-ai-atius-model-detailed.container # Python FastAPI middleware
-│   ├── router-ai-atius-postgres.container      # PostgreSQL 15
-│   └── router-ai-atius-redis.container         # Redis 7 cache
-├── systemd/                                    # generator hints, .env templates
-│   └── router-ai-atius.env.example
-└── secrets/                                    # placeholder for future podman
-                                                #   secret injection paths
+## Decisões arquiteturais
 
-scripts/
-├── podman-up.sh                                # compose-based dev/CI
-├── podman-down.sh
-├── podman-validate.sh                          # pre-flight (no runtime needed)
-├── podman-migrate-from-docker.sh               # one-shot from Docker
-└── podman-quadlets-install.sh                  # one-shot to systemd
-```
+### 1. Pod único vs containers soltos
 
-## Rebrand v2.11 changes
+Os 4 containers compartilham **network namespace** (atrás do mesmo
+Apache proxy, falando entre si via `localhost:5432`/`localhost:6379`)
++ lifecycle (subir juntos, cair juntos).
 
-| Aspect | v1.x (new-api) | v2.11 (router-ai-atius) |
-|--------|----------------|--------------------------|
-| Container `new-api` | `new-api` | `router-ai-atius` |
-| Container `db` | `db-newapi` | `router-ai-atius-db` |
-| Container `cache` | `redis-newapi` | `router-ai-atius-redis` |
-| Container `middleware` | `model-detailed` | `router-ai-atius-model-detailed` |
-| Network | `new-api-network` | `atius-ai-router_internal` |
-| DB name | `newapi` | `DBRouterAiAtius` |
-| Host port (api) | `3301:3000` | `3030:3000` |
-| Host port (middleware) | `3300:3001` | `3300:3001` (unchanged) |
-| Image tag | `ghcr.io/.../router-ai-atius:v2.11.1-rebrand` | `ghcr.io/.../router-ai-atius:latest` (canonical, source of truth) |
-| Tag source | (registry) | `scripts/podman-prepare-images.sh` (build or pull :latest; pin via `ROUTER_AI_ATIUS_VERSION`) |
-| NODE_NAME | `new-api` | `router-ai-atius-podman` |
+**Decisão:** POD único `atius-ai-router` com `network_mode=host` (via
+infra pause container do podman).
 
-Apache reverse proxy on the host continues to front port 443 and forwards
-to either backend. See `/etc/apache2/sites-enabled/router.atius.com.br-le-ssl.conf`.
+**Alternativa rejeitada:** containers soltos + custom network
+(podman 3.4 tem bug em DNS inter-container que quebrou 2026-06-04
+com paperclip-atius-db).
 
-## Two ways to run
+### 2. Bind mounts vs named volumes
 
-### 0. Prepare `:latest` images (once per host, idempotent)
+- `/home/ubuntu/GitHub/containers/router-ai-atius/data` → `/data` (bind)
+- `/home/ubuntu/GitHub/containers/router-ai-atius/logs` → `/app/logs` (bind)
+- `pgdata` (named volume podman) → `/var/lib/postgresql/data`
 
-Both compose and quadlets reference `:latest` as the canonical tag.
-Run this once per host (or after every image rebuild) to populate:
+**Decisão:** bind mounts para dados que precisam ser visíveis/backupáveis
+pelo host (data, logs). Named volume para Postgres (otimização de I/O
+do driver overlay/Volumes).
 
-```bash
-./scripts/podman-prepare-images.sh
-```
+### 3. Imagens
 
-Strategy:
-1. If `:latest` already exists → do nothing.
-2. If `./Dockerfile` exists → `podman build -t ...:latest .`
-3. Else `podman pull ghcr.io/...:latest` directly.
-4. model-detailed is always built locally (no upstream registry copy).
+| Container | Imagem origem (Docker) | Imagem destino (Podman) | Justificativa |
+|-----------|------------------------|--------------------------|---------------|
+| router-ai-atius | `calciumion/new-api:latest` (upstream) | `ghcr.io/giovannimnz/router-ai-atius:latest` (fork rebrand) | Fork rebranded v2.11+ (2026-06-04) |
+| model-detailed | (não estava no compose original) | `localhost/router-ai-atius-model-detailed:latest` (built local) | Adicionado 2026-06-11; hotfix atual usa bind de `/home/ubuntu/GitHub/containers/router-ai-atius/runtime/model-detailed/` |
+| postgres | `postgres:15` | `docker.io/library/postgres:15-alpine` | Idêntico, só normalizado |
+| redis | `redis:latest` | `docker.io/library/redis:7-alpine` | Pin de major version (era `latest`, agora `7-alpine`) |
 
-Pinning a specific build (optional):
-```bash
-ROUTER_AI_ATIUS_VERSION=v2.11.1-rebrand ./scripts/podman-prepare-images.sh
-# → pulls that tag and re-tags it as :latest
-```
+**Workaround `docker save | podman load`** foi aplicado para todas
+as 4 imagens durante a migração inicial 2026-06-04.
 
-`podman-up.sh` and `podman-quadlets-install.sh` call this automatically
-if the images are missing, so manual invocation is optional.
+## Workarounds aplicados
 
-### 1. Compose (dev / CI) — `podman-compose`
+### 1. Network namespace compartilhado
 
-```bash
-./scripts/podman-up.sh                  # detached, .env-driven
-./scripts/podman-up.sh --build         # rebuild model-detailed
-./scripts/podman-up.sh --logs          # follow logs
-./scripts/podman-down.sh               # stop
-./scripts/podman-down.sh --volumes     # also drop pg_data
-```
+Containers `router-ai-atius` e `model-detailed` rodam com
+`net_mode: container:<infra-id>`, o que permite que os
+**port bindings no pod infra** (`3000:3000`, `3001:3001`, `3300:3001`)
+sejam visíveis a partir do host e compartilhados entre os containers.
 
-Or directly:
+Sem isso, o Apache proxy `router.atius.com.br` quebraria.
 
-```bash
-podman-compose -f podman-compose.yml up -d
-podman-compose -f podman-compose.yml down
-```
+### 2. Podman-compose 1.6.0 — limitação de `pods:` block
 
-### 2. Quadlets (production) — `systemd --user`
+`podman-compose` versão 1.6.0 (instalada) **suporta** `pods:` block
+(traduz para `podman pod create`), MAS o parser YAML falha em alguns
+casos edge-case (ver P3b em `multi-server-podman-migration` skill).
 
-Quadlets are systemd units that Podman owns. The service runs as the
-user (no `sudo`), survives reboots via `loginctl enable-linger`, and
-integrates with `journald`.
+**Workaround:** se `podman-compose up -d` falhar com erro de parser,
+usar `bash scripts/recreate-pod.sh` (manual `podman run` por container).
 
-```bash
-./scripts/podman-quadlets-install.sh
-# then:
-systemctl --user enable --now \
-  router-ai-atius-db.service \
-  router-ai-atius-redis.service \
-  router-ai-atius.service \
-  router-ai-atius-model-detailed.service
-systemctl --user status
-systemctl --user journalctl -u router-ai-atius -f
-```
+### 3. Senhas em env
 
-The `.container` files in `podman/quadlets/` are templates — copy them
-to `~/.config/containers/systemd/` (the script does this) and edit
-`EnvironmentFile=` to point at your env file.
+Compose file tem placeholders `***` em vez de senhas reais. As
+senhas ficam em:
+- `podman inspect <ctr>` → campo `Env` (legível pelo root)
+- **NÃO** em git, vault, logs públicos
 
-## Migrating from Docker
+## Lição aprendida
 
-```bash
-# Pre-flight: install Podman on the host
-sudo apt install podman podman-compose
-loginctl enable-linger $USER
+> **NUNCA** `docker system prune` ou `podman system prune` em prod
+> sem backup verificado primeiro. Precedente: 2026-06-07 perdeu
+> imagens de `model-detailed` por prune, restore parcial do GDrive
+> salvou 80%. Ver `61-Incidents/2026-06-07-router-ai-atius-prune-sem-backup-previo.md`.
 
-# One-shot: dump DB, stop Docker stack, start Podman, restore
-./scripts/podman-migrate-from-docker.sh
-```
+## Verificações pós-deploy
 
-The script:
-1. Dumps PostgreSQL from the running Docker stack.
-2. Stops and removes the Docker stack (data/ and logs/ are NOT removed).
-3. Builds the model-detailed image with `podman build`.
-4. Starts the Podman stack pointing at the same `./data` and `./logs`.
-5. Restores the DB dump into the new Podman-managed Postgres.
-6. Smoke-tests `GET http://localhost:3030/api/status`.
+- [x] `podman pod inspect atius-ai-router` → State=Running, NumContainers=5
+- [x] `curl http://localhost:3000/api/status` → 200
+- [x] `curl http://localhost:3001/health` → 200
+- [x] `curl https://router.atius.com.br/api/status` → 200
+- [x] `podman logs router-ai-atius` sem erros fatais
+- [x] `podman logs model-detailed-hotfix` workers=4 healthy
+- [x] Postgres `pg_isready -h localhost` → accepting connections
+- [x] Redis `PING` → PONG
+- [x] Sem containers Docker ativos com nome `router-ai-atius*` (`docker ps | grep router-ai-atius` → vazio)
 
-Downtime is roughly **2-5 min** for a 100 MB SQL dump on a 2-vCPU host.
-Plan a maintenance window.
+## Próximos passos
 
-## Verification checklist
-
-After `./scripts/podman-up.sh`:
-
-```bash
-podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-# expect:
-#   router-ai-atius               Up 5m  0.0.0.0:3030->3000/tcp
-#   router-ai-atius-model-detailed Up 5m  0.0.0.0:3300->3001/tcp
-#   router-ai-atius-db            Up 5m  5432/tcp
-#   router-ai-atius-redis         Up 5m  6379/tcp
-
-curl -fs http://localhost:3030/api/status | jq .
-# expect: {"success":true, ...}
-
-curl -fs http://localhost:3300/v1/models -H "Authorization: Bearer *** | jq '.data | length'
-# expect: 5  (M3, M2.7-highspeed, M2.7, deepseek-v4-pro, deepseek-v4-flash)
-```
-
-### Pre-flight (CI / no-runtime hosts)
-
-```bash
-./scripts/podman-validate.sh
-# runs: YAML parse → service list → spec render (with synthetic .env)
-# exit 0 if everything is in order; non-zero otherwise.
-```
-
-Use this in a pre-merge CI job to catch breakage without bringing up the
-full stack. With `--with-podman`, it actually pulls the images.
-
-After `systemctl --user start`:
-
-```bash
-systemctl --user status router-ai-atius
-systemctl --user is-active router-ai-atius
-# expect: active (running)
-```
-
-## Differences from `docker-compose.yml`
-
-| Concern | Docker | Podman |
-|---------|--------|--------|
-| Daemon | `dockerd` (root) | None (rootless, fork/exec) |
-| Orchestrator | `docker compose` | `podman-compose` |
-| Service integration | none | `systemd` quadlets |
-| Data paths | `/var/lib/docker/volumes/...` | `~/.local/share/containers/storage/...` |
-| Image registry | `docker.io/...` | Same (compatible) |
-| Network on host | bridge | bridge (CNI) or slirp4netns |
-| Privileged ops | `--privileged` flag | `--security-opt label=disable` (rootless) |
-
-> The `podman-compose.yml` keeps the same v2.11 service names and host
-> port mapping as the Docker stack, so the Apache reverse proxy in front
-> of the stack doesn't need to know which backend is in use.
-
-## Files Reference
-
-| File | Purpose |
-|------|---------|
-| `podman-compose.yml` | Compose Spec service definition (dev/CI) |
-| `podman/quadlets/*.container` | systemd unit templates (production) |
-| `podman/systemd/router-ai-atius.env.example` | env file template for quadlets |
-| `scripts/podman-up.sh` | Compose-based bring-up |
-| `scripts/podman-down.sh` | Compose-based teardown |
-| `scripts/podman-validate.sh` | Pre-flight check (no full stack needed) |
-| `scripts/podman-prepare-images.sh` | Populate `:latest` images (build or pull; pin via `ROUTER_AI_ATIUS_VERSION`) |
-| `scripts/podman-migrate-from-docker.sh` | One-shot Docker → Podman migration |
-| `scripts/podman-quadlets-install.sh` | One-shot quadlet install to `~/.config/containers/systemd/` |
-| `docs/PODMAN.md` | This file |
-| `.env.example` | Env template for both Docker and Podman stacks |
-
-## Why not both (Docker + Podman)?
-
-The `docker-compose.yml` is preserved for users who prefer Docker. The
-Podman setup is recommended for new deployments because:
-
-1. **No daemon**: rootless, runs as the user, no `sudo` after setup.
-2. **systemd integration**: quadlets give proper dependency ordering,
-   restart policy, journal logging.
-3. **Tighter isolation**: cgroups v2, no `docker.sock` exposed, no
-   privileged socket.
-4. **Image-compatible**: pulls the same OCI images from the same
-   registries.
-
-The two stacks are NOT meant to run side-by-side on the same host — they
-bind the same host ports and the same data path. Pick one.
-
-## Cross-references
-
-- `docker-compose.yml` — legacy (Docker) compose, kept for users without
-  Podman
-- `scripts/podman-up.sh`, `scripts/podman-down.sh`, etc. — operational
-  entry points
-- `podman/quadlets/router-ai-atius-*.container` — quadlet unit templates
-- `docs/MODELS.md` — what `/v1/models` returns (used to verify the
-  model-detailed stack is healthy)
-- `docs/ARCHITECTURE.md` § 3 — request flow that the stack serves
-- `~/GitHub/obsidian-vault/ideaverse/atius-router/09-PODMAN-MIGRATION.md`
-  — vault note (decision log + alternatives considered)
-- `61-Incidents/2026-06-04-podman-cherry-pick-main.md` — Podman
-  cherry-pick into main, June 2026
+- [ ] Push `ghcr.io/giovannimnz/router-ai-atius:latest` com tag pinned (não só `latest`)
+- [ ] Criar `systemd` user service `pod-atius-ai-router.service` para auto-restart no boot
+- [ ] Adicionar `omni srv1-ops podman status` ao omni-srv-admin CLI (já existe esboço)
+- [ ] Vault log do dia 2026-06-12 com SHA + container IDs preservados

@@ -1,218 +1,184 @@
-# CONVENTIONS.md - Coding Standards & Conventions
+# CONVENTIONS — Atius Monorepo
 
-## Visão Geral
+> Mapeado a partir do código real em `/home/ubuntu/GitHub/atius/`. Atualizado: 2026-06-02.
 
-Este projeto é predominantemente **operacional** — consiste em scripts Bash para gerenciamento de infraestrutura Docker e scripts Python para integração com a API do NewAPI. Não há código de aplicação local (o NewAPI roda como imagem Docker pré-construída).
+## Code Style
 
-## Bash Scripts
+### ESLint
+- `.eslintrc.json` em `frontend/` (TypeScript, Next.js rules)
+- Root `.eslintrc.json` (backend Node — verificar)
+- Padrão: ESLint recommended + Next.js plugin + TypeScript plugin
 
-### Estrutura Padrão
+### TypeScript
+- Frontend: TypeScript estrito (Next.js 15, tsconfig.json)
+- Backend Node: **JavaScript puro** (sem tsc, sem TypeScript compiler)
+- Python: pyright para type checking
 
-```bash
-#!/bin/bash
+### Indentation
+- 2 spaces (padrão Next.js/ESLint default)
+- Não 4 spaces, não tabs
 
-# Comentário descritivo do script
-# Autor: Sistema de IA
-# Descrição: Breve descrição do propósito
+### Quotes
+- Single quotes para strings em JS (`'hello'`)
+- Double quotes para strings em JSX (`<div className="foo">`)
+- Confirmação: verificar `.eslintrc.json` `quotes` rule
 
-set -e  # Sai se algum comando falhar
+### Semicolons
+- Provavelmente sim (padrão ESLint)
+- Confirmação: verificar `.eslintrc.json` `semi` rule
 
-# Diretório base do script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-```
+### Line endings
+- LF (Unix) — projeto em ambiente Linux
 
-### Convenções de Nomenclatura
+## Naming Conventions
 
-| Elemento | Convenção | Exemplo |
-|---|---|---|
-| **Arquivos** | `kebab-case.sh` | `disk-health.sh`, `backup-restore.sh` |
-| **Variáveis** | `UPPER_SNAKE_CASE` | `SCRIPT_DIR`, `COMPOSE_CMD`, `THRESHOLD` |
-| **Funções** | `snake_case` | `show_menu()`, `start_app()`, `backup_data()` |
-| **Constantes** | `UPPER_SNAKE_CASE` | `POSTGRES_USER`, `SQL_DSN` |
+### JavaScript (Backend Node)
 
-### Padrões de Script
+| Type | Convention | Example |
+|------|-----------|---------|
+| Files | kebab-case | `monitor-orchestrator.js`, `trailing-stop-loss.js` |
+| Services/Modules | camelCase | `positionSync`, `instanceManager`, `webhookSignals` |
+| Constants | SCREAMING_SNAKE_CASE | `MAX_RESTARTS`, `LOG_DATE_FORMAT`, `DEFAULT_TIMEOUT` |
+| Enums-like objects | SCREAMING_SNAKE_CASE | `ORDER_STATUS`, `EXCHANGE_IDS` |
+| DB column constants | SCREAMING_SNAKE_CASE | `commonGroupCol`, `commonKeyCol` |
 
-#### 1. Menu Interativo
+### Python
 
-Scripts de gerenciamento seguem o padrão `show_menu` + `while true` + `case`:
+| Type | Convention | Example |
+|------|-----------|---------|
+| Files | snake_case | `conexao.py`, `divap_backtest.py` |
+| Functions/Classes | snake_case + PascalCase | `def enqueue_db_operation`, `class DataValidation` |
+| Constants | SCREAMING_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_POOL_SIZE` |
 
-```bash
-show_menu() {
-    echo "=================================="
-    echo " Título do Menu"
-    echo "=================================="
-    echo "1. Opção 1"
-    echo "2. Opção 2"
-    echo "N. Sair"
-    echo "=================================="
+### Database
+
+| Type | Convention | Example |
+|------|-----------|---------|
+| Tables | snake_case (plural-ish) | `posicoes_fechadas`, `user_account_config` |
+| Columns | snake_case | `preco_entrada`, `account_id`, `exchange_slug` |
+| Sequences | snake_case | (gerenciado pelo GORM ou manual) |
+
+### Git Commits
+- Formato: `type(scope): description`
+- Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `merge`
+- GSD snapshots: `gsd snapshot: pre-dispatch, uncommitted changes after Nm inactivity`
+
+## Error Handling
+
+### Backend Node
+```javascript
+// Try/catch com logging
+try {
+    const result = await dbOperation();
+} catch (err) {
+    console.warn(`[CONTA-${accountId}] [DB_MOVE] Erro ao arredondar: ${err.message}`);
+    // Não throw — tentando recovery
 }
 
-while true; do
-    show_menu
-    read -p "Escolha uma opção [1-N]: " choice
-    case $choice in
-        1) action_one ;;
-        2) action_two ;;
-        N) exit 0 ;;
-        *) echo "Opção inválida." ;;
-    esac
-    read -p "Pressione Enter para continuar..."
-done
-```
-
-#### 2. Detecção de Docker Compose
-
-Todos os scripts detectam automaticamente o comando compose disponível:
-
-```bash
-get_compose_cmd() {
-    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-        echo "docker compose"
-    elif command -v docker-compose >/dev/null 2>&1; then
-        echo "docker-compose"
-    else
-        echo "Erro: Docker Compose não está disponível no PATH" >&2
-        exit 1
-    fi
+// Async/await com tratamento
+async function handleSignal(req, res) {
+    try {
+        const signal = await validateSignal(req.body);
+        await processSignal(signal);
+        return res.status(200).json({ ok: true });
+    } catch (err) {
+        console.error('[SIGNAL] Error:', err);
+        return res.status(500).json({ error: err.message });
+    }
 }
 ```
 
-#### 3. Parse de Argumentos (scripts avançados)
+### Custom Error Classes
+- Não observado custom error classes — usa Error nativo
 
-```bash
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --threshold) THRESHOLD="$2"; shift 2 ;;
-    --cleanup-safe) DO_CLEANUP=true; shift ;;
-    *) echo "Uso: $0 [--threshold 95] [--cleanup-safe]" >&2; exit 1 ;;
-  esac
-done
+### Validation
+- `validationInterceptor.js` — validação de dados de entrada
+- `dataValidation.js` — validação de dados
+- `dataValidation.validatePosition()` — validação de posições
+
+## Logging Conventions
+
+### Backend Node (pino-pretty)
+```javascript
+// Tags estruturadas
+console.warn(`[CONTA-${accountId}] [DB_MOVE] Erro ao arredondar preco_saida`);
+console.error('[SIGNAL] Error processing signal:', err);
+console.log('[API] Request received:', req.method, req.url);
+
+// Padrão de tags
+// [AREA] [SUBCOMPONENT] Message
+// [CONTA-{id}] [DB_MOVE] Message
+// [MEXC] [SESSION] Message
+// [SIGNAL] Message
 ```
 
-### Tratamento de Erros
+### PM2
+- `log_date_format: 'YYYY-MM-DD HH:mm:ss'` em todas as apps
+- `merge_logs: true` — logs agregados
+- `pm2 logs` para visualização
 
-| Padrão | Uso |
-|---|---|
-| `set -e` | Sai imediatamente em caso de erro |
-| `2>/dev/null \|\| true` | Suprime erros esperados sem falhar |
-| `echo "Erro: ..." >&2` | Mensagens de erro para stderr |
-| `exit 1` | Código de saída não-zero para falhas |
-| `exit 2` | Código específico para condições críticas (ex: disco cheio) |
+### Python
+```python
+# Logging padrão Python
+import logging
+logger = logging.getLogger(__name__)
+logger.error("message")
+```
 
-### Comentários
+## Comment Standards
 
-- Cabeçalho com **Autor** e **Descrição**
-- Comentários inline em português para lógica importante
-- Separadores visuais (`# ---`) para seções
+### JSDoc
+- Não observado uso massivo de JSDoc
+- Comentários inline para explicar decisões complexas
 
-## Python Scripts
+### Inline
+```javascript
+// Função para carregar validationInterceptor dinamicamente (evita dependência circular)
+let validationInterceptor = null;
+```
 
-### Scripts de Integração
+### Python Docstrings
+- Não observado docstrings em todas as funções
+- Funções críticas têm docstrings
 
-| Script | Finalidade |
-|---|---|
-| `sync_deepseak_channels.py` | Sincroniza channels DeepSeek via API admin |
-| `sync_openrouter_channels.py` | Sincroniza channels OpenRouter |
-| `sync_iflow_channel_keys.py` | Sincroniza chaves de canais iFlow |
-| `normalize_models_real_only.py` | Normaliza catálogo de modelos |
+## Database Conventions
 
-### Convenções Inferidas
+### GORM-like (Node) — manual query builder
+- Queries via `pg` client (não GORM)
+- Filas de operações por tabela (`enqueue_db_operation`)
 
-| Elemento | Convenção |
-|---|---|
-| **Arquivos** | `snake_case.py` |
-| **Dependências** | `requests` (implícito para chamadas HTTP) |
-| **Config** | Lê variáveis de ambiente de `integration/.env` |
-| **Autenticação** | Usa `NEWAPI_ADMIN_TOKEN` para chamadas à API admin |
+### Migrations
+- SQL puro (não ORM migrations)
+- Patologia: migrations renomeiam tabelas/colunas frequentemente
+- V34: renomeou `user_account_exchange` → `user_account`
+- V35: criou `user_strategies` + linked `account_config`
+- Nunca drop columns sem backup
 
-## Docker & Compose
+### Cross-DB Compatibility
+- Dual pool: PostgreSQL + MySQL
+- `commonGroupCol`, `commonKeyCol` para colunas que são palavras reservadas
+- Boolean handling: Postgres `true/false` vs MySQL `1/0`
 
-### Nomenclatura de Serviços
+## API Conventions
 
-| Serviço | Convenção |
-|---|---|
-| App principal | `new-api` (nome direto) |
-| Banco de dados | `db-newapi` (prefixo `db-`) |
+### REST
+- Backend: Fastify routes
+- Frontend: Next.js API routes (`frontend/src/app/api/`)
 
-### Nomenclatura de Containers
+### WebSocket
+- `ws` raw — não socket.io
+- Handler files em `backend/server/ws/`
 
-| Container | Convenção |
-|---|---|
-| `new-api` | Mesmo nome do serviço |
-| `db-newapi` | Mesmo nome do serviço |
+### Response Shape
+```javascript
+// Sucesso
+res.status(200).json({ ok: true, data: result });
 
-### Portas
+// Erro
+res.status(500).json({ error: err.message });
+res.status(400).json({ error: 'Invalid signal' });
+```
 
-| Serviço | Host | Container |
-|---|---|---|
-| NewAPI | 3300 | 3000 |
-| PostgreSQL | 8746 | 5432 |
+## Testing Conventions
 
-### Volumes
-
-| Volume | Tipo | Descrição |
-|---|---|---|
-| `./data:/data` | Bind mount | Logs e dados da aplicação |
-| `./data/postgres_data:/var/lib/postgresql/data` | Bind mount | Dados do PostgreSQL |
-
-## Variáveis de Ambiente
-
-### Hierarquia de Configuração
-
-| Caminho | Prioridade | Uso |
-|---|---|---|
-| `integration/.env` | Principal | Variáveis unificadas (app + middleware + providers) |
-| `.env` (raiz) | Standalone | Variáveis básicas (app + DB) |
-
-### Grupos de Variáveis
-
-| Prefixo | Grupo |
-|---|---|
-| `POSTGRES_*` | Banco de dados PostgreSQL |
-| `SQL_*` | String de conexão SQL |
-| `DEEPSEAK_*` | Provider DeepSeek |
-| `NEWAPI_*` | Configurações NewAPI |
-| `LITELLM_*` | Compatibilidade LiteLLM |
-| `MODEL_*`, `RATE_LIMIT_*` | Middleware search-engine |
-| `TZ`, `LANG`, `LC_*` | Locale do sistema |
-
-## Documentação
-
-### Arquivos de Documentação
-
-| Arquivo | Conteúdo |
-|---|---|
-| `README.md` | Documentação principal com endpoints, cURL examples, troubleshooting |
-| `DEVELOPMENT_GUIDE.md` | Guia de desenvolvimento com estrutura e opções de dev local |
-| `SUMMARY.md` | Resumo executivo |
-| `FILES_LOCATION.md` | Mapa de arquivos |
-| `integration/GUIA_MUDANCA_CHAVES_API.md` | Guia de rotação de chaves |
-
-### Convenções de Documentação
-
-- **Idioma**: Português (Brasil) para conteúdo principal
-- **Formatação**: Markdown com tabelas para dados estruturados
-- **Code blocks**: Bash com syntax highlighting
-- **Seções**: Headers com `##` e `###`
-- **Tabelas**: Usadas extensivamente para preços, endpoints, configurações
-
-## Padrões de Segurança
-
-| Prática | Implementação |
-|---|---|
-| **Tokens em .env** | API keys definidas em variáveis de ambiente, não em código |
-| **SSL Mode** | `sslmode=disable` no DSN (apenas para rede interna Docker) |
-| **Aviso de troca** | README alerta para trocar credenciais padrão |
-| **Healthcheck** | PostgreSQL com healthcheck antes do NewAPI iniciar |
-
-## Padrões de Operacionalização
-
-| Operação | Script | Método |
-|---|---|---|
-| Iniciar | `start.sh` | `docker compose up -d` |
-| Parar | `management.sh` (opção 2) | `docker compose down` |
-| Reiniciar | `management.sh` (opção 3) | `docker compose restart` |
-| Aplicar .env | `reload-newapi.sh` | `docker compose up -d --force-recreate` |
-| Backup | `backup-restore.sh` | `tar -czf` de `data/` |
-| Limpeza | `disk-health.sh --cleanup-safe` | Remove cache e logs antigos |
-| Recriar tudo | `recreate-all.sh` | Destrói e recria containers + dados |
+Ver `TESTING.md` para cobertura completa.

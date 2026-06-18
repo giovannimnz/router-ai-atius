@@ -1,164 +1,157 @@
-# TESTING.md - Test Infrastructure & Strategy
+# TESTING — Atius Monorepo
 
-## Visão Geral
+> Mapeado a partir do código real em `/home/ubuntu/GitHub/atius/`. Atualizado: 2026-06-02.
 
-O projeto possui uma **estratégia de teste operacional** focada em verificação de endpoints e saúde do stack, não em testes unitários de código. Isso se deve ao fato de que a aplicação NewAPI é uma imagem Docker pré-construída — não há código-fonte local para testes unitários.
+## Test Frameworks
 
-## Tipos de Teste
+### Backend (Node.js)
+- **Framework**: Jest (`jest`, `@babel/core`, `@babel/preset-env`)
+- **Config**: `jest.backend.config.js` (backend Node), `jest.backend.runtime.config.js` (runtime tests)
+- **Reporter**: JUnit XML output para CI (`jest.reporters.js`)
+- **Mode**: `--ci --runInBand` para CI (sequencial, não paralelo)
 
-### 1. Testes de Modelos (Integration Testing)
+### Frontend
+- **Framework**: Playwright (`playwright`)
+- **Config**: `playwright.config.js`
+- **Report**: `playwright-report/` dir
 
-| Script | `integration/scripts/test_all_models.sh` |
-|---|---|
-| **Tipo** | Teste de integração com providers |
-| **O que testa** | Cada modelo configurado responde corretamente |
-| **Método** | Requisições HTTP para `/v1/chat/completions` |
-| **Auth** | Usa `NEWAPI_ADMIN_TOKEN` |
+### Python
+- **Framework**: pytest `>=9.0.2` (dependency group dev em pyproject.toml)
+- **Usage**: Não observado testes Python ativos — provavelmente para backtest e indicadores
 
-**Padrão esperado:**
-```bash
-# Para cada modelo no catálogo:
-curl -X POST https://router.atius.com.br/v1/chat/completions \
-  -H "Authorization: Bearer $NEWAPI_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "<modelo>", "messages": [{"role": "user", "content": "ok"}], "max_tokens": 8}'
+## Test Directory Structure
 
-# Esperado: HTTP 200 com resposta válida
+```
+tests/
+├── backend/
+│   ├── exchanges/
+│   │   └── mexc/
+│   │       ├── regression/          # Regression suite MEXC
+│   │       ├── automation/
+│   │       └── (outros)
+│   ├── auth/                        # Auth tests
+│   └── (outros)
+│
+└── frontend/
+    └── auth/                        # Frontend auth tests
 ```
 
-### 2. Verificação do Stack
+## Backend Jest — Detailed Config
 
-| Script | `integration/scripts/verify_stack.sh` |
-|---|---|
-| **Tipo** | Health check do stack completo |
-| **O que testa** | Containers rodando, DB acessível, API respondendo |
-| **Método** | Docker ps + curl para healthcheck |
-
-### 3. Testes Manuais via cURL (documentados no README)
-
-#### Status da Aplicação
-
-```bash
-curl -sS https://router.atius.com.br/api/status
-# Esperado: 200 com status OK
+### jest.backend.config.js
+```javascript
+// Test patterns: *.test.js
+// Config: jest.backend.config.js
+// Reporter: JUnit XML via jest.reporters.js
+// CI command: CI=true JEST_JUNIT_ENABLED=1 jest --config jest.backend.config.js --ci --runInBand
 ```
 
-#### Health Check
-
-```bash
-curl -sS https://router.atius.com.br/health
-# Esperado: 200 com health OK
+### jest.backend.runtime.config.js
+```javascript
+// Runtime tests: *.runtime.test.js (live API tests)
+// Executado separadamente com RUN_LIVE_API_TESTS env var
+// CI: CI=true JEST_JUNIT_ENABLED=1 jest --config jest.backend.runtime.config.js
 ```
 
-#### Listagem de Modelos
+### jest.reporters.js
+- JUnit XML output para integração CI/CD
+- Output: `backend-junit.xml`, `backend-runtime-junit.xml`
 
+## Naming Patterns
+
+### Backend
+- `*.test.js` — unit tests (Jest)
+- `*.runtime.test.js` — runtime/live API tests
+
+### Frontend
+- Não especificado — Playwright usa `*.spec.ts` ou `*.test.ts`
+
+## Mocking Strategy
+
+### Manual Mocks
+- `__mocks__/` dir para mocks manuais
+- `jest.mock()` para mocking inline
+
+### Common Mocks
+- Exchange API mocks (não hitting real exchanges em tests)
+- Database mocks (pool mock para não precisar Postgres real)
+- Telegram bot mocks
+
+## CI/CD Integration
+
+### Backend Tests
 ```bash
-curl -sS -H "Authorization: Bearer $NEWAPI_ADMIN_TOKEN" \
-  https://router.atius.com.br/v1/models
-# Esperado: 200 com lista de modelos
+# Unit tests
+npm run test:backend:jest
+# or
+CI=true JEST_JUNIT_ENABLED=1 JEST_JUNIT_OUTPUT_NAME=backend-junit.xml \
+  jest --config jest.backend.config.js --ci --runInBand
+
+# Runtime tests
+npm run test:backend:runtime
+# or
+CI=true JEST_JUNIT_ENABLED=1 JEST_JUNIT_OUTPUT_NAME=backend-runtime-junit.xml \
+  jest --config jest.backend.runtime.config.js --ci --runInBand
 ```
 
-#### Chat Completion
-
+### Frontend Tests (Playwright)
 ```bash
-curl -sS \
-  -H "Authorization: Bearer $NEWAPI_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  https://router.atius.com.br/v1/chat/completions \
-  -d '{"model": "qwen3-max", "messages": [{"role": "user", "content": "Responda apenas: ok"}], "max_tokens": 8}'
-# Esperado: 200 com resposta do modelo
+# Commands em package.json (frontend/package.json)
+# Verificar playwright scripts específicos
 ```
 
-#### Validação de Token Open-WebUI
+## Live Test Mode
 
+### RUN_LIVE_API_TESTS
 ```bash
-curl -sS -o /tmp/models.json -w "%{http_code}\n" \
-  -H "Authorization: Bearer $OPENWEBUI_LITELLM_KEY" \
-  http://localhost:3300/v1/models
-# Esperado: 200 com lista não-vazia
+# Ativa testes de API real (não mocks)
+RUN_LIVE_API_TESTS=true npm run test:backend:runtime:live
+# ou
+RUN_LIVE_API_TESTS=true jest --config jest.backend.runtime.config.js
 ```
 
-## Códigos de Resposta Esperados
+## Playwright Config
 
-| Código | Significado |
-|---|---|
-| `200` | Sucesso |
-| `401` | Token ausente/inválido/sem permissão |
-| `429` | Limite de taxa atingido no provider upstream |
-| `404` | Endpoint não disponível nesta versão |
-| `5xx` | Erro interno ou indisponibilidade de dependência |
+```javascript
+// playwright.config.js (raiz)
+// playwright.config.js (frontend/)
+// Playwright tests: tests/frontend/ (não especificado)
+```
 
-## Monitoramento de Saúde
+## Coverage Approach
 
-### Disk Health Check
+- JUnit XML output para CI parsing (Jenkins, GitHub Actions, etc.)
+- No coverage report mentioned (sem istanbul/nyc)
+- Tests run `--ci --runInBand` (sequencial, não paralelo para evitar race conditions)
 
-| Script | `disk-health.sh` |
-|---|---|
-| **Tipo** | Monitoramento de infraestrutura |
-| **Threshold** | 95% de uso de disco |
-| **Ação** | Alerta crítico + sugestão de limpeza |
-| **Limpeza** | `--cleanup-safe` remove cache e logs antigos |
+## Test Execution
 
-**Verifica:**
-- Uso de disco do host (`df -P /`)
-- Cache npm (`~/.npm/_cacache/`)
-- Cache Playwright (`~/.cache/ms-playwright/`)
-- Cache pip (`~/.cache/pip/`)
-- Logs antigos do NewAPI (mantém 5 mais recentes)
+```bash
+# All tests
+npm run test  # → test:backend:jest
 
-### PostgreSQL Healthcheck
+# Backend unit
+npm run test:backend:jest
 
-| Config | Valor |
-|---|---|
-| **Test** | `pg_isready -U admin -d newapi` |
-| **Interval** | 10s |
-| **Timeout** | 5s |
-| **Retries** | 10 |
+# Backend runtime
+npm run test:backend:runtime
 
-## Testes de Sync de Channels
+# Backend CI
+npm run test:backend:ci
 
-| Script | Função |
-|---|---|
-| `sync_deepseak_channels.py` | Verifica se channels DeepSeek estão sincronizados com `.env` |
-| `sync_openrouter_channels.py` | Verifica channels OpenRouter |
-| `sync_iflow_channel_keys.py` | Verifica chaves de canais iFlow |
+# Frontend
+npm run test:frontend  # Verificar em package.json
+```
 
-**Estes scripts funcionam como testes de consistência** — garantem que a configuração local (`.env`) esteja refletida no banco de dados do NewAPI.
+## MEXC Regression Suite
 
-## Troubleshooting como Teste
+Tests específicos para MEXC:
+- `tests/backend/exchanges/mexc/regression/` — regressão de automação
+- Regression gate: `npm run mexc:regression-gate` + `mexc:regression-gate:strict`
+- Truth baseline recheck: `npm run mexc:truth-baseline:recheck`
 
-O README documenta fluxos de troubleshooting que funcionam como diagnósticos:
+## Browser Automation Testing
 
-### Problema: Open-WebUI sem modelos
-
-1. Validar token contra endpoint `/v1/models`
-2. Se `401` → Alinhar tokens
-3. Se `200` e lista vazia → Normalizar catálogo
-4. Se `5xx` → Verificar logs e DB
-
-### Problema: `system_disk_overloaded`
-
-1. `./disk-health.sh` para verificar uso
-2. `./disk-health.sh --cleanup-safe` para limpar
-3. `./reload-newapi.sh` para recriar container
-
-## O que NÃO Existe
-
-| Tipo de Teste | Status |
-|---|---|
-| **Testes unitários** | ❌ Não aplicável (app é imagem Docker) |
-| **Testes E2E automatizados** | ❌ Não implementados |
-| **CI/CD pipeline** | ❌ Não configurado |
-| **Testes de regressão** | ❌ Não automatizados |
-| **Testes de performance** | ❌ Não implementados |
-| **Testes de segurança** | ❌ Não automatizados |
-
-## Recomendações Futuras
-
-| Melhoria | Prioridade |
-|---|---|
-| Automatizar `test_all_models.sh` como cron job | Alta |
-| Adicionar healthcheck para NewAPI (não só PostgreSQL) | Alta |
-| Criar script de validação pós-deploy | Média |
-| Adicionar testes de carga para rate limiting | Baixa |
-| Implementar monitoramento com alertas | Baixa |
+- Playwright usado para MEXC browser automation testing
+- Tests em `backend/exchanges/mexc/automation/` e `tests/backend/exchanges/mexc/`
+- Chromium via `npm run mexc:browser:install`

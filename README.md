@@ -1,280 +1,153 @@
-# Atius AI Router
+# router-ai-atius — podman deployment (AT IUS AI Router)
 
-<!-- Badges -->
-![License](https://img.shields.io/github/license/giovannimnz/atius-ai-router)
-![Version](https://img.shields.io/github/v/tag/giovannimnz/atius-ai-router?filter=v*)
-![New-API](https://img.shields.io/badge/New--API-0.12.14-blue)
+Estado do deployment do `router-ai-atius` no ATIUS-SRV-1 após migração
+Docker → Podman (Phase 17 do projeto omni-srv-admin).
 
-## O que é
+Governanca/admin local: `omni-srv-admin`, em
+`/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router/`.
 
-Gateway LLM centralizado que agrega MiniMax, DeepSeek e 40+ provedores AI atrás de uma API única compatível com OpenAI/Anthropic. Fork de [QuantumNous/new-api](https://github.com/QuantumNous/new-api) adaptado para o ecossistema Atius.
+## Status
 
-| Item | Valor |
-|------|-------|
-| Fork URL | https://github.com/giovannimnz/atius-ai-router |
-| Parent URL | https://github.com/QuantumNous/new-api |
-| Versão fork | `0.12.14.2` (base: 0.12.14 + suffix `.2`) |
-| Stack | NewAPI (Go 1.22+) · PostgreSQL 15 · Python middleware |
+- **Migrado:** 2026-06-04 (precedente, recriado 2026-06-11)
+- **Re-baselined:** 2026-06-12 (compose file versionado aqui)
+- **Container runtime:** podman 4.9.3 (rootless, network=host via pod)
+- **Pod name:** `atius-ai-router` (id: `9ffed7fe58c8239c5cbc8b3c254842f9558a680379a7c8329234888b01d349e3`)
+- **Containers no pod:** 4 user + 1 infra pause = **5 containers total**
+- **Docker (legado):** nenhum container router-ai-atius ativo (intencional)
 
-## Stack Técnica
+## Containers
 
-| Camada | Tecnologia |
-|--------|------------|
-| Gateway | Go + Gin + GORM v2 |
-| Frontend | React 19 + TypeScript + Rsbuild + Radix UI + Tailwind CSS |
-| Middleware | Python FastAPI (enriquecimento de modelos) |
-| Banco | PostgreSQL 15 (container `db-newapi`) |
-| Cache | Redis (go-redis) + in-memory |
-| Auth | JWT, WebAuthn/Passkeys, OAuth (GitHub, Discord, OIDC) |
-| Orquestração | Docker Compose |
+| Nome | Imagem | Função | Porta (host) |
+|------|--------|--------|--------------|
+| `router-ai-atius` | `ghcr.io/giovannimnz/router-ai-atius:latest` | Backend Go (new-api) | 3000 |
+| `model-detailed-hotfix` | `localhost/router-ai-atius-model-detailed:latest` | FastAPI model proxy (SSO proxy) | 3001/3300 |
+| `postgres` | `docker.io/library/postgres:15-alpine` | DB (DBRouterAiAtius) | (interno) |
+| `redis` | `docker.io/library/redis:7-alpine` | Cache | (interno) |
+| `<pod-id>-infra` | `localhost/podman-pause:4.9.3-0` | Network namespace holder (podman) | n/a |
 
-## Modelos Disponíveis
+## Network / Portas
 
-| Modelo | Provider | Context | Max Output |
-|--------|----------|---------|------------|
-| `MiniMax-M2.7` | MiniMax | 245760 | 50000 |
-| `MiniMax-M2.7-highspeed` | MiniMax | 245760 | 50000 |
-| `MiniMax-M2.5` | MiniMax | 245760 | 50000 |
-| `MiniMax-M2.5-highspeed` | MiniMax | 245760 | 50000 |
-| `deepseek-chat` | DeepSeek | 131072 | 8192 |
-| `deepseek-reasoner` | DeepSeek | 131072 | 65536 |
+O pod usa **network=host** (todos containers compartilham net ns via
+infra pause). Bind mounts do **infra container**:
+- `3000:3000` → `router-ai-atius` (UI/API)
+- `3001:3001` → `model-detailed-hotfix` (FastAPI)
+- `3300:3001` → alias Apache proxy → `model-detailed-hotfix`
 
-### Alias Highspeed
+Domínios públicos (via Apache):
+- `https://router.atius.com.br/` → `127.0.0.1:3000`
+- `https://docs.router.atius.com.br/` → mesmo upstream
+- (sem proxy separado pro model-detailed ainda)
 
-| Alias | Mapa para |
-|-------|-----------|
-| `MiniMax-M2.7-hs` | `MiniMax-M2.7-highspeed` |
-| `MiniMax-M2.5-hs` | `MiniMax-M2.5-highspeed` |
+## Volumes críticos
 
-Mapping feito automaticamente pelo `model_mapping` no canal MiniMax no DB.
+| Tipo | Source (host) | Destination (ctr) | Conteúdo |
+|------|---------------|-------------------|----------|
+| bind | `/home/ubuntu/GitHub/containers/router-ai-atius/data` | `/data` | codex-home, logs, migrations, pg_backup, scalar, static |
+| bind | `/home/ubuntu/GitHub/containers/router-ai-atius/logs` | `/app/logs` | oneapi-*.log, auto-sync-deploy.log |
+| volume | `pgdata` (podman) | `/var/lib/postgresql/data` | Postgres data |
 
-## Arquitetura de Routing
-
-```
-Cliente (SDK OpenAI/Anthropic)
-    │
-    ├─► POST /v1/chat/completions ──► RelayFormatOpenAI ──► minimax adaptor ──► /v1/text/chatcompletion_v2
-    │
-    ├─► POST /v1/messages ──────────► RelayFormatClaude ──► minimax adaptor ──► /anthropic/v1/messages
-    │
-    ├─► GET  /v1/models ─────────────► middleware Python ──► enrichment ──────► resposta enriquecida
-    │
-    ├─► POST /v1/embeddings ─────────────────────────────────────────► minimax
-    ├─► POST /v1/audio/speech ─────────────────────────────────────────► minimax TTS
-    ├─► POST /v1/audio/transcriptions ─────────────────────────────────► minimax STT
-    ├─► POST /v1/images/generations ───────────────────────────────────► minimax image
-    └─► POST /v1/rerank ────────────────────────────────────────────────► minimax rerank
-
-Channel Selection (distribute middleware):
-    Token ─► Abilities table ─► matching (group, model) ─► channel_id
-    ─► Channels table ─► base_url, model_mapping
-```
-
-## Endpoints Principais
-
-| Método | Path | Descrição |
-|--------|------|-----------|
-| POST | `/v1/chat/completions` | Chat completions (OpenAI compat.) |
-| POST | `/v1/messages` | Messages (Anthropic compat.) |
-| POST | `/v1/completions` | Completions (legacy) |
-| POST | `/v1/embeddings` | Embeddings |
-| POST | `/v1/audio/speech` | Text-to-Speech |
-| POST | `/v1/audio/transcriptions` | Speech-to-Text |
-| POST | `/v1/images/generations` | Image generation |
-| POST | `/v1/rerank` | Rerank |
-| GET | `/v1/models` | Lista modelos (enriquecidos) |
-| GET | `/api/status` | Status do sistema + API Info |
-| POST | `/api/user/register` | Registro |
-| POST | `/api/user/login` | Login |
-
-### URLs de Acesso
-
-| Serviço | URL | Notas |
-|---------|-----|-------|
-| Middleware (host) | `http://localhost:3300` | Via Python middleware |
-| Middleware (Docker) | `http://model-detailed:3001` | Via rede `newapi-internal` |
-| NewAPI (host) | `http://localhost:3301` | Direto (sem enrichment) |
-| NewAPI (Docker) | `http://new-api:3000` | Via rede `atius-shared` |
-| PostgreSQL (host) | `localhost:8746` | psycopg2 |
-
-## Quick Start
+## Verificação
 
 ```bash
-# 1. Clone e entre no diretório
-git clone https://github.com/giovannimnz/atius-ai-router.git
-cd atius-ai-router
+# Status do pod
+podman pod inspect atius-ai-router
+# Esperado: State=Running, NumContainers=5
 
-# 2. Configure variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas chaves de API
+# Containers
+podman ps --filter pod=atius-ai-router
+# Esperado: 5 linhas (infra, postgres, redis, router-ai-atius, model-detailed-hotfix)
 
-# 3. Suba os containers
-docker compose up -d
+# Backend responde
+curl -sI http://localhost:3000/api/status | head -1
+# Esperado: HTTP/1.1 200 OK
 
-# 4. Verifique o status
-docker compose ps
+# Model-detailed responde
+curl -sI http://localhost:3001/health | head -1
+# Esperado: HTTP/1.1 200 OK
 
-# 5. Teste o endpoint de models
-curl http://localhost:3300/v1/models \
-  -H "Authorization: Bearer <SEU_TOKEN>"
+# Domínio público
+curl -sI https://router.atius.com.br/api/status | head -1
+# Esperado: HTTP/2 200
 ```
 
-## Exemplos de Uso
+## CLIAnything
 
-### OpenAI SDK
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="<SEU_TOKEN>",
-    base_url="https://router.atius.com.br/v1"
-)
-
-response = client.chat.completions.create(
-    model="MiniMax-M2.7",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Explain quantum computing simply."}
-    ],
-    max_tokens=1024,
-    temperature=0.7
-)
-print(response.choices[0].message.content)
-```
-
-### Anthropic SDK
-
-```python
-import anthropic
-
-client = anthropic.Anthropic(
-    api_key="<SEU_TOKEN>",
-    base_url="https://router.atius.com.br/v1"
-)
-
-message = client.messages.create(
-    model="MiniMax-M2.7",
-    max_tokens=1024,
-    system="You are a helpful assistant.",
-    messages=[
-        {"role": "user", "content": "Explain quantum computing simply."}
-    ]
-)
-print(message.content[0].text)
-```
-
-### curl
+O deploy agora tem um CLI operacional para gestao sem frontend:
 
 ```bash
-# Chat completions
-curl -X POST https://router.atius.com.br/v1/chat/completions \
-  -H "Authorization: Bearer <SEU_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "MiniMax-M2.7",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "max_tokens": 50
-  }'
-
-# Anthropic messages
-curl -X POST https://router.atius.com.br/v1/messages \
-  -H "Authorization: Bearer <SEU_TOKEN>" \
-  -H "x-api-key: <SEU_TOKEN>" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "MiniMax-M2.7",
-    "max_tokens": 1024,
-    "messages": [{"role": "user", "content": "Hello"}]
-  }'
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+bin/clianything status
+bin/clianything coverage --strict
+bin/clianything providers --all
+bin/clianything resources
 ```
 
-## Preços MiniMax (por Million tokens)
+Principais garantias:
 
-| Modelo | Input | Output | Cache Read | Cache Write |
-|--------|-------|--------|------------|-------------|
-| M2.7 | $0.30 | $1.20 | $0.06 | $0.375 |
-| M2.7-hs | $0.30 | $2.40 | $0.06 | $0.375 |
-| M2.5 | $0.30 | $1.20 | $0.03 | $0.375 |
-| M2.5-hs | $0.30 | $2.40 | $0.03 | $0.375 |
+- `create`, `update` e `delete` sao dry-run por padrao.
+- Escrita real exige `--execute`.
+- Antes de qualquer escrita real, o CLI faz backup data-only da tabela em
+  `backups/clianything/`.
+- Campos sensiveis sao redigidos por padrao.
+- `coverage --strict` valida 158 endpoints administrativos documentados contra
+  `tools/clianything_endpoints.json`.
+- `endpoint`, `channel`, `model`, `option`, `ratio`, `token`, `log`, `task` e
+  `vendor` cobrem acoes do frontend/API sem depender do navegador.
 
-> Cache write tokens = 1.25× preço de input. Cache read tokens = 0.1× preço de input.
+Manuais:
 
-## Rate Limits
+- `docs/CLIANYTHING.md`
+- `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md`
+- `docs/PROVIDERS-HERMES-CODEX.md`
 
-| Modelo | RPM | TPM |
-|--------|-----|-----|
-| Todos M2.x | 500 | 20,000,000 |
+## Restart / Recovery
 
-> TPM de 20M ≈ ~333K tokens/segundo. Limite prático = RPM 500 (~8.3 req/s).
-
-## Scripts Disponíveis
-
-| Script | Função |
-|--------|--------|
-| `scripts/sync-fork.sh` | Sync com upstream + version bump |
-| `scripts/version-bump.sh` | Versionamento semântico X.Y.Z.N |
-| `scripts/run-bruno-tests.sh` | Executar suite de testes Bruno CLI |
-| `scripts/deploy-ghcr.sh` | Build + push para GHCR |
-| `scripts/auto-sync-deploy.sh` | Sync + deploy automático |
-
-## Git Workflow
+Container restart é gerenciado pelo systemd unit `pod-atius-ai-router.service`
+(gerado por `podman generate systemd --new --files`).
 
 ```bash
-# Remotes
-origin   → https://github.com/giovannimnz/atius-ai-router.git
-upstream → https://github.com/QuantumNous/new-api.git
+# Reiniciar pod inteiro
+systemctl --user restart pod-atius-ai-router.service
 
-# Sync semanal (automático via GitHub Actions)
-./scripts/sync-fork.sh --dry-run
+# Reiniciar 1 container específico
+podman restart router-ai-atius
 
-# Version bump check
-./scripts/version-bump.sh --check
-
-# Restaurar protected files após sync
-git checkout HEAD -- integration/middleware/model_detailed.py
-git checkout HEAD -- docker-compose.yml
+# Logs
+podman logs router-ai-atius --tail 50
+podman logs model-detailed-hotfix --tail 50
 ```
 
-## Versionamento
-
-Fork usa `X.Y.Z.N`:
-- `X.Y.Z` = versão base do upstream NewAPI
-- `N` = suffix do fork (incrementado a cada sync)
+## Recriar do zero (apenas se pod sumir)
 
 ```bash
-cat VERSION  # 0.12.14.2
-git tag -l "v0.12.*"
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+podman-compose up -d
+# OU (se podman-compose bug, ver script manual abaixo)
+bash scripts/recreate-pod.sh
 ```
 
-## Troubleshooting
+O script `scripts/recreate-pod.sh` faz o equivalente manual
+(`podman pod create` + 4x `podman run --pod`).
 
-```bash
-# Containers não sobem
-docker compose down && docker compose up -d
-docker compose ps
+## Histórico
 
-# Teste direto no new-api (sem middleware)
-docker exec new-api curl localhost:3000/v1/models
+- **2026-06-04** — Migração inicial Docker → Podman (5 containers).
+  Vault: `60-LOGS/2026-06-04-atius-router-podman-cutover.md` (precedente).
+- **2026-06-11** — Recriação do pod durante Phase 17 (rollback jenkins não
+  afetou router-ai-atius). Compose atualizado para refletir imagem
+  `ghcr.io/giovannimnz/router-ai-atius:latest` (substituiu
+  `calciumion/new-api:latest`).
+- **2026-06-12** — `podman-compose.yml` versionado neste diretório como
+  source of truth pra re-deploy. Adicionado `model-detailed` (estava
+  rodando no pod mas não estava no compose file original).
+- **2026-06-12** — `docs/PODMAN.md` com notas de migração + lessons learned.
 
-# Bruno tests falham
-./scripts/run-bruno-tests.sh
+## References
 
-# Ver logs
-docker compose logs -f new-api
-docker compose logs -f model-detailed
-```
-
-## Links
-
-| Recurso | URL |
-|---------|-----|
-| Fork | https://github.com/giovannimnz/atius-ai-router |
-| Parent | https://github.com/QuantumNous/new-api |
-| Router UI | https://router.atius.com.br |
-| Swagger Docs | interno na rede Docker |
-
----
-
-_Last updated: 2026-05-31_
+- Vault: `20-PROJETOS/21-PROJETOS-ATIVOS/atius-router/router-ai-atius-panorama-fork-2026-06-01.md`
+- Vault: `60-LOGS/2026-06-11-podman-migration-3srv-parcial.md` (Phase 17 partial)
+- Vault: `61-Incidents/2026-06-07-router-ai-atius-prune-sem-backup-previo.md` (LIÇÃO)
+- Phase plan: `/home/ubuntu/.planning/phases/17-podman-migration-3srv/17-01-PLAN.md`
+- Source compose atual: `/home/ubuntu/GitHub/containers/router-ai-atius/podman-compose.yml`
+- Admin config: `/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router/`
+- Fork GHCR: `https://github.com/giovannimnz/router-ai-atius`

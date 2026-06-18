@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # podman-up.sh — bring the stack up via podman-compose
 #
-# Rebrand v2.11: container names and ports updated. See podman-compose.yml
-# for the full layout.
-#
 # Usage:
 #   ./scripts/podman-up.sh                 # start detached
 #   ./scripts/podman-up.sh --build         # rebuild model-detailed first
@@ -13,8 +10,7 @@
 #   docker compose -f podman-compose.yml up -d
 #
 # Prereqs: podman 4.x, podman-compose 1.0+, .env file with POSTGRES_PASSWORD
-# and REDIS_PASSWORD set, and the :local images present on the host
-# (run ./scripts/podman-prepare-images.sh first if not).
+# and REDIS_PASSWORD set.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,9 +21,9 @@ LOGS=""
 for arg in "$@"; do
   case "$arg" in
     --build) BUILD="--build" ;;
-    --logs)  LOGGS="1" ;;
+    --logs)  LOGS="1" ;;
     -h|--help)
-      sed -n '2,15p' "$0" | sed 's/^# \?//'
+      sed -n '2,12p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
   esac
@@ -37,26 +33,13 @@ done
 command -v podman >/dev/null || { echo "ERROR: podman not installed" >&2; exit 1; }
 command -v podman-compose >/dev/null || { echo "ERROR: podman-compose not installed" >&2; exit 1; }
 
-# Ensure the :latest images exist before bringing the stack up. The compose
-# file uses :latest as the canonical tag (decoupled from registry versions).
-# If the images are missing, run prepare-images and abort so the operator
-# can decide whether to build or pull.
-if ! podman image exists ghcr.io/giovannimnz/router-ai-atius:latest 2>/dev/null \
-   || ! podman image exists router-ai-atius-model-detailed:latest 2>/dev/null; then
-  echo "[podman-up] :latest images not all present. running prepare-images..."
-  ./scripts/podman-prepare-images.sh || {
-    echo "ERROR: prepare-images failed; aborting podman-up." >&2
-    exit 2
-  }
-fi
-
 # Ensure .env exists. If missing, copy from .env.example and abort so the
 # operator fills real secrets before bringing up the stack (the example file
 # has placeholders that would otherwise start the stack with weak credentials).
 if [ ! -f .env ]; then
   if [ -f .env.example ]; then
-    echo "[podman-up] .env missing, copying from .env.example"
-    echo "[podman-up] PLEASE edit .env and set POSTGRES_PASSWORD / REDIS_PASSWORD / SESSION_SECRET before rerunning." >&2
+    echo "[podman-up] .env missing, copied from .env.example."
+    echo "ERROR: edit .env and set POSTGRES_PASSWORD / REDIS_PASSWORD / SESSION_SECRET before rerunning." >&2
     cp .env.example .env
     exit 1
   else

@@ -152,6 +152,12 @@ var defaultModelRatio = map[string]float64{
 	"claude-opus-4-7-high":                      2.5,
 	"claude-opus-4-7-medium":                    2.5,
 	"claude-opus-4-7-low":                       2.5,
+	"claude-opus-4-8":                           2.5,
+	"claude-opus-4-8-max":                       2.5,
+	"claude-opus-4-8-xhigh":                     2.5,
+	"claude-opus-4-8-high":                      2.5,
+	"claude-opus-4-8-medium":                    2.5,
+	"claude-opus-4-8-low":                       2.5,
 	"claude-3-opus-20240229":                    7.5, // $15 / 1M tokens
 	"claude-opus-4-20250514":                    7.5,
 	"claude-opus-4-1-20250805":                  7.5,
@@ -520,6 +526,12 @@ type CompletionRatioInfo struct {
 	Locked bool    `json:"locked"`
 }
 
+type ModelRatioInfo struct {
+	Ratio       float64 `json:"ratio"`
+	MatchedName string  `json:"matched_name"`
+	Explicit    bool    `json:"explicit"`
+}
+
 func GetCompletionRatioInfo(name string) CompletionRatioInfo {
 	name = FormatMatchingModelName(name)
 
@@ -550,6 +562,34 @@ func GetCompletionRatioInfo(name string) CompletionRatioInfo {
 	return CompletionRatioInfo{
 		Ratio:  hardCodedRatio,
 		Locked: false,
+	}
+}
+
+func GetModelRatioInfo(name string) ModelRatioInfo {
+	name = FormatMatchingModelName(name)
+
+	if ratio, ok := modelRatioMap.Get(name); ok {
+		return ModelRatioInfo{
+			Ratio:       ratio,
+			MatchedName: name,
+			Explicit:    true,
+		}
+	}
+
+	if strings.HasSuffix(name, CompactModelSuffix) {
+		if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
+			return ModelRatioInfo{
+				Ratio:       wildcardRatio,
+				MatchedName: name,
+				Explicit:    true,
+			}
+		}
+	}
+
+	return ModelRatioInfo{
+		Ratio:       37.5,
+		MatchedName: name,
+		Explicit:    false,
 	}
 }
 

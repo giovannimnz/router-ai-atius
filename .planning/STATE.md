@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: — Model Aliases & Token Management ✓
-status: executing
-last_updated: "2026-06-18T05:36:28.823Z"
+status: completed
+last_updated: "2026-06-18T08:41:47.835Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 2
@@ -18,10 +18,10 @@ progress:
 ## Current Position
 
 Phase: phase-20 (go-native-model-router) — EXECUTING
-Plan: 2 of 3
+Plan: Not started
 **Milestone:** v2.12 — pt-native upstream sync (next)
-**Phase:** Phase 7 completed locally on `feat/pt-native`; Phase 8 pending
-**Status:** Executing Phase phase-20
+**Phase:** phase-20
+**Status:** Milestone complete
 **Last activity:** 2026-06-18
 
 ## What Was Done

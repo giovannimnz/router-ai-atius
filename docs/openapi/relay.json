@@ -75,12 +75,24 @@
       "get": {
         "summary": "获取模型列表",
         "deprecated": false,
-        "description": "获取当前可用的模型列表。\n\n根据请求头自动识别返回格式：\n- 包含 `x-api-key` 和 `anthropic-version` 头时返回 Anthropic 格式\n- 包含 `x-goog-api-key` 头或 `key` 查询参数时返回 Gemini 格式\n- 其他情况返回 OpenAI 格式\n",
+        "description": "获取当前可用的模型列表。Go backend owns the enriched `/v1/models` catalog; Python middleware is not the catalog source.\n\nPublic `/v1/models` model-list responses use a root payload with `data` only. They do not include top-level `object`, `success`, `first_id`, `last_id`, or `has_more`.\n\nOrdering is deterministic: text models before embeddings; provider groups MiniMax, DeepSeek, then OpenAI/OpenAI Codex; each provider group is sorted by recent/capable variants first.\n\n根据请求头或查询参数自动识别返回格式：\n- `api_format=anthropic` 或包含 `x-api-key` 和 `anthropic-version` 头时返回 Anthropic-selected data\n- 包含 `x-goog-api-key` 头或 `key` 查询参数时返回 Gemini 格式\n- 其他情况返回 OpenAI-compatible enriched model data\n",
         "operationId": "listModels",
         "tags": [
           "获取模型列表"
         ],
         "parameters": [
+          {
+            "name": "api_format",
+            "in": "query",
+            "description": "Set to `anthropic` to request Anthropic-selected models from the Go catalog while keeping the root `{data:[...]}` payload.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "anthropic"
+              ]
+            }
+          },
           {
             "name": "key",
             "in": "query",
@@ -2406,16 +2418,63 @@
             "type": "string",
             "description": "模型所有者",
             "example": "openai"
+          },
+          "supported_endpoint_types": {
+            "type": "array",
+            "description": "Supported endpoint families for this model.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supported_endpoint_type_labels": {
+            "type": "array",
+            "description": "Human-readable endpoint labels.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pricing": {
+            "type": "object",
+            "description": "Public price values in USD per 1M tokens.",
+            "properties": {
+              "input": {
+                "type": "number"
+              },
+              "output": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "example": "usd_per_1m_tokens"
+              }
+            }
+          },
+          "input_price": {
+            "type": "number",
+            "description": "Input price in USD per 1M tokens. Missing prices are represented as 0.00."
+          },
+          "output_price": {
+            "type": "number",
+            "description": "Output price in USD per 1M tokens. Missing prices are represented as 0.00."
+          },
+          "billing_mode": {
+            "type": "string"
+          },
+          "billing_expr": {
+            "type": "string"
+          },
+          "pricing_version": {
+            "type": "string"
           }
         }
       },
       "ModelsResponse": {
         "type": "object",
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false,
         "properties": {
-          "object": {
-            "type": "string",
-            "example": "list"
-          },
           "data": {
             "type": "array",
             "items": {

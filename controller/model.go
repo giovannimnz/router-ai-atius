@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,6 +17,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/modelcatalog"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -111,41 +111,14 @@ func init() {
 }
 
 func channelOwnerName(channelType int) string {
-	apiType, success := common.ChannelType2APIType(channelType)
-	if !success {
-		return strings.ToLower(constant.GetChannelTypeName(channelType))
-	}
-	adaptor := relay.GetAdaptor(apiType)
-	if adaptor == nil {
-		return strings.ToLower(constant.GetChannelTypeName(channelType))
-	}
-	adaptor.Init(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{
-		ChannelType: channelType,
-	}})
-	if name := strings.TrimSpace(adaptor.GetChannelName()); name != "" {
-		return name
-	}
-	return strings.ToLower(constant.GetChannelTypeName(channelType))
+	return modelcatalog.ChannelOwnerName(channelType)
 }
 
 func getPreferredModelOwners(modelNames []string, groups []string) map[string]string {
-	channelTypes, err := model.GetPreferredModelOwnerChannelTypes(modelNames, groups)
+	owners, err := modelcatalog.PreferredOwnerNames(modelNames, groups)
 	if err != nil {
-		common.SysLog(fmt.Sprintf("GetPreferredModelOwnerChannelTypes error: %v", err))
+		common.SysLog(fmt.Sprintf("PreferredOwnerNames error: %v", err))
 		return map[string]string{}
-	}
-
-	ownerByChannelType := make(map[int]string)
-	owners := make(map[string]string, len(channelTypes))
-	for modelName, channelType := range channelTypes {
-		owner, ok := ownerByChannelType[channelType]
-		if !ok {
-			owner = channelOwnerName(channelType)
-			ownerByChannelType[channelType] = owner
-		}
-		if owner != "" {
-			owners[modelName] = owner
-		}
 	}
 	return owners
 }

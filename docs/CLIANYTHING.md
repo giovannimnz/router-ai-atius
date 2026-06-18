@@ -361,6 +361,24 @@ Resultado:
 - Smoke embeddings e routing matrix sem `ATIUS_ROUTER_TOKEN`: exit 2 esperado.
 - Smoke real com token operacional via ambiente efemero `uv`: OpenAI SDK `MiniMax-M3` OK, Anthropic SDK `MiniMax-M3` OK, OpenAI SDK `gpt-5.5` OK com `ATIUS_ROUTER_STREAM=1`.
 - Middleware `model-detailed-hotfix` usa fila anti-rate-limit por provider/model-family por padrao. Quando a fila atua, validar os headers `X-Atius-Rate-Queue`, `X-Atius-Rate-Queue-Wait-Ms` e `X-Atius-Rate-Retry-Count`.
+- Middleware `/models` e `/v1/models` agora enriquecem pricing a partir do backend Go `/api/pricing`; os campos publicos esperados para modelos conhecidos sao `pricing`, `input_price` e `output_price`.
+- Precificacao cadastrada no backend para `MiniMax-M2.1`, variantes MiniMax highspeed, Codex OAuth `gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`/`gpt-5.3-codex-spark`, `embo-01` e OpenAI embeddings `text-embedding-3-small`/`text-embedding-3-large`.
+- Testes unitarios cobrem conversao de `ModelRatio`/`CompletionRatio` para preco por token e enriquecimento de catalogo OpenAI/Anthropic/embeddings.
 - Secret scan em `tools`, `scripts`, `tests`, docs e Phase 18 sem hits.
 - Em 2026-06-15, `scripts/router-model-battery.py --token-id 8 --rate-requests 20 --rate-delay 0.2` validou MiniMax-M3 com 20/20 OK e embeddings `embo-01` roteando via `http://127.0.0.1:3001/v1`, bloqueado por upstream `429 rate limit exceeded(RPM)`.
 - Em 2026-06-15, `uv run --with openai --with anthropic python scripts/smoke-routing-matrix.py` validou o dominio publico `https://router.atius.com.br`: catalogos OpenAI/Anthropic OK, OpenAI SDK OK, Anthropic SDK OK, Codex OAuth `gpt-5.5` OK, embeddings `embo-01` roteando mas bloqueados por upstream `429`.
+
+Validacao rapida do catalogo enriquecido:
+
+```bash
+bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3001/models
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3001/models?api_format=anthropic'
+```
+
+Snapshot esperado em 2026-06-15:
+
+- `MiniMax-M3`: input `$0.30/M`, output `$1.20/M`.
+- `gpt-5.5`: input `$5.00/M`, output `$30.00/M`.
+- `embo-01`: input/output `$0.069/M`.
+- `text-embedding-3-small`: input/output `$0.02/M`.

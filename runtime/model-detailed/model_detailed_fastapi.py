@@ -220,6 +220,7 @@ RATE_QUEUE_INTERVALS = {
     "default-chat": _env_float("ATIUS_RATE_QUEUE_DEFAULT_CHAT_INTERVAL", 0.25),
     "embeddings": _env_float("ATIUS_RATE_QUEUE_DEFAULT_EMBEDDINGS_INTERVAL", 1.0),
 }
+QUOTA_PER_UNIT = _env_float("ATIUS_QUOTA_PER_UNIT", 500000.0)
 
 # Docs auth credentials (fallback if session auth fails)
 DOCS_USERNAME = os.environ.get("DOCS_USERNAME", "admin")
@@ -749,6 +750,133 @@ MINIMAX_METADATA = {
 ALL_MODEL_METADATA = {**DEEPSEEK_METADATA, **MINIMAX_METADATA}
 MODEL_CREATED_TS = 1735689600  # 2025-01-01
 
+
+def _float_or_none(value) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_token_price(value: float) -> str:
+    if value <= 0:
+        return "0.00"
+    return f"{value:.12f}".rstrip("0").rstrip(".")
+
+
+def _pricing_from_per_token(
+    *,
+    prompt_price: float,
+    completion_price: float,
+    source: str,
+    estimated: bool,
+    extra_pricing: dict | None = None,
+) -> dict:
+    pricing = dict(extra_pricing or {})
+    pricing["prompt"] = _format_token_price(prompt_price)
+    pricing["completion"] = _format_token_price(completion_price)
+    return {
+        "pricing": pricing,
+        "input_price": round(prompt_price * 1_000_000, 6),
+        "output_price": round(completion_price * 1_000_000, 6),
+        "pricing_source": source,
+        "pricing_estimated": estimated,
+    }
+
+
+def _zero_pricing_info(source: str = "missing") -> dict:
+    return _pricing_from_per_token(
+        prompt_price=0,
+        completion_price=0,
+        source=source,
+        estimated=True,
+    )
+
+
+def _backend_pricing_item_to_info(item: dict) -> dict | None:
+    model_ratio = _float_or_none(item.get("model_ratio"))
+    if model_ratio is None:
+        return None
+    completion_ratio = _float_or_none(item.get("completion_ratio"))
+    if completion_ratio is None:
+        completion_ratio = 1.0
+    prompt_price = model_ratio / QUOTA_PER_UNIT
+    completion_price = model_ratio * completion_ratio / QUOTA_PER_UNIT
+    return _pricing_from_per_token(
+        prompt_price=prompt_price,
+        completion_price=completion_price,
+        source="backend",
+        estimated=False,
+    )
+
+
+def build_backend_pricing_map(pricing_payload: dict) -> dict[str, dict]:
+    rows = pricing_payload.get("data", [])
+    if not isinstance(rows, list):
+        return {}
+    pricing_map: dict[str, dict] = {}
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        model_name = item.get("model_name")
+        if not isinstance(model_name, str) or not model_name:
+            continue
+        info = _backend_pricing_item_to_info(item)
+        if info is not None:
+            pricing_map[model_name] = info
+    return pricing_map
+
+
+def _static_pricing_info(model_id: str) -> dict | None:
+    metadata = ALL_MODEL_METADATA.get(model_id)
+    if not metadata:
+        return None
+    pricing = metadata.get("pricing")
+    if not isinstance(pricing, dict):
+        return None
+    prompt_price = _float_or_none(pricing.get("prompt"))
+    completion_price = _float_or_none(pricing.get("completion"))
+    if prompt_price is None and completion_price is None:
+        return None
+    return _pricing_from_per_token(
+        prompt_price=prompt_price or 0,
+        completion_price=completion_price or 0,
+        source="static-estimate",
+        estimated=True,
+        extra_pricing=pricing,
+    )
+
+
+def model_pricing_info(model_id: str, backend_pricing: dict[str, dict] | None = None) -> dict:
+    backend_pricing = backend_pricing or {}
+    static_info = _static_pricing_info(model_id)
+    backend_info = backend_pricing.get(model_id)
+    if backend_info:
+        if static_info:
+            merged = dict(backend_info)
+            pricing = dict(static_info.get("pricing", {}))
+            pricing.update(backend_info.get("pricing", {}))
+            merged["pricing"] = pricing
+            return merged
+        return backend_info
+    if static_info:
+        return static_info
+    return _zero_pricing_info()
+
+
+async def fetch_backend_model_pricing(headers: dict) -> dict[str, dict]:
+    client = await get_http_client()
+    try:
+        response = await client.get(f"{BACKEND_URL}/api/pricing", headers=headers, timeout=10.0)
+        if response.status_code != 200:
+            return {}
+        return build_backend_pricing_map(response.json())
+    except Exception as exc:
+        print(f"[middleware] WARNING: failed to fetch backend pricing: {exc}")
+        return {}
+
 # ==============================================================================
 # Global state
 # ==============================================================================
@@ -773,7 +901,7 @@ def load_curated_spec() -> dict | None:
     return None
 
 
-def enrich_models_response_anthropic(upstream_data: dict) -> dict:
+def enrich_models_response_anthropic(upstream_data: dict, backend_pricing: dict[str, dict] | None = None) -> dict:
     """Transform abilities data to Anthropic models list format.
 
     upstream_data comes from /internal/v1/models which returns abilities with channel_type.
@@ -812,6 +940,7 @@ def enrich_models_response_anthropic(upstream_data: dict) -> dict:
         models_seen.add(model_name)
 
         meta = metadata_map.get(model_name, {})
+        pricing_info = model_pricing_info(model_name, backend_pricing)
         anthropic_models.append({
             "id": model_name,
             "created_at": "2021-07-20T10:40:00Z",
@@ -819,8 +948,8 @@ def enrich_models_response_anthropic(upstream_data: dict) -> dict:
             "type": "model",
             "api_format": "anthropic",
             "context_length": meta.get("context_length", 1000000),
-            "input_price": meta.get("input_price", 0),
-            "output_price": meta.get("output_price", 0),
+            "input_price": pricing_info["input_price"],
+            "output_price": pricing_info["output_price"],
         })
 
     return {
@@ -829,7 +958,7 @@ def enrich_models_response_anthropic(upstream_data: dict) -> dict:
     }
 
 
-def enrich_openai_models_response_anthropic(openai_data: dict) -> dict:
+def enrich_openai_models_response_anthropic(openai_data: dict, backend_pricing: dict[str, dict] | None = None) -> dict:
     """Build an Anthropic-format model list from the regular /v1/models response."""
     models_seen = set()
     anthropic_models = []
@@ -850,6 +979,7 @@ def enrich_openai_models_response_anthropic(openai_data: dict) -> dict:
 
         models_seen.add(model_name)
         metadata = ALL_MODEL_METADATA.get(model_name, {})
+        pricing_info = model_pricing_info(model_name, backend_pricing)
         anthropic_models.append({
             "id": model_name,
             "created_at": "2021-07-20T10:40:00Z",
@@ -857,8 +987,8 @@ def enrich_openai_models_response_anthropic(openai_data: dict) -> dict:
             "type": "model",
             "api_format": "anthropic",
             "context_length": metadata.get("context_length", 1000000),
-            "input_price": 0,
-            "output_price": 0,
+            "input_price": pricing_info["input_price"],
+            "output_price": pricing_info["output_price"],
         })
 
     return {
@@ -867,11 +997,12 @@ def enrich_openai_models_response_anthropic(openai_data: dict) -> dict:
     }
 
 
-async def enrich_models_response(upstream_data: dict) -> dict:
+async def enrich_models_response(upstream_data: dict, backend_pricing: dict[str, dict] | None = None) -> dict:
     """Enrich /v1/models response with metadata for DeepSeek and MiniMax."""
     enriched = []
     for model in upstream_data.get("data", []):
         model_id = model.get("id", "")
+        pricing_info = model_pricing_info(model_id, backend_pricing)
         if model_id == "embo-01":
             enriched.append({
                 "id": model_id,
@@ -881,6 +1012,7 @@ async def enrich_models_response(upstream_data: dict) -> dict:
                 "name": "MiniMax embo-01",
                 "description": "Embeddings model",
                 "supported_endpoint_types": ["embeddings"],
+                "pricing": pricing_info["pricing"],
             })
             continue
 
@@ -901,7 +1033,7 @@ async def enrich_models_response(upstream_data: dict) -> dict:
                 "name": metadata["name"],
                 "context_length": metadata["context_length"],
                 "top_provider": {"max_completion_tokens": metadata["max_completion_tokens"]},
-                "pricing": metadata["pricing"],
+                "pricing": pricing_info["pricing"],
             }
             # Preserve upstream endpoint types, but add anthropic for ALL MiniMax models
             enriched_model["supported_endpoint_types"] = model.get("supported_endpoint_types", ["openai"]).copy()
@@ -910,7 +1042,9 @@ async def enrich_models_response(upstream_data: dict) -> dict:
                     enriched_model["supported_endpoint_types"].append("anthropic")
             enriched.append(enriched_model)
         else:
-            enriched.append(model)
+            enriched_model = dict(model)
+            enriched_model["pricing"] = pricing_info["pricing"]
+            enriched.append(enriched_model)
     return {"data": enriched, "object": "list", "success": True}
 
 
@@ -1002,6 +1136,7 @@ async def get_models(request: Request):
         headers["authorization"] = f"Bearer {request.headers['x-api-key']}"
 
     api_format = request.query_params.get("api_format", "openai")
+    backend_pricing = await fetch_backend_model_pricing(headers)
 
     try:
         if api_format == "anthropic":
@@ -1015,7 +1150,7 @@ async def get_models(request: Request):
                 return Response(content=response.content, status_code=response.status_code, media_type="application/json")
             try:
                 data = response.json()
-                enriched = enrich_models_response_anthropic(data)
+                enriched = enrich_models_response_anthropic(data, backend_pricing)
                 return JSONResponse(content=enriched)
             except json.JSONDecodeError:
                 # Some New API builds route /internal/v1/models to the SPA shell.
@@ -1025,8 +1160,8 @@ async def get_models(request: Request):
                 if response.status_code != 200:
                     return Response(content=response.content, status_code=response.status_code, media_type="application/json")
                 data = response.json()
-                enriched_openai = await enrich_models_response(data)
-                enriched = enrich_openai_models_response_anthropic(enriched_openai)
+                enriched_openai = await enrich_models_response(data, backend_pricing)
+                enriched = enrich_openai_models_response_anthropic(enriched_openai, backend_pricing)
                 return JSONResponse(content=enriched)
         else:
             # OpenAI format — call original /v1/models
@@ -1035,7 +1170,7 @@ async def get_models(request: Request):
                 return Response(content=response.content, status_code=response.status_code, media_type="application/json")
             try:
                 data = response.json()
-                enriched = await enrich_models_response(data)
+                enriched = await enrich_models_response(data, backend_pricing)
                 return JSONResponse(content=enriched, headers={"X-Model-Metadata-Enriched": "true"})
             except json.JSONDecodeError as e:
                 print(f"[middleware] Failed to parse models response: {e}")

@@ -6,6 +6,7 @@ These tests stay local: no Podman, no database, no network.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import sys
@@ -494,6 +495,72 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
         self.assertIn("deepseek-v4-flash", ids)
         self.assertIn("MiniMax-M3", ids)
         self.assertNotIn("deepseek-v4-beta", ids)
+
+    def test_backend_pricing_map_converts_ratios_to_per_token_prices(self):
+        pricing_map = model_detailed.build_backend_pricing_map(
+            {
+                "data": [
+                    {
+                        "model_name": "gpt-5.5",
+                        "model_ratio": 2.5,
+                        "completion_ratio": 6,
+                    },
+                    {
+                        "model_name": "text-embedding-3-small",
+                        "model_ratio": 0.01,
+                        "completion_ratio": 1,
+                    },
+                ]
+            }
+        )
+
+        self.assertEqual(pricing_map["gpt-5.5"]["pricing"]["prompt"], "0.000005")
+        self.assertEqual(pricing_map["gpt-5.5"]["pricing"]["completion"], "0.00003")
+        self.assertEqual(pricing_map["gpt-5.5"]["input_price"], 5)
+        self.assertEqual(pricing_map["gpt-5.5"]["output_price"], 30)
+        self.assertFalse(pricing_map["gpt-5.5"]["pricing_estimated"])
+        self.assertEqual(pricing_map["text-embedding-3-small"]["input_price"], 0.02)
+
+    def test_model_enrichment_uses_backend_pricing_for_codex_and_embeddings(self):
+        backend_pricing = model_detailed.build_backend_pricing_map(
+            {
+                "data": [
+                    {"model_name": "gpt-5.5", "model_ratio": 2.5, "completion_ratio": 6},
+                    {"model_name": "embo-01", "model_ratio": 0.0345, "completion_ratio": 1},
+                ]
+            }
+        )
+        payload = {
+            "data": [
+                {"id": "gpt-5.5", "object": "model", "created": 1, "owned_by": "codex"},
+                {"id": "embo-01", "object": "model", "created": 1, "owned_by": "minimax"},
+            ]
+        }
+
+        enriched = asyncio.run(model_detailed.enrich_models_response(payload, backend_pricing))
+        by_id = {item["id"]: item for item in enriched["data"]}
+
+        self.assertEqual(by_id["gpt-5.5"]["pricing"]["prompt"], "0.000005")
+        self.assertEqual(by_id["gpt-5.5"]["pricing"]["completion"], "0.00003")
+        self.assertNotIn("pricing_source", by_id["gpt-5.5"])
+        self.assertNotIn("pricing_estimated", by_id["gpt-5.5"])
+        self.assertEqual(by_id["embo-01"]["pricing"]["prompt"], "0.000000069")
+        self.assertEqual(by_id["embo-01"]["supported_endpoint_types"], ["embeddings"])
+        self.assertNotIn("pricing_source", by_id["embo-01"])
+        self.assertNotIn("pricing_estimated", by_id["embo-01"])
+
+    def test_anthropic_enrichment_uses_backend_price_fields(self):
+        payload = {"data": [{"model": "MiniMax-M3", "channel_type": 14}]}
+        backend_pricing = model_detailed.build_backend_pricing_map(
+            {"data": [{"model_name": "MiniMax-M3", "model_ratio": 0.15, "completion_ratio": 4}]}
+        )
+
+        enriched = model_detailed.enrich_models_response_anthropic(payload, backend_pricing)
+
+        self.assertEqual(enriched["data"][0]["input_price"], 0.3)
+        self.assertEqual(enriched["data"][0]["output_price"], 1.2)
+        self.assertNotIn("pricing_source", enriched["data"][0])
+        self.assertNotIn("pricing_estimated", enriched["data"][0])
 
     def test_normalise_embedding_input_preserves_query_and_db(self):
         body_query, should_query = model_detailed._normalise_embedding_input(

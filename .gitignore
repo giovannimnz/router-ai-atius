@@ -51,5 +51,6 @@ podman/quadlets/state/
 backups/
 docs/atius-router-docs/
 .planning/
+graphify-out/
 *.pyc
 __pycache__/

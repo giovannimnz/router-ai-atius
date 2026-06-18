@@ -33,3 +33,20 @@ type GeminiModel struct {
 	TopP                       interface{}   `json:"topP"`
 	TopK                       interface{}   `json:"topK"`
 }
+
+type ModelCatalogEntry struct {
+	ModelName                   string                  `json:"model_name"`
+	OwnedBy                     string                  `json:"owned_by"`
+	EnableGroups                []string                `json:"enable_groups,omitempty"`
+	SupportedEndpointTypes      []constant.EndpointType `json:"supported_endpoint_types,omitempty"`
+	SupportedEndpointTypeLabels []string                `json:"supported_endpoint_type_labels,omitempty"`
+	QuotaType                   int                     `json:"quota_type"`
+	ModelRatio                  float64                 `json:"model_ratio,omitempty"`
+	ModelPrice                  float64                 `json:"model_price,omitempty"`
+	CompletionRatio             float64                 `json:"completion_ratio,omitempty"`
+	BillingMode                 string                  `json:"billing_mode,omitempty"`
+	BillingExpr                 string                  `json:"billing_expr,omitempty"`
+	PricingSource               string                  `json:"-"`
+	PricingEstimated            bool                    `json:"-"`
+	PricingVersion              string                  `json:"pricing_version,omitempty"`
+}

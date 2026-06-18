@@ -75,6 +75,45 @@ Endpoints ativos:
 - Anthropic-Compatible: `/v1/messages`
 - Embeddings: `/v1/embeddings`
 
+## Catalogo `/models` e precificacao
+
+Estado validado em 2026-06-15:
+
+- O middleware `model-detailed-hotfix` consulta o backend Go em `/api/pricing` e usa essa resposta como fonte de preco para `/models` e `/v1/models`.
+- Os campos enriquecidos publicos esperados sao `pricing`, `input_price` e `output_price`.
+- Para modelos ainda sem preco cadastrado, o comportamento esperado do catalogo enriquecido e retornar `0.00` ate o cadastro real ou estimado ser feito.
+- O cadastro de modelos token-priced deve usar `ModelRatio` e `CompletionRatio`; nao usar `ModelPrice` para esses modelos, porque `ModelPrice` muda a semantica para cobranca fixa/request.
+- Backup antes do cadastro de precos em 2026-06-15: `/home/ubuntu/GitHub/containers/router-ai-atius/backups/clianything/20260615_063018_options.sql`.
+
+Precos cadastrados/validados no backend:
+
+| Modelo | Input $/M | Output $/M | Fonte |
+|---|---:|---:|---|
+| `MiniMax-M3` | 0.30 | 1.20 | backend |
+| `MiniMax-M2.7` | 0.30 | 1.20 | backend |
+| `MiniMax-M2.5` | 0.30 | 1.20 | backend |
+| `MiniMax-M2.1` | 0.30 | 1.20 | backend |
+| `MiniMax-M2.1-highspeed` / `-hs` | 0.60 | 2.40 | estimado |
+| `MiniMax-M2.5-highspeed` / `-hs` | 0.60 | 2.40 | estimado |
+| `MiniMax-M2.7-highspeed` / `-hs` | 0.60 | 2.40 | estimado |
+| `deepseek-v4-flash` | 0.14 | 0.28 | backend |
+| `deepseek-v4-pro` | 0.435 | 0.87 | backend |
+| `gpt-5.5` | 5.00 | 30.00 | estimado/standard |
+| `gpt-5.4` | 2.50 | 15.00 | estimado/standard |
+| `gpt-5.4-mini` | 0.75 | 4.50 | estimado/standard |
+| `gpt-5.3-codex-spark` | 1.75 | 14.00 | estimado |
+| `embo-01` | 0.069 | 0.069 | estimado |
+| `text-embedding-3-small` | 0.02 | 0.02 | OpenAI |
+| `text-embedding-3-large` | 0.13 | 0.13 | OpenAI |
+
+Comandos de verificacao:
+
+```bash
+bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3001/models
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3001/models?api_format=anthropic'
+```
+
 Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
@@ -209,9 +248,14 @@ bin/clianything logs --limit 50
 podman logs router-ai-atius --tail 80
 podman logs model-detailed-hotfix --tail 80
 
-# Restart controlado
-systemctl --user restart pod-atius-ai-router.service
+# Restart controlado do backend Go
+systemctl --user restart container-router-ai-atius.service
+
+# Restart controlado do middleware /models
+systemctl --user restart container-model-detailed.service
 ```
+
+Nao usar `podman restart router-ai-atius` como rotina operacional neste runtime. Em 2026-06-15, restart direto do container Go falhou durante cleanup/unmount e precisou ser recuperado pelo user unit `container-router-ai-atius.service`.
 
 ## CLIAnything Phase 18
 

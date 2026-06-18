@@ -469,6 +469,12 @@ type CompletionRatioInfo struct {
 	Locked bool    `json:"locked"`
 }
 
+type ModelRatioInfo struct {
+	Ratio       float64 `json:"ratio"`
+	MatchedName string  `json:"matched_name"`
+	Explicit    bool    `json:"explicit"`
+}
+
 func GetCompletionRatioInfo(name string) CompletionRatioInfo {
 	name = FormatMatchingModelName(name)
 
@@ -499,6 +505,34 @@ func GetCompletionRatioInfo(name string) CompletionRatioInfo {
 	return CompletionRatioInfo{
 		Ratio:  hardCodedRatio,
 		Locked: false,
+	}
+}
+
+func GetModelRatioInfo(name string) ModelRatioInfo {
+	name = FormatMatchingModelName(name)
+
+	if ratio, ok := modelRatioMap.Get(name); ok {
+		return ModelRatioInfo{
+			Ratio:       ratio,
+			MatchedName: name,
+			Explicit:    true,
+		}
+	}
+
+	if strings.HasSuffix(name, CompactModelSuffix) {
+		if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
+			return ModelRatioInfo{
+				Ratio:       wildcardRatio,
+				MatchedName: name,
+				Explicit:    true,
+			}
+		}
+	}
+
+	return ModelRatioInfo{
+		Ratio:       37.5,
+		MatchedName: name,
+		Explicit:    false,
 	}
 }
 

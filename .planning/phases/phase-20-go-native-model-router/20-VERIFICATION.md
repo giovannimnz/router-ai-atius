@@ -1,7 +1,7 @@
 ---
 phase: phase-20-go-native-model-router
-verified: 2026-06-26T12:40:00Z
-status: human_needed
+verified: 2026-06-26T13:01:51Z
+status: passed
 score: 9/9 must-haves verified
 overrides_applied: 0
 ---
@@ -9,8 +9,8 @@ overrides_applied: 0
 # Phase 20: Embedding Governor Follow-up Verification Report
 
 **Phase Goal:** Evolve the active Go-native embedding governor and relay path so local TEI embeddings stay fully Go-owned, use metadata-only workload classification, preserve safe adaptive limits, add a disabled-by-default read-only TEI health guardrail, and keep the operational manual aligned with the production baseline.
-**Verified:** 2026-06-26T12:40:00Z
-**Status:** human_needed
+**Verified:** 2026-06-26T13:01:51Z
+**Status:** passed
 **Re-verification:** Yes - this verifies the follow-up execution delivered by plans `20-03`, `20-04`, and `20-05` after the earlier Go-native `/v1/models` cutover.
 
 ## Goal Achievement
@@ -27,7 +27,7 @@ overrides_applied: 0
 | 6 | The relay passes only metadata-derived embedding input stats into the governor and preserves the public model name as the governor scope key. | VERIFIED | `dto.EmbeddingRequest.GetInputStats()` returns numeric-only stats; `relay/embedding_handler.go` passes `InputCount`, `InputChars`, `Workload`, `ChannelID`, `ChannelName`, and `publicModelName`; `TestEmbeddingHelperPassesGovernorRequestMetadata` passes. |
 | 7 | The optional TEI health guardrail is read-only, disabled by default, and cannot downscale after a single bad sample. | VERIFIED | Health probe config/state exists in `service/embeddinggovernor`; tests `TestHealthProbeDisabledByDefault`, `TestHealthHysteresisIgnoresSingleBadSample`, `TestHealthHysteresisReducesAfterConsecutiveBadWindows`, and `TestHealthHysteresisHealthySampleResetsBadWindows` pass. |
 | 8 | The operational manual documents the final governor behavior, env vars, Graphify gate, and controlled production monitor flow. | VERIFIED | `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md` documents metadata thresholds, split metrics, TEI health env vars/defaults, smoke commands, Graphify freshness, and monitor gates. |
-| 9 | Graphify is fresh against the final code/docs state after the phase follow-up changes. | VERIFIED | `graphify status` reports `stale=false`, `commit_stale=false`, `built_at_commit=495f127`, `current_commit=495f127`. |
+| 9 | Graphify is fresh against the final code/docs state after the phase follow-up changes. | VERIFIED | `graphify status` reports `stale=false`, `commit_stale=false`, `built_at_commit=7490e1b`, `current_commit=7490e1b`. |
 
 **Score:** 9/9 truths verified
 
@@ -52,7 +52,9 @@ overrides_applied: 0
 | DTO and relay follow-up | `/usr/local/go/bin/go test ./dto ./relay ./service/embeddinggovernor -count=1` | Passou | PASS |
 | Broader Go gate | `/usr/local/go/bin/go test ./common ./controller ./service/modelcatalog ./relay/common ./service/embeddinggovernor ./relay -count=1` | Passou | PASS |
 | Runtime health gate | `bin/clianything status --strict` | Passou no runtime atual | PASS |
-| Graphify freshness | `node /home/ubuntu/.codex/gsd-core/bin/gsd-tools.cjs graphify status` | `stale=false`, `commit_stale=false` | PASS |
+| Graphify freshness | `node /home/ubuntu/.codex/gsd-core/bin/gsd-tools.cjs graphify status` | `stale=false`, `commit_stale=false`, `built_at_commit=7490e1b` | PASS |
+| Authenticated local embeddings smoke | `ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-pt-v1 ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 python3 scripts/smoke-embeddings.py` | `embeddings ok: model=embedding-pt-v1 type=openai dimension=768` | PASS |
+| Batch workload header smoke | `POST http://127.0.0.1:3000/v1/embeddings` with `X-Embedding-Workload: batch`, model `embedding-pt-v1`, two inputs | HTTP 200, model `text-embeddings-inference`, dimensions `[768, 768]` | PASS |
 
 ### Requirements Coverage
 
@@ -60,18 +62,18 @@ overrides_applied: 0
 |---|---|---|---|
 | `PHASE-20-PYTHON-MIDDLEWARE-REMOVAL` | Middleware must not own this embeddings/governor path | SATISFIED_FOR_SCOPE | All follow-up changes stay in Go `service/embeddinggovernor`, `dto`, `relay`, and docs. |
 | `PHASE-20-UPSTREAM-SYNC-GUARD` | Preserve Go-native fork-owned paths and contracts | SATISFIED | Changes stay in protected paths and maintain `max=3`, metadata-only state, and Go-only ownership. |
-| `PHASE-20-SDK-SMOKES` | Runtime validation must include embeddings smoke path | HUMAN_NEEDED | The code path is verified, but the authenticated local embeddings smoke still requires a human-run token-backed check. |
+| `PHASE-20-SDK-SMOKES` | Runtime validation must include embeddings smoke path | SATISFIED | Authenticated local smoke passed through `http://127.0.0.1:3000/v1/embeddings` with `embedding-pt-v1` and dimension `768`; batch workload header smoke also passed with two `768`-dimensional vectors. |
 | `PHASE-20-GRAPHIFY-GATE` | Graphify must be fresh when enabled | SATISFIED_WITH_NOTE | Graphify is fresh now; however, `.planning/config.json` does not yet contain all requirement-listed boolean toggles. |
 | `PHASE-20-CLI-DOCS-RUNTIME-PARITY` | Docs and operational runbook stay aligned with runtime | SATISFIED_WITH_NOTE | Manual and runtime gates are aligned; `bin/clianything coverage --strict` still fails in this checkout because the management docs tree is absent. |
 
-### Human Verification Required
+### Human Verification Completed
 
 1. **Authenticated local embeddings smoke**
    - Command:
      `ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-pt-v1 ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 python3 scripts/smoke-embeddings.py`
    - Required env:
      `ATIUS_ROUTER_TOKEN`
-   - Expected:
+   - Observed:
      Exit `0` and embedding dimension `768` through the Go path `router -> governor -> TEI`.
 
 ### Warnings
@@ -81,9 +83,9 @@ overrides_applied: 0
 
 ### Gaps Summary
 
-No code or wiring gaps were found in the phase follow-up implementation. The only remaining completion blocker is the human-run authenticated embeddings smoke.
+No code, wiring, or runtime smoke gaps were found in the phase follow-up implementation.
 
 ---
 
-_Verified: 2026-06-26T12:40:00Z_  
+_Verified: 2026-06-26T13:01:51Z_
 _Verifier: the agent (gsd-verifier), reconciled by execute-phase orchestrator_

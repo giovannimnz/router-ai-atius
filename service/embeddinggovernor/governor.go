@@ -131,6 +131,14 @@ type Lease struct {
 	once  sync.Once
 }
 
+type finishOutcome int
+
+const (
+	finishOutcomeSuccess finishOutcome = iota
+	finishOutcomeClientError
+	finishOutcomePressure
+)
+
 var global = New(LoadConfigFromEnv())
 
 func LoadConfigFromEnv() Config {
@@ -316,15 +324,12 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 		g.interactiveLatencyEWMA = blendDuration(g.interactiveLatencyEWMA, latency)
 	}
 
-	if statusCode >= http.StatusInternalServerError {
-		success = false
-	}
 	slowRequestDuration := g.cfg.SlowRequestDuration
 	if batch && g.cfg.BatchSlowRequestDuration > 0 {
 		slowRequestDuration = g.cfg.BatchSlowRequestDuration
 	}
-	if slowRequestDuration > 0 && latency >= slowRequestDuration {
-		success = false
+	slow := slowRequestDuration > 0 && latency >= slowRequestDuration
+	if slow {
 		g.slow++
 		if batch {
 			g.batchSlow++
@@ -334,13 +339,21 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 	}
 
 	now := g.clock()
-	if !success {
+	outcome := classifyFinishOutcome(success, statusCode, slow)
+	if outcome != finishOutcomeSuccess {
 		g.failed++
+	}
+	if outcome == finishOutcomePressure {
 		g.currentConcurrency = g.cfg.MinConcurrency
 		g.successes = 0
 		g.cooldownUntil = now.Add(g.cfg.Cooldown)
 		g.lastFailureAt = now
 		g.lastScaleAt = now
+		g.updateIdleLocked(now)
+		g.cond.Broadcast()
+		return
+	}
+	if outcome == finishOutcomeClientError {
 		g.updateIdleLocked(now)
 		g.cond.Broadcast()
 		return
@@ -473,6 +486,22 @@ func (g *Governor) scaleUpLatencyLocked(batch bool) time.Duration {
 		return g.interactiveLatencyEWMA
 	}
 	return 0
+}
+
+func classifyFinishOutcome(success bool, statusCode int, slow bool) finishOutcome {
+	if slow {
+		return finishOutcomePressure
+	}
+	if success {
+		return finishOutcomeSuccess
+	}
+	if statusCode <= 0 || statusCode == http.StatusRequestTimeout || statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError {
+		return finishOutcomePressure
+	}
+	if statusCode >= http.StatusBadRequest && statusCode < http.StatusInternalServerError {
+		return finishOutcomeClientError
+	}
+	return finishOutcomePressure
 }
 
 func (g *Governor) updateIdleLocked(now time.Time) {

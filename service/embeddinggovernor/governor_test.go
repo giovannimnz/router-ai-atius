@@ -3,6 +3,7 @@ package embeddinggovernor
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -259,6 +260,118 @@ func TestSnapshotContainsOnlyAggregateEmbeddingGovernorMetadata(t *testing.T) {
 	assert.NotContains(t, raw, "authorization")
 	assert.NotContains(t, raw, "token")
 	assert.NotContains(t, raw, "secret")
+}
+
+func TestStatusClassificationIgnoresClientErrors(t *testing.T) {
+	statuses := []int{
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusNotFound,
+		http.StatusUnprocessableEntity,
+	}
+
+	for _, status := range statuses {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			g := New(testConfigWith(func(cfg *Config) {
+				cfg.InitialConcurrency = 2
+				cfg.MaxConcurrency = 3
+				cfg.MinConcurrency = 1
+				cfg.Cooldown = time.Minute
+			}))
+
+			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+			require.Nil(t, reject)
+			require.NotNil(t, lease)
+			lease.Finish(false, status, 250*time.Millisecond)
+
+			snapshot := g.Snapshot()
+			assert.Equal(t, 2, snapshot.CurrentConcurrency)
+			assert.True(t, snapshot.CooldownUntil.IsZero())
+			assert.True(t, snapshot.LastFailureAt.IsZero())
+		})
+	}
+}
+
+func TestStatusClassificationReducesOnPressureFailures(t *testing.T) {
+	statuses := []int{
+		0,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+	}
+
+	for _, status := range statuses {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			g := New(testConfigWith(func(cfg *Config) {
+				cfg.InitialConcurrency = 2
+				cfg.MaxConcurrency = 3
+				cfg.MinConcurrency = 1
+				cfg.Cooldown = time.Minute
+			}))
+
+			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+			require.Nil(t, reject)
+			require.NotNil(t, lease)
+			lease.Finish(false, status, 250*time.Millisecond)
+
+			snapshot := g.Snapshot()
+			assert.Equal(t, 1, snapshot.CurrentConcurrency)
+			assert.False(t, snapshot.CooldownUntil.IsZero())
+			assert.False(t, snapshot.LastFailureAt.IsZero())
+		})
+	}
+}
+
+func TestStatusClassificationKeepsSlowRequestsAsPressure(t *testing.T) {
+	tests := []struct {
+		name            string
+		req             Request
+		latency         time.Duration
+		expectedSlow    uint64
+		expectedBatchSlow uint64
+		expectedInteractiveSlow uint64
+	}{
+		{
+			name: "interactive slow request still applies pressure",
+			req:  Request{Model: "embedding-pt-v1"},
+			latency: 3 * time.Minute,
+			expectedSlow: 1,
+			expectedInteractiveSlow: 1,
+		},
+		{
+			name: "batch slow request still applies pressure",
+			req:  Request{Model: "embedding-pt-v1-batch"},
+			latency: 11 * time.Minute,
+			expectedSlow: 1,
+			expectedBatchSlow: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := New(testConfigWith(func(cfg *Config) {
+				cfg.InitialConcurrency = 2
+				cfg.MaxConcurrency = 3
+				cfg.MinConcurrency = 1
+				cfg.Cooldown = time.Minute
+				cfg.SlowRequestDuration = 2 * time.Minute
+				cfg.BatchSlowRequestDuration = 10 * time.Minute
+			}))
+
+			lease, reject := g.Acquire(context.Background(), tc.req)
+			require.Nil(t, reject)
+			require.NotNil(t, lease)
+			lease.Finish(true, http.StatusOK, tc.latency)
+
+			snapshot := g.Snapshot()
+			assert.Equal(t, 1, snapshot.CurrentConcurrency)
+			assert.False(t, snapshot.CooldownUntil.IsZero())
+			assert.Equal(t, tc.expectedSlow, snapshot.Slow)
+			assert.Equal(t, tc.expectedBatchSlow, snapshot.BatchSlow)
+			assert.Equal(t, tc.expectedInteractiveSlow, snapshot.InteractiveSlow)
+		})
+	}
 }
 
 func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {

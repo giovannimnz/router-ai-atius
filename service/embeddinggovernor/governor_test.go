@@ -167,6 +167,168 @@ func TestLoadConfigNormalizesWorkloadMetadataThresholds(t *testing.T) {
 	assert.Equal(t, defaultBatchInputCharsThreshold, cfg.BatchInputCharsThreshold)
 }
 
+func TestHealthProbeDisabledByDefault(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED", "")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_URL", "")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT", "")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL", "")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD", "")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION", "")
+
+	cfg := LoadConfigFromEnv()
+
+	assert.False(t, cfg.HealthProbeEnabled)
+	assert.Empty(t, cfg.HealthProbeURL)
+	assert.Equal(t, 30*time.Second, cfg.HealthProbeTimeout)
+	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
+	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
+	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
+
+	g := newGovernor(cfg, true)
+	snapshot := g.Snapshot()
+	assert.False(t, snapshot.HealthProbeEnabled)
+	assert.Equal(t, 0, snapshot.HealthBadWindows)
+	assert.Empty(t, snapshot.LastHealthStatus)
+	assert.Equal(t, int64(0), snapshot.LastHealthLatencyMs)
+	assert.True(t, snapshot.LastHealthAt.IsZero())
+	assert.Nil(t, g.healthProbeStop)
+}
+
+func TestHealthHysteresisIgnoresSingleBadSample(t *testing.T) {
+	now := time.Unix(200, 0)
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 3
+		cfg.HealthProbeEnabled = true
+		cfg.HealthProbeURL = "http://tei.local/health"
+		cfg.HealthProbeTimeout = 30 * time.Second
+		cfg.HealthProbeInterval = 30 * time.Second
+		cfg.HealthBadWindowThreshold = 3
+		cfg.HealthSlowDuration = 10 * time.Second
+	}), false)
+	g.clock = func() time.Time {
+		return now
+	}
+
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+
+	snapshot := g.Snapshot()
+	assert.True(t, snapshot.HealthProbeEnabled)
+	assert.Equal(t, 2, snapshot.CurrentConcurrency)
+	assert.True(t, snapshot.CooldownUntil.IsZero())
+	assert.True(t, snapshot.LastFailureAt.IsZero())
+	assert.Equal(t, 1, snapshot.HealthBadWindows)
+	assert.Equal(t, "timeout", snapshot.LastHealthStatus)
+	assert.Equal(t, int64((30 * time.Second).Milliseconds()), snapshot.LastHealthLatencyMs)
+	assert.Equal(t, now, snapshot.LastHealthAt)
+	assert.True(t, healthCanIncrease(g, false))
+}
+
+func TestHealthHysteresisReducesAfterConsecutiveBadWindows(t *testing.T) {
+	now := time.Unix(300, 0)
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 3
+		cfg.MaxConcurrency = 3
+		cfg.MinConcurrency = 1
+		cfg.HealthProbeEnabled = true
+		cfg.HealthProbeURL = "http://tei.local/health"
+		cfg.HealthProbeTimeout = 30 * time.Second
+		cfg.HealthProbeInterval = 30 * time.Second
+		cfg.HealthBadWindowThreshold = 3
+		cfg.HealthSlowDuration = 10 * time.Second
+	}), false)
+	g.clock = func() time.Time {
+		return now
+	}
+
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+	now = now.Add(time.Minute)
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+
+	beforeThreshold := g.Snapshot()
+	assert.Equal(t, 3, beforeThreshold.CurrentConcurrency)
+	assert.Equal(t, 2, beforeThreshold.HealthBadWindows)
+	assert.True(t, healthCanIncrease(g, false))
+
+	now = now.Add(time.Minute)
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+
+	atThreshold := g.Snapshot()
+	assert.Equal(t, 2, atThreshold.CurrentConcurrency)
+	assert.Equal(t, 3, atThreshold.HealthBadWindows)
+	assert.True(t, atThreshold.CooldownUntil.IsZero())
+	assert.Equal(t, "timeout", atThreshold.LastHealthStatus)
+	assert.False(t, healthCanIncrease(g, false))
+
+	now = now.Add(time.Minute)
+	g.observeHealthSample(http.StatusServiceUnavailable, 500*time.Millisecond, nil)
+
+	afterThreshold := g.Snapshot()
+	assert.Equal(t, 1, afterThreshold.CurrentConcurrency)
+	assert.Equal(t, 4, afterThreshold.HealthBadWindows)
+	assert.Equal(t, "http_503", afterThreshold.LastHealthStatus)
+}
+
+func TestHealthHysteresisHealthySampleResetsBadWindows(t *testing.T) {
+	now := time.Unix(400, 0)
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 3
+		cfg.MaxConcurrency = 3
+		cfg.MinConcurrency = 1
+		cfg.HealthProbeEnabled = true
+		cfg.HealthProbeURL = "http://tei.local/health"
+		cfg.HealthProbeTimeout = 30 * time.Second
+		cfg.HealthProbeInterval = 30 * time.Second
+		cfg.HealthBadWindowThreshold = 3
+		cfg.HealthSlowDuration = 10 * time.Second
+	}), false)
+	g.clock = func() time.Time {
+		return now
+	}
+
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+	now = now.Add(time.Minute)
+	g.observeHealthSample(http.StatusServiceUnavailable, 500*time.Millisecond, nil)
+
+	badSnapshot := g.Snapshot()
+	assert.Equal(t, 2, badSnapshot.HealthBadWindows)
+	assert.Equal(t, 3, badSnapshot.CurrentConcurrency)
+
+	now = now.Add(time.Minute)
+	g.observeHealthSample(http.StatusOK, 1500*time.Millisecond, nil)
+
+	resetSnapshot := g.Snapshot()
+	assert.Equal(t, 0, resetSnapshot.HealthBadWindows)
+	assert.Equal(t, 3, resetSnapshot.CurrentConcurrency)
+	assert.Equal(t, "ok", resetSnapshot.LastHealthStatus)
+	assert.True(t, healthCanIncrease(g, false))
+
+	now = now.Add(time.Minute)
+	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
+
+	afterReset := g.Snapshot()
+	assert.Equal(t, 1, afterReset.HealthBadWindows)
+	assert.Equal(t, 3, afterReset.CurrentConcurrency)
+}
+
+func TestLoadConfigNormalizesHealthProbeSettings(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED", "true")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_URL", "http://127.0.0.1:9999/health")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT", "5s")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL", "0s")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD", "1")
+	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION", "-1s")
+
+	cfg := LoadConfigFromEnv()
+
+	assert.True(t, cfg.HealthProbeEnabled)
+	assert.Equal(t, "http://127.0.0.1:9999/health", cfg.HealthProbeURL)
+	assert.Equal(t, 30*time.Second, cfg.HealthProbeTimeout)
+	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
+	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
+	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
+}
+
 func TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
 		cfg.BatchSlowRequestDuration = 10 * time.Minute
@@ -559,25 +721,35 @@ func finishSequential(t *testing.T, g *Governor, success bool, statusCode int) {
 	lease.Finish(success, statusCode, time.Millisecond)
 }
 
+func healthCanIncrease(g *Governor, batch bool) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.canIncreaseLocked(g.clock(), batch)
+}
+
 func testConfig() Config {
 	return Config{
-		Enabled:             true,
-		Models:              parseCSVSet(defaultModels),
-		BatchModels:         parseCSVSet(defaultBatchModels),
-		InitialConcurrency:  2,
-		MinConcurrency:      1,
-		MaxConcurrency:      3,
-		BatchConcurrency:    1,
-		QueueLimit:          8,
-		BatchQueueLimit:     8,
-		InteractiveTimeout:  time.Second,
-		BatchTimeout:        time.Second,
-		Cooldown:            time.Minute,
-		SlowRequestDuration: 0,
-		LatencyTarget:       0,
-		ScaleUpMinInterval:  0,
-		ScaleDownIdle:       0,
-		SuccessWindow:       20,
+		Enabled:                  true,
+		Models:                   parseCSVSet(defaultModels),
+		BatchModels:              parseCSVSet(defaultBatchModels),
+		InitialConcurrency:       2,
+		MinConcurrency:           1,
+		MaxConcurrency:           3,
+		BatchConcurrency:         1,
+		QueueLimit:               8,
+		BatchQueueLimit:          8,
+		InteractiveTimeout:       time.Second,
+		BatchTimeout:             time.Second,
+		Cooldown:                 time.Minute,
+		SlowRequestDuration:      0,
+		LatencyTarget:            0,
+		ScaleUpMinInterval:       0,
+		ScaleDownIdle:            0,
+		SuccessWindow:            20,
+		HealthProbeTimeout:       30 * time.Second,
+		HealthProbeInterval:      30 * time.Second,
+		HealthBadWindowThreshold: 3,
+		HealthSlowDuration:       10 * time.Second,
 	}
 }
 

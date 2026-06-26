@@ -178,6 +178,7 @@
 - Canais type=14 (Anthropic) criados: id=3 (MiniMax), id=4 (MiniMax-Highspeed)
 - Relay /v1/messages funcionando (Claude → OpenAI conversion)
 - Abilities populadas para M2.1, M2.5, M2.7 nos canais Anthropic
+- Nota 2026-06-18: este desenho de canais Anthropic separados foi substituido pela consolidacao Go-native; MiniMax opera como canal unico type=35 e DeepSeek como canal unico type=43.
 
 ### Phase 2: /v1/claude/models Endpoint ✓
 

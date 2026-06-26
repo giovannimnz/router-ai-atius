@@ -1,0 +1,13 @@
+{
+  "graphify": {
+    "enabled": true,
+    "auto_update": true,
+    "build_timeout": 600
+  },
+  "git": {
+    "base_branch": "feat/pt-native"
+  },
+  "workflow": {
+    "_auto_chain_active": false
+  }
+}

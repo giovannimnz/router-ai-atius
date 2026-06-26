@@ -2,9 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: — Model Aliases & Token Management ✓
+current_phase: 20
 status: completed
-last_updated: "2026-06-18T08:41:47.835Z"
-last_activity: 2026-06-18
+stopped_at: Completed phase-20-03-PLAN.md
+last_updated: "2026-06-26T13:04:51.800Z"
+last_activity: 2026-06-26
 progress:
   total_phases: 2
   completed_phases: 0
@@ -20,9 +22,9 @@ progress:
 Phase: phase-20 (go-native-model-router) — EXECUTING
 Plan: Not started
 **Milestone:** v2.12 — pt-native upstream sync (next)
-**Phase:** phase-20
+**Phase:** 20
 **Status:** Milestone complete
-**Last activity:** 2026-06-18
+**Last activity:** 2026-06-26
 
 ## What Was Done
 
@@ -174,3 +176,9 @@ DB:      DBRouterAiAtius
 - [Phase ?]: Use existing GET /v1/models as the only public Go catalog endpoint — Avoids a second source of truth and satisfies the corrected Phase 20 contract.
 - [Phase ?]: Use api_format=anthropic and Anthropic headers for model-list intent — Lets Go serve Anthropic-selected model lists under the same root data-only payload contract.
 - [Phase ?]: Keep pricing provenance internal to JSON output — pricing_source and pricing_estimated are useful internally but must not leak from public /v1/models.
+
+## Session
+
+**Last session:** 2026-06-26T11:48:08.881Z
+**Stopped at:** Completed phase-20-03-PLAN.md
+**Resume file:** None

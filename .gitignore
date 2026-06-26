@@ -36,3 +36,5 @@ data/
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+graphify-out/
+.planning/graphs/.last-build-snapshot.json

@@ -4,8 +4,8 @@ milestone: v1.4
 milestone_name: — Model Aliases & Token Management ✓
 current_phase: 20
 status: completed
-stopped_at: Completed phase-20-03-PLAN.md
-last_updated: "2026-06-26T13:04:51.800Z"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-06-26T18:09:28.970Z"
 last_activity: 2026-06-26
 progress:
   total_phases: 2
@@ -129,7 +129,7 @@ DB:      DBRouterAiAtius
 | v1.2 | Fork Migration | ✅ |
 | v1.3 | Testing Infrastructure | ✅ |
 | v1.4 | Model Aliases | ✅ |
-| v1.5 | API Documentation Site | ✅ |
+| v1.5 | API Unification & Model Listing | ✅ |
 | v1.6 | Internacionalização PT-BR | ✅ done 2026-06-04 |
 | v1.7 | Documentação PT-BR | deferred (lower priority) |
 | v1.8 | Podman Migration | ✅ done 2026-06-04 (code); SRV-1 cutover pending |
@@ -179,6 +179,6 @@ DB:      DBRouterAiAtius
 
 ## Session
 
-**Last session:** 2026-06-26T11:48:08.881Z
-**Stopped at:** Completed phase-20-03-PLAN.md
-**Resume file:** None
+**Last session:** 2026-06-26T18:09:28.957Z
+**Stopped at:** Phase 8 context gathered
+**Resume file:** .planning/phases/08-feat-pt-native-pr/08-CONTEXT.md

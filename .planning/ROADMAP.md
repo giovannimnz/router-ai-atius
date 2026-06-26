@@ -188,17 +188,22 @@
 - Fix `IsModelLimitsEnabled()` em middleware/auth.go
 - Bruno test collection criada (3/3 passing)
 
-### Phase 3: Model Unification via Middleware [PLANNING]
+### Phase 3: Model Unification via Middleware [SUPERSEDED]
 
 **slug:** `model-unification`
 
-- Unificar `/v1/models` com `?api_format=openai|anthropic`
-- FastAPI como entry point para listagem (Option A)
-- Go vira pure relay (downstream)
-- Deprecar `/v1/claude/models` com headers Sunset
-- Internal endpoint `/internal/v1/models` no Go
+- Proposta historica: unificar `/v1/models` com `?api_format=openai|anthropic`
+- Proposta historica: FastAPI como entry point para listagem (Option A)
+- Proposta historica: Go vira pure relay (downstream)
+- Proposta historica: deprecar `/v1/claude/models` com headers Sunset
+- Proposta historica: internal endpoint `/internal/v1/models` no Go
 
-**Blocked by:** Phase 2 completion
+**Resolution:** Nao pendente. Esta direcao foi substituida pelo cutover Go-native consolidado na `phase-20-go-native-model-router`, onde o Go passou a ser o owner de `GET /v1/models` e a dependencia do middleware Python foi removida do caminho canonico.
+
+**Current canonical state:**
+- `GET /v1/models` pertence ao backend Go
+- o middleware/FastAPI nao e o owner do catalogo publico
+- `model-detailed` pode permanecer apenas para superfícies auxiliares legadas/docs, nao como source of truth de `/v1/models`
 
 ---
 

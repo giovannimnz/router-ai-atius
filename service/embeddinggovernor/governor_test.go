@@ -3,9 +3,11 @@ package embeddinggovernor
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,6 +164,101 @@ func TestLoadConfigNormalizesWorkloadMetadataThresholds(t *testing.T) {
 
 	assert.Equal(t, defaultBatchInputCountThreshold, cfg.BatchInputCountThreshold)
 	assert.Equal(t, defaultBatchInputCharsThreshold, cfg.BatchInputCharsThreshold)
+}
+
+func TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.BatchSlowRequestDuration = 10 * time.Minute
+	}))
+
+	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, interactive)
+	interactive.Finish(true, http.StatusOK, 2*time.Second)
+
+	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	require.Nil(t, reject)
+	require.NotNil(t, batch)
+	batch.Finish(true, http.StatusOK, 5*time.Minute)
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, int64((2 * time.Second).Milliseconds()), snapshot.InteractiveAverageLatencyMs)
+	assert.Equal(t, int64((5 * time.Minute).Milliseconds()), snapshot.BatchAverageLatencyMs)
+	assert.Equal(t, uint64(1), snapshot.InteractiveCompleted)
+	assert.Equal(t, uint64(1), snapshot.BatchCompleted)
+	assert.NotEqual(t, snapshot.InteractiveAverageLatencyMs, snapshot.BatchAverageLatencyMs)
+}
+
+func TestBatchLatencyDoesNotBlockInteractiveScaleUp(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 1
+		cfg.MaxConcurrency = 3
+		cfg.SuccessWindow = 100
+		cfg.ScaleUpMinInterval = 0
+		cfg.LatencyTarget = 90 * time.Second
+		cfg.BatchSlowRequestDuration = 10 * time.Minute
+	}))
+
+	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	require.Nil(t, reject)
+	require.NotNil(t, batch)
+	batch.Finish(true, http.StatusOK, 5*time.Minute)
+
+	firstInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, firstInteractive)
+
+	secondInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, secondInteractive)
+	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
+
+	firstInteractive.Finish(true, http.StatusOK, time.Second)
+	secondInteractive.Finish(true, http.StatusOK, time.Second)
+}
+
+func TestSnapshotContainsOnlyAggregateEmbeddingGovernorMetadata(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.BatchSlowRequestDuration = 10 * time.Minute
+	}))
+
+	interactive, reject := g.Acquire(context.Background(), Request{
+		Model:      "embedding-pt-v1",
+		InputCount: 3,
+		InputChars: 4096,
+		Workload:   "interactive",
+	})
+	require.Nil(t, reject)
+	require.NotNil(t, interactive)
+	interactive.Finish(true, http.StatusOK, 1500*time.Millisecond)
+
+	batch, reject := g.Acquire(context.Background(), Request{
+		Model:      "embedding-pt-v1-batch",
+		InputCount: 4,
+		InputChars: 16000,
+		Workload:   "batch",
+	})
+	require.Nil(t, reject)
+	require.NotNil(t, batch)
+	batch.Finish(true, http.StatusOK, 4*time.Minute)
+
+	payload, err := common.Marshal(g.Snapshot())
+	require.NoError(t, err)
+
+	raw := strings.ToLower(string(payload))
+	assert.Contains(t, raw, "\"interactive_average_latency_ms\"")
+	assert.Contains(t, raw, "\"batch_average_latency_ms\"")
+	assert.Contains(t, raw, "\"interactive_completed\"")
+	assert.Contains(t, raw, "\"batch_completed\"")
+	assert.Contains(t, raw, "\"interactive_slow\"")
+	assert.Contains(t, raw, "\"batch_slow\"")
+	assert.NotContains(t, raw, "input_count")
+	assert.NotContains(t, raw, "input_chars")
+	assert.NotContains(t, raw, "workload")
+	assert.NotContains(t, raw, "channel_name")
+	assert.NotContains(t, raw, "authorization")
+	assert.NotContains(t, raw, "token")
+	assert.NotContains(t, raw, "secret")
 }
 
 func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {

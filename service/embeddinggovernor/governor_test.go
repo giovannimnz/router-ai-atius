@@ -325,25 +325,25 @@ func TestStatusClassificationReducesOnPressureFailures(t *testing.T) {
 
 func TestStatusClassificationKeepsSlowRequestsAsPressure(t *testing.T) {
 	tests := []struct {
-		name            string
-		req             Request
-		latency         time.Duration
-		expectedSlow    uint64
-		expectedBatchSlow uint64
+		name                    string
+		req                     Request
+		latency                 time.Duration
+		expectedSlow            uint64
+		expectedBatchSlow       uint64
 		expectedInteractiveSlow uint64
 	}{
 		{
-			name: "interactive slow request still applies pressure",
-			req:  Request{Model: "embedding-pt-v1"},
-			latency: 3 * time.Minute,
-			expectedSlow: 1,
+			name:                    "interactive slow request still applies pressure",
+			req:                     Request{Model: "embedding-pt-v1"},
+			latency:                 3 * time.Minute,
+			expectedSlow:            1,
 			expectedInteractiveSlow: 1,
 		},
 		{
-			name: "batch slow request still applies pressure",
-			req:  Request{Model: "embedding-pt-v1-batch"},
-			latency: 11 * time.Minute,
-			expectedSlow: 1,
+			name:              "batch slow request still applies pressure",
+			req:               Request{Model: "embedding-pt-v1-batch"},
+			latency:           11 * time.Minute,
+			expectedSlow:      1,
 			expectedBatchSlow: 1,
 		},
 	}

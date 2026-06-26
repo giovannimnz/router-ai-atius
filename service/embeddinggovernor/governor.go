@@ -11,17 +11,17 @@ import (
 )
 
 const (
-	defaultModels             = "embedding-pt-v1,embedding-pt-v1-batch"
-	defaultBatchModels        = "embedding-pt-v1-batch"
-	defaultInitialConcurrency = 2
-	defaultMinConcurrency     = 1
-	defaultMaxConcurrency     = 3
-	defaultBatchConcurrency   = 1
+	defaultModels                   = "embedding-pt-v1,embedding-pt-v1-batch"
+	defaultBatchModels              = "embedding-pt-v1-batch"
+	defaultInitialConcurrency       = 2
+	defaultMinConcurrency           = 1
+	defaultMaxConcurrency           = 3
+	defaultBatchConcurrency         = 1
 	defaultBatchInputCountThreshold = 4
 	defaultBatchInputCharsThreshold = 12000
-	defaultQueueLimit         = 128
-	defaultBatchQueueLimit    = 512
-	defaultSuccessWindow      = 8
+	defaultQueueLimit               = 128
+	defaultBatchQueueLimit          = 512
+	defaultSuccessWindow            = 8
 )
 
 // Request carries only routing metadata. It must never include embedding input text.
@@ -65,32 +65,32 @@ type Config struct {
 }
 
 type Snapshot struct {
-	Enabled              bool      `json:"enabled"`
-	CurrentConcurrency   int       `json:"current_concurrency"`
-	MinConcurrency       int       `json:"min_concurrency"`
-	MaxConcurrency       int       `json:"max_concurrency"`
-	BatchConcurrency     int       `json:"batch_concurrency"`
-	Running              int       `json:"running"`
-	RunningBatch         int       `json:"running_batch"`
-	WaitingInteractive   int       `json:"waiting_interactive"`
-	WaitingBatch         int       `json:"waiting_batch"`
-	CooldownUntil        time.Time `json:"cooldown_until,omitempty"`
-	ConsecutiveSuccesses int       `json:"consecutive_successes"`
-	Completed            uint64    `json:"completed"`
-	Failed               uint64    `json:"failed"`
-	Slow                 uint64    `json:"slow"`
-	AverageLatencyMs     int64     `json:"average_latency_ms"`
-	InteractiveAverageLatencyMs int64  `json:"interactive_average_latency_ms"`
-	BatchAverageLatencyMs       int64  `json:"batch_average_latency_ms"`
-	InteractiveCompleted        uint64 `json:"interactive_completed"`
-	BatchCompleted              uint64 `json:"batch_completed"`
-	InteractiveSlow             uint64 `json:"interactive_slow"`
-	BatchSlow                   uint64 `json:"batch_slow"`
-	LastSuccessAt        time.Time `json:"last_success_at,omitempty"`
-	LastFailureAt        time.Time `json:"last_failure_at,omitempty"`
-	LastScaleAt          time.Time `json:"last_scale_at,omitempty"`
-	PeakRunning          int       `json:"peak_running"`
-	PeakWaiting          int       `json:"peak_waiting"`
+	Enabled                     bool      `json:"enabled"`
+	CurrentConcurrency          int       `json:"current_concurrency"`
+	MinConcurrency              int       `json:"min_concurrency"`
+	MaxConcurrency              int       `json:"max_concurrency"`
+	BatchConcurrency            int       `json:"batch_concurrency"`
+	Running                     int       `json:"running"`
+	RunningBatch                int       `json:"running_batch"`
+	WaitingInteractive          int       `json:"waiting_interactive"`
+	WaitingBatch                int       `json:"waiting_batch"`
+	CooldownUntil               time.Time `json:"cooldown_until,omitempty"`
+	ConsecutiveSuccesses        int       `json:"consecutive_successes"`
+	Completed                   uint64    `json:"completed"`
+	Failed                      uint64    `json:"failed"`
+	Slow                        uint64    `json:"slow"`
+	AverageLatencyMs            int64     `json:"average_latency_ms"`
+	InteractiveAverageLatencyMs int64     `json:"interactive_average_latency_ms"`
+	BatchAverageLatencyMs       int64     `json:"batch_average_latency_ms"`
+	InteractiveCompleted        uint64    `json:"interactive_completed"`
+	BatchCompleted              uint64    `json:"batch_completed"`
+	InteractiveSlow             uint64    `json:"interactive_slow"`
+	BatchSlow                   uint64    `json:"batch_slow"`
+	LastSuccessAt               time.Time `json:"last_success_at,omitempty"`
+	LastFailureAt               time.Time `json:"last_failure_at,omitempty"`
+	LastScaleAt                 time.Time `json:"last_scale_at,omitempty"`
+	PeakRunning                 int       `json:"peak_running"`
+	PeakWaiting                 int       `json:"peak_waiting"`
 }
 
 type Governor struct {
@@ -100,29 +100,29 @@ type Governor struct {
 	cond  *sync.Cond
 	clock func() time.Time
 
-	currentConcurrency int
-	running            int
-	runningBatch       int
-	waitingInteractive int
-	waitingBatch       int
-	successes          int
-	cooldownUntil      time.Time
-	latencyEWMA        time.Duration
+	currentConcurrency     int
+	running                int
+	runningBatch           int
+	waitingInteractive     int
+	waitingBatch           int
+	successes              int
+	cooldownUntil          time.Time
+	latencyEWMA            time.Duration
 	interactiveLatencyEWMA time.Duration
 	batchLatencyEWMA       time.Duration
-	lastSuccessAt      time.Time
-	lastFailureAt      time.Time
-	lastScaleAt        time.Time
-	idleSince          time.Time
-	completed          uint64
-	failed             uint64
-	slow               uint64
-	interactiveCompleted uint64
-	batchCompleted       uint64
-	interactiveSlow      uint64
-	batchSlow            uint64
-	peakRunning        int
-	peakWaiting        int
+	lastSuccessAt          time.Time
+	lastFailureAt          time.Time
+	lastScaleAt            time.Time
+	idleSince              time.Time
+	completed              uint64
+	failed                 uint64
+	slow                   uint64
+	interactiveCompleted   uint64
+	batchCompleted         uint64
+	interactiveSlow        uint64
+	batchSlow              uint64
+	peakRunning            int
+	peakWaiting            int
 }
 
 type Lease struct {
@@ -269,32 +269,32 @@ func (g *Governor) Snapshot() Snapshot {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return Snapshot{
-		Enabled:              g.cfg.Enabled,
-		CurrentConcurrency:   g.currentConcurrency,
-		MinConcurrency:       g.cfg.MinConcurrency,
-		MaxConcurrency:       g.cfg.MaxConcurrency,
-		BatchConcurrency:     g.cfg.BatchConcurrency,
-		Running:              g.running,
-		RunningBatch:         g.runningBatch,
-		WaitingInteractive:   g.waitingInteractive,
-		WaitingBatch:         g.waitingBatch,
-		CooldownUntil:        g.cooldownUntil,
-		ConsecutiveSuccesses: g.successes,
-		Completed:            g.completed,
-		Failed:               g.failed,
-		Slow:                 g.slow,
-		AverageLatencyMs:     g.latencyEWMA.Milliseconds(),
+		Enabled:                     g.cfg.Enabled,
+		CurrentConcurrency:          g.currentConcurrency,
+		MinConcurrency:              g.cfg.MinConcurrency,
+		MaxConcurrency:              g.cfg.MaxConcurrency,
+		BatchConcurrency:            g.cfg.BatchConcurrency,
+		Running:                     g.running,
+		RunningBatch:                g.runningBatch,
+		WaitingInteractive:          g.waitingInteractive,
+		WaitingBatch:                g.waitingBatch,
+		CooldownUntil:               g.cooldownUntil,
+		ConsecutiveSuccesses:        g.successes,
+		Completed:                   g.completed,
+		Failed:                      g.failed,
+		Slow:                        g.slow,
+		AverageLatencyMs:            g.latencyEWMA.Milliseconds(),
 		InteractiveAverageLatencyMs: g.interactiveLatencyEWMA.Milliseconds(),
 		BatchAverageLatencyMs:       g.batchLatencyEWMA.Milliseconds(),
 		InteractiveCompleted:        g.interactiveCompleted,
 		BatchCompleted:              g.batchCompleted,
 		InteractiveSlow:             g.interactiveSlow,
 		BatchSlow:                   g.batchSlow,
-		LastSuccessAt:        g.lastSuccessAt,
-		LastFailureAt:        g.lastFailureAt,
-		LastScaleAt:          g.lastScaleAt,
-		PeakRunning:          g.peakRunning,
-		PeakWaiting:          g.peakWaiting,
+		LastSuccessAt:               g.lastSuccessAt,
+		LastFailureAt:               g.lastFailureAt,
+		LastScaleAt:                 g.lastScaleAt,
+		PeakRunning:                 g.peakRunning,
+		PeakWaiting:                 g.peakWaiting,
 	}
 }
 

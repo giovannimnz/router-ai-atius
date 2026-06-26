@@ -13,10 +13,12 @@ import (
 const (
 	defaultModels             = "embedding-pt-v1,embedding-pt-v1-batch"
 	defaultBatchModels        = "embedding-pt-v1-batch"
-	defaultInitialConcurrency = 1
+	defaultInitialConcurrency = 2
 	defaultMinConcurrency     = 1
-	defaultMaxConcurrency     = 4
+	defaultMaxConcurrency     = 3
 	defaultBatchConcurrency   = 1
+	defaultBatchInputCountThreshold = 4
+	defaultBatchInputCharsThreshold = 12000
 	defaultQueueLimit         = 128
 	defaultBatchQueueLimit    = 512
 	defaultSuccessWindow      = 8
@@ -28,6 +30,8 @@ type Request struct {
 	ChannelID   int
 	ChannelName string
 	Workload    string
+	InputCount  int
+	InputChars  int
 }
 
 type Reject struct {
@@ -38,23 +42,26 @@ type Reject struct {
 }
 
 type Config struct {
-	Enabled             bool
-	Models              map[string]bool
-	BatchModels         map[string]bool
-	InitialConcurrency  int
-	MinConcurrency      int
-	MaxConcurrency      int
-	BatchConcurrency    int
-	QueueLimit          int
-	BatchQueueLimit     int
-	InteractiveTimeout  time.Duration
-	BatchTimeout        time.Duration
-	Cooldown            time.Duration
-	SlowRequestDuration time.Duration
-	LatencyTarget       time.Duration
-	ScaleUpMinInterval  time.Duration
-	ScaleDownIdle       time.Duration
-	SuccessWindow       int
+	Enabled                  bool
+	Models                   map[string]bool
+	BatchModels              map[string]bool
+	InitialConcurrency       int
+	MinConcurrency           int
+	MaxConcurrency           int
+	BatchConcurrency         int
+	BatchInputCountThreshold int
+	BatchInputCharsThreshold int
+	QueueLimit               int
+	BatchQueueLimit          int
+	InteractiveTimeout       time.Duration
+	BatchTimeout             time.Duration
+	Cooldown                 time.Duration
+	SlowRequestDuration      time.Duration
+	BatchSlowRequestDuration time.Duration
+	LatencyTarget            time.Duration
+	ScaleUpMinInterval       time.Duration
+	ScaleDownIdle            time.Duration
+	SuccessWindow            int
 }
 
 type Snapshot struct {
@@ -116,23 +123,26 @@ var global = New(LoadConfigFromEnv())
 
 func LoadConfigFromEnv() Config {
 	cfg := Config{
-		Enabled:             envBool("EMBEDDING_GOVERNOR_ENABLED", true),
-		Models:              parseCSVSet(envString("EMBEDDING_GOVERNOR_MODELS", defaultModels)),
-		BatchModels:         parseCSVSet(envString("EMBEDDING_GOVERNOR_BATCH_MODELS", defaultBatchModels)),
-		InitialConcurrency:  envInt("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", defaultInitialConcurrency),
-		MinConcurrency:      envInt("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", defaultMinConcurrency),
-		MaxConcurrency:      envInt("EMBEDDING_GOVERNOR_MAX_CONCURRENCY", defaultMaxConcurrency),
-		BatchConcurrency:    envInt("EMBEDDING_GOVERNOR_BATCH_CONCURRENCY", defaultBatchConcurrency),
-		QueueLimit:          envInt("EMBEDDING_GOVERNOR_QUEUE_LIMIT", defaultQueueLimit),
-		BatchQueueLimit:     envInt("EMBEDDING_GOVERNOR_BATCH_QUEUE_LIMIT", defaultBatchQueueLimit),
-		InteractiveTimeout:  envDuration("EMBEDDING_GOVERNOR_INTERACTIVE_TIMEOUT", 30*time.Second),
-		BatchTimeout:        envDuration("EMBEDDING_GOVERNOR_BATCH_TIMEOUT", 5*time.Minute),
-		Cooldown:            envDuration("EMBEDDING_GOVERNOR_COOLDOWN", 10*time.Minute),
-		SlowRequestDuration: envDuration("EMBEDDING_GOVERNOR_SLOW_REQUEST_DURATION", 2*time.Minute),
-		LatencyTarget:       envDuration("EMBEDDING_GOVERNOR_LATENCY_TARGET", 90*time.Second),
-		ScaleUpMinInterval:  envDuration("EMBEDDING_GOVERNOR_SCALE_UP_MIN_INTERVAL", 30*time.Second),
-		ScaleDownIdle:       envDuration("EMBEDDING_GOVERNOR_SCALE_DOWN_IDLE", 10*time.Minute),
-		SuccessWindow:       envInt("EMBEDDING_GOVERNOR_SUCCESS_WINDOW", defaultSuccessWindow),
+		Enabled:                  envBool("EMBEDDING_GOVERNOR_ENABLED", true),
+		Models:                   parseCSVSet(envString("EMBEDDING_GOVERNOR_MODELS", defaultModels)),
+		BatchModels:              parseCSVSet(envString("EMBEDDING_GOVERNOR_BATCH_MODELS", defaultBatchModels)),
+		InitialConcurrency:       envInt("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", defaultInitialConcurrency),
+		MinConcurrency:           envInt("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", defaultMinConcurrency),
+		MaxConcurrency:           envInt("EMBEDDING_GOVERNOR_MAX_CONCURRENCY", defaultMaxConcurrency),
+		BatchConcurrency:         envInt("EMBEDDING_GOVERNOR_BATCH_CONCURRENCY", defaultBatchConcurrency),
+		BatchInputCountThreshold: envInt("EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD", defaultBatchInputCountThreshold),
+		BatchInputCharsThreshold: envInt("EMBEDDING_GOVERNOR_BATCH_INPUT_CHARS_THRESHOLD", defaultBatchInputCharsThreshold),
+		QueueLimit:               envInt("EMBEDDING_GOVERNOR_QUEUE_LIMIT", defaultQueueLimit),
+		BatchQueueLimit:          envInt("EMBEDDING_GOVERNOR_BATCH_QUEUE_LIMIT", defaultBatchQueueLimit),
+		InteractiveTimeout:       envDuration("EMBEDDING_GOVERNOR_INTERACTIVE_TIMEOUT", 30*time.Second),
+		BatchTimeout:             envDuration("EMBEDDING_GOVERNOR_BATCH_TIMEOUT", 10*time.Minute),
+		Cooldown:                 envDuration("EMBEDDING_GOVERNOR_COOLDOWN", 10*time.Minute),
+		SlowRequestDuration:      envDuration("EMBEDDING_GOVERNOR_SLOW_REQUEST_DURATION", 2*time.Minute),
+		BatchSlowRequestDuration: envDuration("EMBEDDING_GOVERNOR_BATCH_SLOW_REQUEST_DURATION", 10*time.Minute),
+		LatencyTarget:            envDuration("EMBEDDING_GOVERNOR_LATENCY_TARGET", 90*time.Second),
+		ScaleUpMinInterval:       envDuration("EMBEDDING_GOVERNOR_SCALE_UP_MIN_INTERVAL", 30*time.Second),
+		ScaleDownIdle:            envDuration("EMBEDDING_GOVERNOR_SCALE_DOWN_IDLE", 10*time.Minute),
+		SuccessWindow:            envInt("EMBEDDING_GOVERNOR_SUCCESS_WINDOW", defaultSuccessWindow),
 	}
 	return normalizeConfig(cfg)
 }
@@ -216,6 +226,12 @@ func (g *Governor) Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 			g.decrementWaiterLocked(batch)
 			return nil, rejectFromContext(ctx.Err(), timeout)
 		}
+		if wait := g.cooldownWaitLocked(g.clock()); wait > 0 {
+			g.mu.Unlock()
+			waitForCooldown(ctx, wait)
+			g.mu.Lock()
+			continue
+		}
 		if g.canStartLocked(batch) {
 			g.decrementWaiterLocked(batch)
 			g.running++
@@ -278,7 +294,11 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 	if statusCode >= http.StatusInternalServerError {
 		success = false
 	}
-	if g.cfg.SlowRequestDuration > 0 && latency >= g.cfg.SlowRequestDuration {
+	slowRequestDuration := g.cfg.SlowRequestDuration
+	if batch && g.cfg.BatchSlowRequestDuration > 0 {
+		slowRequestDuration = g.cfg.BatchSlowRequestDuration
+	}
+	if slowRequestDuration > 0 && latency >= slowRequestDuration {
 		success = false
 		g.slow++
 	}
@@ -329,6 +349,12 @@ func (g *Governor) isBatch(req Request) bool {
 	}
 	if workload == "interactive" || workload == "realtime" {
 		return false
+	}
+	if g.cfg.BatchInputCountThreshold > 0 && req.InputCount >= g.cfg.BatchInputCountThreshold {
+		return true
+	}
+	if g.cfg.BatchInputCharsThreshold > 0 && req.InputChars >= g.cfg.BatchInputCharsThreshold {
+		return true
 	}
 	return g.cfg.BatchModels[strings.TrimSpace(req.Model)]
 }
@@ -443,6 +469,25 @@ func (g *Governor) decrementWaiterLocked(batch bool) {
 	}
 }
 
+func (g *Governor) cooldownWaitLocked(now time.Time) time.Duration {
+	if g.cooldownUntil.IsZero() || !now.Before(g.cooldownUntil) {
+		return 0
+	}
+	return g.cooldownUntil.Sub(now)
+}
+
+func waitForCooldown(ctx context.Context, wait time.Duration) {
+	if wait <= 0 {
+		return
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
+
 func rejectFromContext(err error, timeout time.Duration) *Reject {
 	if err == context.Canceled {
 		return &Reject{
@@ -484,6 +529,12 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.BatchConcurrency > cfg.MaxConcurrency {
 		cfg.BatchConcurrency = cfg.MaxConcurrency
 	}
+	if cfg.BatchInputCountThreshold <= 0 {
+		cfg.BatchInputCountThreshold = defaultBatchInputCountThreshold
+	}
+	if cfg.BatchInputCharsThreshold <= 0 {
+		cfg.BatchInputCharsThreshold = defaultBatchInputCharsThreshold
+	}
 	if cfg.QueueLimit < 1 {
 		cfg.QueueLimit = defaultQueueLimit
 	}
@@ -494,13 +545,16 @@ func normalizeConfig(cfg Config) Config {
 		cfg.InteractiveTimeout = 30 * time.Second
 	}
 	if cfg.BatchTimeout <= 0 {
-		cfg.BatchTimeout = 5 * time.Minute
+		cfg.BatchTimeout = 10 * time.Minute
 	}
 	if cfg.Cooldown < 0 {
 		cfg.Cooldown = 0
 	}
 	if cfg.SlowRequestDuration < 0 {
 		cfg.SlowRequestDuration = 0
+	}
+	if cfg.BatchSlowRequestDuration < 0 {
+		cfg.BatchSlowRequestDuration = 0
 	}
 	if cfg.LatencyTarget < 0 {
 		cfg.LatencyTarget = 0

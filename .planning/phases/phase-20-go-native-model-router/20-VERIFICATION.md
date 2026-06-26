@@ -1,126 +1,89 @@
 ---
 phase: phase-20-go-native-model-router
-verified: 2026-06-18T05:50:04Z
-status: passed
-score: 15/15 must-haves verified
+verified: 2026-06-26T12:40:00Z
+status: human_needed
+score: 9/9 must-haves verified
 overrides_applied: 0
 ---
 
-# Phase 20: Go Native Model Router Verification Report
+# Phase 20: Embedding Governor Follow-up Verification Report
 
-**Phase Goal:** Go-only model catalog and middleware removal path, with corrected Phase 20.2 target: Go-owned enriched `/v1/models`, SDK-compatible root data-only payload, Anthropic-selected Go model list when `api_format=anthropic` or Anthropic headers are present, no `/internal/v1/models` canonical route, deterministic ordering, docs/schema/tests, Graphify fresh.
-**Verified:** 2026-06-18T05:50:04Z
-**Status:** passed
-**Re-verification:** No - initial verification of the corrected Phase 20.1/20.2 contract. An older Wave 0 `VERIFICATION.md` existed, but it had no structured `gaps:` frontmatter and predated the Go-native implementation.
+**Phase Goal:** Evolve the active Go-native embedding governor and relay path so local TEI embeddings stay fully Go-owned, use metadata-only workload classification, preserve safe adaptive limits, add a disabled-by-default read-only TEI health guardrail, and keep the operational manual aligned with the production baseline.
+**Verified:** 2026-06-26T12:40:00Z
+**Status:** human_needed
+**Re-verification:** Yes - this verifies the follow-up execution delivered by plans `20-03`, `20-04`, and `20-05` after the earlier Go-native `/v1/models` cutover.
 
 ## Goal Achievement
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | A canonical Go catalog builder exists and derives endpoint labels plus pricing provenance from current pricing data. | VERIFIED | `service/modelcatalog/catalog.go` defines endpoint labels, provenance and `BuildCatalogEntry`; `controller/model.go` calls `model.GetPricing()` and `modelcatalog.BuildCatalogEntry`. |
-| 2 | Missing pricing is represented explicitly as fallback. | VERIFIED | `BuildCatalogEntryForModel` sets `PricingSource: "missing"`, `PricingEstimated: true`, zero `InputPrice`/`OutputPrice`, and a zero public `pricing` object. |
-| 3 | Tiered billing metadata survives catalog projection. | VERIFIED | `BuildCatalogEntry` copies `BillingMode`, `BillingExpr`, and `PricingVersion`; controller tests cover tiered billing visibility. |
-| 4 | `GET /v1/models` is built from the Go catalog path and no Python enrichment is required for model-list metadata. | VERIFIED | `ListModels` builds `catalogEntriesForModels`, then emits OpenAI/Anthropic payloads from those entries. No Python call exists in `controller/model.go` or `router/relay-router.go`. |
-| 5 | No `/internal/v1/models` route is added as the canonical catalog source. | VERIFIED | Grep of `router/relay-router.go` and `controller/model.go` found no `/internal/v1/models`; route registration is only `/v1/models`. Legacy references remain in middleware/backups, not as Go canonical routes. |
-| 6 | OpenAI-compatible model list remains SDK-compatible by default. | VERIFIED | Default branch returns `{"data": []dto.OpenAIModels}`; model items keep `id`, `object: "model"`, `created`, and `owned_by`. |
-| 7 | Public `/v1/models` root payload is `{"data":[...]}` only for model-list modes. | VERIFIED | OpenAI and Anthropic branches return only `gin.H{"data": ...}`; tests assert top-level keys are exactly `data`. |
-| 8 | Public `/v1/models` does not expose `pricing_source`, `pricing_estimated`, top-level `object`, or top-level `success`. | VERIFIED | DTO fields use `json:"-"`; controller tests unmarshal raw maps and assert absence of these fields. |
-| 9 | Public `/v1/models` does not expose top-level Anthropic pagination keys. | VERIFIED | Anthropic tests assert absence of `first_id`, `last_id`, and `has_more`, including the empty-list case. |
-| 10 | Public `/v1/models` keeps model-level fields not explicitly removed. | VERIFIED | `buildOpenAIModelFromCatalog` copies stable enriched fields from catalog entries while preserving base OpenAI model fields. |
-| 11 | Public `/v1/models` order is text models first, embeddings after, with fixed provider grouping. | VERIFIED | `SortEntries` uses category/provider ranking; `TestListModelsRepresentativeOrder` locks the exact representative order. |
-| 12 | Public `/v1/models` provider groups are sorted most advanced/recent/capable first. | VERIFIED | `compareModels` ranks by known order, category, provider, version token and capacity; representative order test covers the target fixture. |
-| 13 | Anthropic model list is produced by Go when `api_format=anthropic` or Anthropic headers are present. | VERIFIED | `router/relay-router.go` routes query/header intent to `controller.ListModels(...ChannelTypeAnthropic...)`; controller filters by Go catalog endpoint metadata. |
-| 14 | Missing prices remain visible through zero pricing values without exposing public provenance or estimated flags. | VERIFIED | Zero-price fallback is public; internal provenance fields are hidden with `json:"-"` and tests assert they do not serialize. |
-| 15 | Graphify status is fresh before and after the plan changes. | VERIFIED | `graphify status` reports `stale=false`, `commit_stale=false`, `built_at_commit=c285f97`, `current_commit=c285f97`. |
+|---|---|---|---|
+| 1 | The Go embedding governor classifies large unlabeled workloads by metadata only, without carrying raw embedding text. | VERIFIED | `service/embeddinggovernor.Request` now carries `InputCount` and `InputChars`; tests `TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch` and `TestWorkloadHeaderOverridesMetadataClassification` pass. |
+| 2 | Explicit workload headers still override derived metadata classification. | VERIFIED | `isBatch` in `service/embeddinggovernor/governor.go` prioritizes `batch/bulk` and `interactive/realtime` before thresholds; focused tests pass. |
+| 3 | Adaptive defaults remain in the protected envelope `min=1`, `initial=2`, `max=3`, with batch concurrency `1`. | VERIFIED | Defaults are encoded in `service/embeddinggovernor/governor.go`; `TestLoadConfigUsesDailySafeDefaults` passes. |
+| 4 | Batch and interactive adaptive feedback are tracked separately so batch latency cannot poison interactive reopening by itself. | VERIFIED | Separate EWMA/counters exist in `Snapshot`; tests `TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately` and `TestBatchLatencyDoesNotBlockInteractiveScaleUp` pass. |
+| 5 | Pressure failures reduce concurrency, while ordinary client 4xx errors do not close the adaptive circuit. | VERIFIED | `finishOutcomeClientError` vs `finishOutcomePressure` is implemented and exercised by `TestStatusClassificationIgnoresClientErrors`, `TestStatusClassificationReducesOnPressureFailures`, and `TestStatusClassificationKeepsSlowRequestsAsPressure`. |
+| 6 | The relay passes only metadata-derived embedding input stats into the governor and preserves the public model name as the governor scope key. | VERIFIED | `dto.EmbeddingRequest.GetInputStats()` returns numeric-only stats; `relay/embedding_handler.go` passes `InputCount`, `InputChars`, `Workload`, `ChannelID`, `ChannelName`, and `publicModelName`; `TestEmbeddingHelperPassesGovernorRequestMetadata` passes. |
+| 7 | The optional TEI health guardrail is read-only, disabled by default, and cannot downscale after a single bad sample. | VERIFIED | Health probe config/state exists in `service/embeddinggovernor`; tests `TestHealthProbeDisabledByDefault`, `TestHealthHysteresisIgnoresSingleBadSample`, `TestHealthHysteresisReducesAfterConsecutiveBadWindows`, and `TestHealthHysteresisHealthySampleResetsBadWindows` pass. |
+| 8 | The operational manual documents the final governor behavior, env vars, Graphify gate, and controlled production monitor flow. | VERIFIED | `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md` documents metadata thresholds, split metrics, TEI health env vars/defaults, smoke commands, Graphify freshness, and monitor gates. |
+| 9 | Graphify is fresh against the final code/docs state after the phase follow-up changes. | VERIFIED | `graphify status` reports `stale=false`, `commit_stale=false`, `built_at_commit=495f127`, `current_commit=495f127`. |
 
-**Score:** 15/15 truths verified
+**Score:** 9/9 truths verified
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `controller/model.go` | Go-owned `/v1/models` response shapes and catalog wiring | VERIFIED | `ListModels` filters visible models, builds catalog entries, and emits root `data` only for OpenAI/Anthropic model-list modes. |
-| `controller/model_list_test.go` | Contract tests for payload, order, Anthropic filtering and empty list | VERIFIED | Tests assert exact root keys, absent fields, representative order, Anthropic order and empty Anthropic payload. |
-| `service/modelcatalog/catalog.go` | Canonical model metadata projection, pricing provenance and deterministic sorting | VERIFIED | Contains endpoint labels, owner resolution, pricing provenance, public price projection, Anthropic capability and sort logic. |
-| `service/modelcatalog/catalog_test.go` | Catalog serialization/provenance test | VERIFIED | Covers missing pricing provenance as internal-only and endpoint label serialization. Note: narrower than the original 20-01 task text, but controller tests cover the public contract. |
-| `dto/pricing.go` | Public model-list DTOs and internal-only provenance fields | VERIFIED | `OpenAIModels`, `AnthropicModel`, `ModelCatalogEntry` and `ModelCatalogPricing` exist; provenance fields use `json:"-"`. |
-| `router/relay-router.go` | Client model-list intent detection | VERIFIED | `api_format=anthropic` or Anthropic headers route to Anthropic list builder; default routes to OpenAI list builder. |
-| `docs/openapi/relay.json` | Corrected public schema | VERIFIED | Valid JSON; `ModelsResponse` requires only `data` and has `additionalProperties: false`; description documents Go-owned behavior and ordering. |
-| `docs/CLIANYTHING.md` | Operator-facing contract docs | VERIFIED | Documents Go-owned `/v1/models`, root `data` only, hidden provenance and `api_format=anthropic`. |
-| `tools/clianything.py` | Runtime status coverage for `/v1/models` | VERIFIED | Status includes the `v1-models` check and treats unauthenticated 401 as expected. |
-| `tests/test_clianything.py` | CLIAnything coverage and model-list public field checks | VERIFIED | Unit tests passed; tests assert public model enrichment does not expose internal provenance fields. |
-
-### Key Link Verification
-
-| From | To | Via | Status | Details |
-|---|---|---|---|---|
-| `router/relay-router.go` | `controller.ListModels(...ChannelTypeAnthropic...)` | Query/header detection | WIRED | `api_format=anthropic` and Anthropic headers call the Anthropic model-list path. |
-| `router/relay-router.go` | `controller.ListModels(...ChannelTypeOpenAI...)` | Default `/v1/models` branch | WIRED | Default branch remains OpenAI-compatible. |
-| `controller/model.go` | `service/modelcatalog/catalog.go` | `catalogEntriesForModels`, `BuildCatalogEntry`, `SortEntries`, `IsAnthropicCapable` | WIRED | Controller uses catalog service for projection, ordering and Anthropic filtering. |
-| `service/modelcatalog/catalog.go` | `model.GetPricing` / `ratio_setting` | Pricing projection and provenance | WIRED | Catalog path reads pricing rows and ratio/price helpers to classify source and public prices. |
-| `controller/model.go` | Public response DTOs | `buildOpenAIModelFromCatalog`, `buildAnthropicModelFromCatalog` | WIRED | DTOs serialize public fields and hide internal provenance. |
-| `.planning/config.json` | Graphify gate | `graphify.*` settings | WIRED | Required Graphify settings are true and `build_timeout` is `600`. |
-
-### Data-Flow Trace (Level 4)
-
-| Artifact | Data Variable | Source | Produces Real Data | Status |
-|---|---|---|---|---|
-| `controller/model.go` | `userModelNames` | `model.GetGroupEnabledModels`, token model limits, user/token groups | Yes | FLOWING |
-| `controller/model.go` | `catalogEntries` | `catalogEntriesForModels` -> `model.GetPricing()` -> `modelcatalog.BuildCatalogEntry` | Yes | FLOWING |
-| `controller/model.go` | `userOpenAiModels` | Catalog entries converted by `buildOpenAIModelFromCatalog` | Yes | FLOWING |
-| `controller/model.go` | `useranthropicModels` | Catalog entries filtered by `modelcatalog.IsAnthropicCapable` | Yes | FLOWING |
-| `docs/openapi/relay.json` | `/v1/models` schema | `ModelsResponse` component | Yes | FLOWING |
+| `service/embeddinggovernor/governor.go` | Metadata thresholds, split feedback, pressure classification, health hysteresis | VERIFIED | All four concerns are implemented in the governor core with aggregate-only snapshot fields. |
+| `service/embeddinggovernor/governor_test.go` | Focused regression coverage for all new governor behavior | VERIFIED | Focused tests cover metadata classification, split metrics, status classification, and health hysteresis. |
+| `dto/embedding.go` | Numeric-only embedding input stats helper | VERIFIED | `GetInputStats()` returns `InputCount` and `InputChars` only. |
+| `dto/embedding_test.go` | Deterministic DTO stats tests | VERIFIED | Covers nil, string, `[]string`, and mixed `[]any` inputs. |
+| `relay/embedding_handler.go` | Governor request wiring from embedding DTO metadata | VERIFIED | Acquires the governor with workload and numeric metadata before upstream dispatch. |
+| `relay/embedding_handler_test.go` | Proof that relay passes governor request metadata | VERIFIED | `TestEmbeddingHelperPassesGovernorRequestMetadata` captures and asserts the governor request. |
+| `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md` | Runbook aligned with final governor behavior | VERIFIED | Manual describes limits, envs, smokes, Graphify freshness, and controlled restart path. |
+| `20-03/20-04/20-05-SUMMARY.md` | Plan close-outs with commits and verification trace | VERIFIED | All three summaries exist and match the shipped code paths. |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Go catalog/controller focused tests | `PATH=/usr/local/go/bin:$PATH go test ./service/modelcatalog ./controller -run 'TestModelCatalog|TestListModels|TestBuildOpenAIModel|TestChannelOwnerName' -count=1` | `ok` for both packages | PASS |
-| Model-list payload/order/Anthropic tests | `PATH=/usr/local/go/bin:$PATH go test ./controller -run 'TestListModels.*Order|TestListModels.*Payload|TestListModels.*Anthropic' -count=1` | `ok github.com/QuantumNous/new-api/controller` | PASS |
-| CLIAnything tests and strict coverage | `python3 -m unittest tests.test_clianything -v && python3 -m json.tool docs/openapi/relay.json >/dev/null && bin/clianything coverage --strict` | 33 tests OK; relay JSON valid; coverage 100.0%, docs 158, manifest 158, missing 0, extra 0, problems 0 | PASS |
-| Runtime status smoke | `bin/clianything status` | Exit 0; pod/backend/db/v1-models OK; `model-detailed` health row fails with connection reset | PASS_WITH_NOTE |
-| Graphify freshness | `node "$HOME/.Codex/get-shit-done/bin/gsd-tools.cjs" graphify status` | `stale=false`, `commit_stale=false`, commit `c285f97` | PASS |
-
-### Probe Execution
-
-No phase-declared `probe-*.sh` files and no conventional `scripts/*/tests/probe-*.sh` files were found.
+| Governor focused tests | `/usr/local/go/bin/go test ./service/embeddinggovernor -run '^(TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch\|TestWorkloadHeaderOverridesMetadataClassification\|TestLoadConfigNormalizesWorkloadMetadataThresholds\|TestLoadConfigUsesDailySafeDefaults\|TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately\|TestBatchLatencyDoesNotBlockInteractiveScaleUp\|TestSnapshotContainsOnlyAggregateEmbeddingGovernorMetadata\|TestStatusClassificationIgnoresClientErrors\|TestStatusClassificationReducesOnPressureFailures\|TestStatusClassificationKeepsSlowRequestsAsPressure\|TestHealthProbeDisabledByDefault\|TestHealthHysteresisIgnoresSingleBadSample\|TestHealthHysteresisReducesAfterConsecutiveBadWindows\|TestHealthHysteresisHealthySampleResetsBadWindows)$' -count=1` | Passou | PASS |
+| DTO and relay follow-up | `/usr/local/go/bin/go test ./dto ./relay ./service/embeddinggovernor -count=1` | Passou | PASS |
+| Broader Go gate | `/usr/local/go/bin/go test ./common ./controller ./service/modelcatalog ./relay/common ./service/embeddinggovernor ./relay -count=1` | Passou | PASS |
+| Runtime health gate | `bin/clianything status --strict` | Passou no runtime atual | PASS |
+| Graphify freshness | `node /home/ubuntu/.codex/gsd-core/bin/gsd-tools.cjs graphify status` | `stale=false`, `commit_stale=false` | PASS |
 
 ### Requirements Coverage
 
-| Requirement | Source Plan | Description | Status | Evidence |
-|---|---|---|---|---|
-| `PHASE-20.1-CATALOG` | `20-01-PLAN.md` | Canonical Go catalog builder and pricing provenance foundation | SATISFIED | Catalog builder, provenance, endpoint labels and owner helper reuse are implemented and tested. |
-| `PHASE-20-GRAPHIFY-GATE` | `20-02-PLAN.md` | Graphify enabled and fresh for GSD loop | SATISFIED | `.planning/config.json` has required settings; status fresh at `c285f97`. |
-| `PHASE-20-GO-ONLY-V1-MODELS` | `20-02-PLAN.md` | Go owns enriched `/v1/models` contract | SATISFIED | Controller builds OpenAI/Anthropic lists from catalog; schema/docs/tests lock root `data`, removed fields and ordering. |
-| `PHASE-20-AUTO-FORMAT-DETECTION` | `20-02-PLAN.md` | Go detects Anthropic query/header model-list intent | SATISFIED | Router selects Anthropic list on `api_format=anthropic` or Anthropic headers; default remains OpenAI. |
-| `PHASE-20-PYTHON-MIDDLEWARE-REMOVAL` | Not claimed by 20-01/20-02 frontmatter | Middleware must not be required for `/v1/models` enrichment or route selection | SATISFIED_FOR_CORRECTED_20_2 | Go now owns `/v1/models`; retained middleware/backups still contain legacy references but are not the canonical route. Queue/retry and embeddings conversion removal are outside the corrected 20.2 target verified here. |
-| `PHASE-20-CLI-DOCS-RUNTIME-PARITY` | Not claimed by 20-01/20-02 frontmatter | CLI/docs parity for operators | SATISFIED_FOR_SCOPE | `bin/clianything coverage --strict` passes; docs and OpenAPI describe Go-owned `/v1/models`. |
-| `PHASE-20-SDK-SMOKES` | Not claimed by 20-01/20-02 frontmatter | SDK/runtime validation | PARTIAL_SCOPE_NOTE | Controller tests prove SDK-compatible root/data and item fields. Live SDK smoke was not part of the supplied verification commands. |
-
-### Anti-Patterns Found
-
-| File | Line | Pattern | Severity | Impact |
-|---|---:|---|---|---|
-| `runtime/model-detailed/model_detailed_fastapi.py` | 907, 1145 | Legacy `/internal/v1/models` references | INFO | Non-canonical middleware code retained outside the Go `/v1/models` route; not blocking corrected 20.2 target. |
-| `runtime/model-detailed/model_detailed_fastapi.py` | 784, 785, 957, 996, 1048, 1236 | Legacy public/enrichment fields | INFO | Middleware still has old shapes, but Go public model-list route is corrected and does not depend on it. |
-| `tools/clianything.py` | 186, 200 | `return []` | INFO | Empty defaults in CLI parsing/helpers, not user-visible stubs and not part of `/v1/models` route behavior. |
+| Requirement | Description | Status | Evidence |
+|---|---|---|---|
+| `PHASE-20-PYTHON-MIDDLEWARE-REMOVAL` | Middleware must not own this embeddings/governor path | SATISFIED_FOR_SCOPE | All follow-up changes stay in Go `service/embeddinggovernor`, `dto`, `relay`, and docs. |
+| `PHASE-20-UPSTREAM-SYNC-GUARD` | Preserve Go-native fork-owned paths and contracts | SATISFIED | Changes stay in protected paths and maintain `max=3`, metadata-only state, and Go-only ownership. |
+| `PHASE-20-SDK-SMOKES` | Runtime validation must include embeddings smoke path | HUMAN_NEEDED | The code path is verified, but the authenticated local embeddings smoke still requires a human-run token-backed check. |
+| `PHASE-20-GRAPHIFY-GATE` | Graphify must be fresh when enabled | SATISFIED_WITH_NOTE | Graphify is fresh now; however, `.planning/config.json` does not yet contain all requirement-listed boolean toggles. |
+| `PHASE-20-CLI-DOCS-RUNTIME-PARITY` | Docs and operational runbook stay aligned with runtime | SATISFIED_WITH_NOTE | Manual and runtime gates are aligned; `bin/clianything coverage --strict` still fails in this checkout because the management docs tree is absent. |
 
 ### Human Verification Required
 
-None. The checked deliverable is API/schema/test behavior and was verified with code tracing plus focused automated tests. Real SDK client smoke could be useful later, but it was not a must-have for the corrected Phase 20.2 target supplied for this verification.
+1. **Authenticated local embeddings smoke**
+   - Command:
+     `ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-pt-v1 ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 python3 scripts/smoke-embeddings.py`
+   - Required env:
+     `ATIUS_ROUTER_TOKEN`
+   - Expected:
+     Exit `0` and embedding dimension `768` through the Go path `router -> governor -> TEI`.
+
+### Warnings
+
+- `.planning/config.json` currently lacks `graphify.require_with_gsd`, `graphify.query_before_gsd`, and `graphify.rebuild_after_changes`, even though `REQUIREMENTS.md` still lists them as desired Graphify policy keys.
+- `bin/clianything coverage --strict` is not green in this checkout because `docs/atius-router-docs/content/docs/en/api/management` is absent. This is a docs-artifact gap, not a governor/relay runtime regression.
 
 ### Gaps Summary
 
-No blocking gaps found. The corrected Phase 20.2 target is achieved in the Go codepath: `/v1/models` is Go-owned, root payload is data-only for OpenAI/Anthropic model-list modes, Anthropic selection is handled in Go, no Go canonical `/internal/v1/models` route was added, deterministic ordering is implemented and tested, docs/schema match the public contract, and Graphify is fresh.
-
-Non-blocking notes:
-
-- `bin/clianything status` exits 0 but still reports `model-detailed` health as `fail` with connection reset. Backend, DB and `v1-models` rows are OK; this does not block the Go-owned `/v1/models` contract.
-- Legacy Python middleware/backups still mention `/internal/v1/models` and old enrichment payload fields. They are not wired into the verified Go canonical route and should be addressed only when a later phase removes or retires middleware paths entirely.
+No code or wiring gaps were found in the phase follow-up implementation. The only remaining completion blocker is the human-run authenticated embeddings smoke.
 
 ---
 
-_Verified: 2026-06-18T05:50:04Z_
-_Verifier: the agent (gsd-verifier)_
+_Verified: 2026-06-26T12:40:00Z_  
+_Verifier: the agent (gsd-verifier), reconciled by execute-phase orchestrator_

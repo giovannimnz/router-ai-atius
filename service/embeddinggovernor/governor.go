@@ -2,7 +2,10 @@ package embeddinggovernor
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -22,6 +25,10 @@ const (
 	defaultQueueLimit               = 128
 	defaultBatchQueueLimit          = 512
 	defaultSuccessWindow            = 8
+	defaultHealthProbeTimeout       = 30 * time.Second
+	defaultHealthProbeInterval      = 30 * time.Second
+	defaultHealthBadWindowThreshold = 3
+	defaultHealthSlowDuration       = 10 * time.Second
 )
 
 // Request carries only routing metadata. It must never include embedding input text.
@@ -62,10 +69,18 @@ type Config struct {
 	ScaleUpMinInterval       time.Duration
 	ScaleDownIdle            time.Duration
 	SuccessWindow            int
+	HealthProbeEnabled       bool
+	HealthProbeURL           string
+	HealthProbeTimeout       time.Duration
+	HealthProbeInterval      time.Duration
+	HealthBadWindowThreshold int
+	HealthSlowDuration       time.Duration
 }
 
 type Snapshot struct {
 	Enabled                     bool      `json:"enabled"`
+	HealthProbeEnabled          bool      `json:"health_probe_enabled"`
+	HealthBadWindows            int       `json:"health_bad_windows"`
 	CurrentConcurrency          int       `json:"current_concurrency"`
 	MinConcurrency              int       `json:"min_concurrency"`
 	MaxConcurrency              int       `json:"max_concurrency"`
@@ -86,6 +101,9 @@ type Snapshot struct {
 	BatchCompleted              uint64    `json:"batch_completed"`
 	InteractiveSlow             uint64    `json:"interactive_slow"`
 	BatchSlow                   uint64    `json:"batch_slow"`
+	LastHealthStatus            string    `json:"last_health_status,omitempty"`
+	LastHealthLatencyMs         int64     `json:"last_health_latency_ms"`
+	LastHealthAt                time.Time `json:"last_health_at,omitempty"`
 	LastSuccessAt               time.Time `json:"last_success_at,omitempty"`
 	LastFailureAt               time.Time `json:"last_failure_at,omitempty"`
 	LastScaleAt                 time.Time `json:"last_scale_at,omitempty"`
@@ -123,6 +141,12 @@ type Governor struct {
 	batchSlow              uint64
 	peakRunning            int
 	peakWaiting            int
+	healthBadWindows       int
+	lastHealthStatus       string
+	lastHealthLatency      time.Duration
+	lastHealthAt           time.Time
+	healthProbeStop        chan struct{}
+	healthProbeFunc        func(ctx context.Context, target string) (int, time.Duration, error)
 }
 
 type Lease struct {
@@ -139,7 +163,7 @@ const (
 	finishOutcomePressure
 )
 
-var global = New(LoadConfigFromEnv())
+var global = newGovernor(LoadConfigFromEnv(), true)
 
 func LoadConfigFromEnv() Config {
 	cfg := Config{
@@ -163,18 +187,32 @@ func LoadConfigFromEnv() Config {
 		ScaleUpMinInterval:       envDuration("EMBEDDING_GOVERNOR_SCALE_UP_MIN_INTERVAL", 30*time.Second),
 		ScaleDownIdle:            envDuration("EMBEDDING_GOVERNOR_SCALE_DOWN_IDLE", 10*time.Minute),
 		SuccessWindow:            envInt("EMBEDDING_GOVERNOR_SUCCESS_WINDOW", defaultSuccessWindow),
+		HealthProbeEnabled:       envBool("EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED", false),
+		HealthProbeURL:           envString("EMBEDDING_GOVERNOR_HEALTH_PROBE_URL", ""),
+		HealthProbeTimeout:       envDuration("EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT", defaultHealthProbeTimeout),
+		HealthProbeInterval:      envDuration("EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL", defaultHealthProbeInterval),
+		HealthBadWindowThreshold: envInt("EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD", defaultHealthBadWindowThreshold),
+		HealthSlowDuration:       envDuration("EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION", defaultHealthSlowDuration),
 	}
 	return normalizeConfig(cfg)
 }
 
 func New(cfg Config) *Governor {
+	return newGovernor(cfg, false)
+}
+
+func newGovernor(cfg Config, startHealthProbe bool) *Governor {
 	cfg = normalizeConfig(cfg)
 	g := &Governor{
 		cfg:                cfg,
 		clock:              time.Now,
 		currentConcurrency: cfg.InitialConcurrency,
+		healthProbeFunc:    defaultHealthProbe,
 	}
 	g.cond = sync.NewCond(&g.mu)
+	if startHealthProbe && cfg.HealthProbeEnabled {
+		g.startHealthProbeLoop()
+	}
 	return g
 }
 
@@ -270,6 +308,8 @@ func (g *Governor) Snapshot() Snapshot {
 	defer g.mu.Unlock()
 	return Snapshot{
 		Enabled:                     g.cfg.Enabled,
+		HealthProbeEnabled:          g.cfg.HealthProbeEnabled,
+		HealthBadWindows:            g.healthBadWindows,
 		CurrentConcurrency:          g.currentConcurrency,
 		MinConcurrency:              g.cfg.MinConcurrency,
 		MaxConcurrency:              g.cfg.MaxConcurrency,
@@ -290,6 +330,9 @@ func (g *Governor) Snapshot() Snapshot {
 		BatchCompleted:              g.batchCompleted,
 		InteractiveSlow:             g.interactiveSlow,
 		BatchSlow:                   g.batchSlow,
+		LastHealthStatus:            g.lastHealthStatus,
+		LastHealthLatencyMs:         g.lastHealthLatency.Milliseconds(),
+		LastHealthAt:                g.lastHealthAt,
 		LastSuccessAt:               g.lastSuccessAt,
 		LastFailureAt:               g.lastFailureAt,
 		LastScaleAt:                 g.lastScaleAt,
@@ -469,6 +512,9 @@ func (g *Governor) canIncreaseLocked(now time.Time, batch bool) bool {
 	if g.cfg.ScaleUpMinInterval > 0 && !g.lastScaleAt.IsZero() && now.Sub(g.lastScaleAt) < g.cfg.ScaleUpMinInterval {
 		return false
 	}
+	if g.healthGuardrailActiveLocked() {
+		return false
+	}
 	if g.cfg.LatencyTarget > 0 && g.scaleUpLatencyLocked(batch) > g.cfg.LatencyTarget {
 		return false
 	}
@@ -502,6 +548,122 @@ func classifyFinishOutcome(success bool, statusCode int, slow bool) finishOutcom
 		return finishOutcomeClientError
 	}
 	return finishOutcomePressure
+}
+
+func (g *Governor) observeHealthSample(statusCode int, latency time.Duration, err error) {
+	now := g.clock()
+	if latency < 0 {
+		latency = 0
+	}
+	bad, status := classifyHealthSample(statusCode, latency, err, g.cfg.HealthSlowDuration)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.lastHealthAt = now
+	g.lastHealthLatency = latency
+	g.lastHealthStatus = status
+
+	if !g.cfg.HealthProbeEnabled {
+		return
+	}
+	if !bad {
+		g.healthBadWindows = 0
+		g.cond.Broadcast()
+		return
+	}
+
+	g.healthBadWindows++
+	if g.healthBadWindows >= g.cfg.HealthBadWindowThreshold && g.currentConcurrency > g.cfg.MinConcurrency {
+		g.currentConcurrency--
+		g.successes = 0
+		g.lastScaleAt = now
+	}
+	g.cond.Broadcast()
+}
+
+func (g *Governor) healthGuardrailActiveLocked() bool {
+	return g.cfg.HealthProbeEnabled && g.healthBadWindows >= g.cfg.HealthBadWindowThreshold
+}
+
+func (g *Governor) startHealthProbeLoop() {
+	if g.healthProbeStop != nil || !g.cfg.HealthProbeEnabled || g.cfg.HealthProbeURL == "" || g.healthProbeFunc == nil {
+		return
+	}
+	g.healthProbeStop = make(chan struct{})
+	go func() {
+		g.runHealthProbe()
+		ticker := time.NewTicker(g.cfg.HealthProbeInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				g.runHealthProbe()
+			case <-g.healthProbeStop:
+				return
+			}
+		}
+	}()
+}
+
+func (g *Governor) runHealthProbe() {
+	if !g.cfg.HealthProbeEnabled || g.cfg.HealthProbeURL == "" || g.healthProbeFunc == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), g.cfg.HealthProbeTimeout)
+	defer cancel()
+
+	statusCode, latency, err := g.healthProbeFunc(ctx, g.cfg.HealthProbeURL)
+	g.observeHealthSample(statusCode, latency, err)
+}
+
+func defaultHealthProbe(ctx context.Context, target string) (int, time.Duration, error) {
+	startedAt := time.Now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
+	latency := time.Since(startedAt)
+	if err != nil {
+		return 0, latency, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, latency, nil
+}
+
+func classifyHealthSample(statusCode int, latency time.Duration, err error, slowDuration time.Duration) (bool, string) {
+	if err != nil {
+		if isTimeoutError(err) {
+			return true, "timeout"
+		}
+		return true, "error"
+	}
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return true, "http_" + strconv.Itoa(statusCode)
+	}
+	if slowDuration > 0 && latency >= slowDuration {
+		return true, "slow"
+	}
+	return false, "ok"
+}
+
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr interface{ Timeout() bool }
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func (g *Governor) updateIdleLocked(now time.Time) {
@@ -644,7 +806,46 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.SuccessWindow < 1 {
 		cfg.SuccessWindow = defaultSuccessWindow
 	}
+	if cfg.HealthProbeTimeout < defaultHealthProbeTimeout {
+		cfg.HealthProbeTimeout = defaultHealthProbeTimeout
+	}
+	if cfg.HealthProbeInterval < defaultHealthProbeInterval {
+		cfg.HealthProbeInterval = defaultHealthProbeInterval
+	}
+	if cfg.HealthBadWindowThreshold < defaultHealthBadWindowThreshold {
+		cfg.HealthBadWindowThreshold = defaultHealthBadWindowThreshold
+	}
+	if cfg.HealthSlowDuration <= 0 {
+		cfg.HealthSlowDuration = defaultHealthSlowDuration
+	}
+	normalizedHealthURL, ok := normalizeHealthProbeURL(cfg.HealthProbeURL)
+	if ok && cfg.HealthProbeEnabled {
+		cfg.HealthProbeURL = normalizedHealthURL
+	} else {
+		cfg.HealthProbeEnabled = false
+		cfg.HealthProbeURL = ""
+	}
 	return cfg
+}
+
+func normalizeHealthProbeURL(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "", false
+	}
+	if parsed.User != nil || parsed.Host == "" {
+		return "", false
+	}
+	switch parsed.Scheme {
+	case "http", "https":
+		return parsed.String(), true
+	default:
+		return "", false
+	}
 }
 
 func blendDuration(current time.Duration, sample time.Duration) time.Duration {

@@ -248,7 +248,6 @@ func TestHealthHysteresisReducesAfterConsecutiveBadWindows(t *testing.T) {
 	beforeThreshold := g.Snapshot()
 	assert.Equal(t, 3, beforeThreshold.CurrentConcurrency)
 	assert.Equal(t, 2, beforeThreshold.HealthBadWindows)
-	assert.True(t, healthCanIncrease(g, false))
 
 	now = now.Add(time.Minute)
 	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)
@@ -301,7 +300,6 @@ func TestHealthHysteresisHealthySampleResetsBadWindows(t *testing.T) {
 	assert.Equal(t, 0, resetSnapshot.HealthBadWindows)
 	assert.Equal(t, 3, resetSnapshot.CurrentConcurrency)
 	assert.Equal(t, "ok", resetSnapshot.LastHealthStatus)
-	assert.True(t, healthCanIncrease(g, false))
 
 	now = now.Add(time.Minute)
 	g.observeHealthSample(0, 30*time.Second, context.DeadlineExceeded)

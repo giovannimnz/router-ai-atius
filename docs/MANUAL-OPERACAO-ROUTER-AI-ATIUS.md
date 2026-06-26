@@ -157,11 +157,20 @@ Estado atualizado em 2026-06-26:
 - O governor de embeddings roda dentro do proprio processo Go do router; nao ha sidecar, middleware Python, container adicional ou rota `model-detailed` no caminho canonico.
 - Implementacao principal: `service/embeddinggovernor/` e integracao em `relay/embedding_handler.go`.
 - Escopo default: `embedding-pt-v1` e `embedding-pt-v1-batch`. Outros modelos passam pelo relay normal sem fila do governor.
-- Default operacional: concorrencia inicial `1`, minima `1`, maxima `4`, batch limitado a `1`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `5m`, cooldown `10m`.
-- O header opcional `X-Embedding-Workload: batch` classifica a chamada como batch; `interactive`/`realtime` forcam tratamento interativo. Sem header, `embedding-pt-v1-batch` e batch e `embedding-pt-v1` e interativo.
-- Em erro upstream `5xx`, erro de request, ou chamada acima de `EMBEDDING_GOVERNOR_SLOW_REQUEST_DURATION`, o governor reduz a concorrencia para o minimo e entra em cooldown. A reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
-- O governor mantem EWMA de latencia, contadores de falha/lentidao, picos de fila/execucao e timestamps de escala. Ele pode subir antes de uma janela fixa quando ha fila interativa, nao ha cooldown/falha recente e a latencia media esta abaixo do alvo.
+- Envelope automatico protegido: `min=1`, `initial=2`, `max=3`, `batch_concurrency=1`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. O valor `4` continua reservado para override/manual turbo window; nao faz parte da escala automatica diaria.
+- Classificacao de workload e metadata-only. Ordem de precedencia:
+  1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
+  2. thresholds locais derivados do request (`InputCount >= 4` ou `InputChars >= 12000`);
+  3. fallback por modelo configurado (`embedding-pt-v1-batch`).
+- Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
+- Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
+- Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
+- Guardrail de health do TEI agora existe, mas e advisory, read-only e disabled-by-default. Ele so liga quando `EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=true` e `EMBEDDING_GOVERNOR_HEALTH_PROBE_URL` apontam para um endpoint HTTP/HTTPS sem auth extra. O probe faz apenas `GET`, nao envia token/header secreto e nao controla deploy/restart.
+- Uma unica amostra ruim de `/health` nao reduz concorrencia e nao arma cooldown. O governor apenas incrementa `health_bad_windows`.
+- Apos `3` janelas ruins consecutivas (default minimo), o governor bloqueia scale-up. Cada janela ruim adicional pode reduzir a concorrencia em `1` ate `min=1`. Uma amostra saudavel reseta o contador de janelas ruins.
+- Isso existe porque `/health` curto pode atrasar durante inferencia CPU-bound sem erro real de embeddings. O sinal de health e deliberadamente mais conservador que o sinal do trafego real.
 - Quando a fila esta cheia ou expira antes de despachar para o upstream, o router retorna `429` com codigo `embedding_governor_queue_full`, `embedding_governor_batch_queue_full` ou `embedding_governor_queue_timeout`.
+- Snapshot/telemetria agregada relevante do governor: `interactive_average_latency_ms`, `batch_average_latency_ms`, `interactive_completed`, `batch_completed`, `interactive_slow`, `batch_slow`, `health_probe_enabled`, `health_bad_windows`, `last_health_status`, `last_health_latency_ms`, `last_health_at`. Nenhum desses campos deve carregar input bruto, token ou URL secreta.
 
 Variaveis de ambiente suportadas:
 
@@ -169,37 +178,91 @@ Variaveis de ambiente suportadas:
 EMBEDDING_GOVERNOR_ENABLED=true
 EMBEDDING_GOVERNOR_MODELS=embedding-pt-v1,embedding-pt-v1-batch
 EMBEDDING_GOVERNOR_BATCH_MODELS=embedding-pt-v1-batch
-EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY=1
+EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY=2
 EMBEDDING_GOVERNOR_MIN_CONCURRENCY=1
-EMBEDDING_GOVERNOR_MAX_CONCURRENCY=4
+EMBEDDING_GOVERNOR_MAX_CONCURRENCY=3
 EMBEDDING_GOVERNOR_BATCH_CONCURRENCY=1
 EMBEDDING_GOVERNOR_QUEUE_LIMIT=128
 EMBEDDING_GOVERNOR_BATCH_QUEUE_LIMIT=512
 EMBEDDING_GOVERNOR_INTERACTIVE_TIMEOUT=30s
-EMBEDDING_GOVERNOR_BATCH_TIMEOUT=5m
+EMBEDDING_GOVERNOR_BATCH_TIMEOUT=10m
 EMBEDDING_GOVERNOR_COOLDOWN=10m
 EMBEDDING_GOVERNOR_SLOW_REQUEST_DURATION=2m
+EMBEDDING_GOVERNOR_BATCH_SLOW_REQUEST_DURATION=10m
 EMBEDDING_GOVERNOR_LATENCY_TARGET=90s
 EMBEDDING_GOVERNOR_SCALE_UP_MIN_INTERVAL=30s
 EMBEDDING_GOVERNOR_SCALE_DOWN_IDLE=10m
 EMBEDDING_GOVERNOR_SUCCESS_WINDOW=8
+EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=false
+EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=
+EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT=30s
+EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL=30s
+EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3
+EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s
 ```
 
-Base empirica dos threads `019f010f-421b-7243-ac95-46c2b287e868` e `019f017f-51fb-7ea1-972a-d4b91434be7d`:
+Significado operacional dos envs novos:
+
+- `EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=false`: default seguro. Sem isso, o governor ignora completamente o sinal de `/health`.
+- `EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=`: endpoint read-only do TEI. Se vazio, invalido ou exigir auth por URL, o probe fica desabilitado.
+- `EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT=30s`: timeout minimo seguro. Timeouts menores que isso ficam normalizados para `30s`.
+- `EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL=30s`: cadencia default entre probes. Tambem e normalizada para pelo menos `30s`.
+- `EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3`: minima quantidade de janelas ruins consecutivas antes de bloquear scale-up e comecar a descer gradualmente.
+- `EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s`: resposta `200` acima disso conta como janela ruim, mas ainda sem cooldown imediato.
+
+Base empirica dos threads `019f010f-421b-7243-ac95-46c2b287e868` e `019f017f-51fb-7ea1-972a-d4b91434be7d`, que justificam o guardrail conservador:
 
 - Inicio do GBrain: `3667 stale chunks`, `Embedded: 0`, schema migrado de `1536` para `768`.
-- Tentativas com paginas grandes deram timeout sem gravar vetores; por isso o governor nao deve iniciar acima de `1`.
-- `GBRAIN_EMBED_PROVIDER_BATCH_SIZE=4` foi o sub-batch que passou em slug que falhava; esse e o limite operacional seguro para catch-up.
-- Com carga viva, TEI ficou tipicamente em `~115%` a `148%` CPU e `~1.4GiB` RSS; em tentativa mais pesada chegou a `~7.8GiB` RSS, ainda sem OOM, mas com erro upstream/rate-limit e reinicio/unready.
-- Em host de 4 cores, load observado `~5.3` a `>6` durante concurrency `2`, ou seja, pressao CPU ja acima de `1.3x` a `1.5x` a capacidade nominal. Memoria sobrou; gargalo principal e CPU/readiness do TEI.
-- Resultado operacional: batch/catch-up fica conservador em `1`; o teto `4` e apenas ceiling adaptativo para fila interativa saudavel, nao baseline.
+- Tentativas com paginas grandes deram timeout sem gravar vetores no inicio; por isso o fallback tecnico deve continuar em `min=1`, mesmo com operacao diaria iniciando em `initial=2`.
+- `GBRAIN_EMBED_PROVIDER_BATCH_SIZE=4` foi o sub-batch que passou em slug que falhava; o TEI tambem registrou que o backend nao suporta batch client acima de `4`.
+- Antes do ajuste de Kubernetes, a conclusao sobre concorrencia estava contaminada: ate `concurrency=1` podia sofrer restart porque o kubelet matava o container por `livenessProbe` em `/health` durante inferencia CPU longa. O exit `137` veio do restart forcado por probe, nao de OOM.
+- O ajuste que mudou o envelope operacional foi: `max_client_batch_size=4`, probes mais tolerantes, health monitorado com timeout de `30s`, pod novo `1/1`, `restarts=0`, limite `3 CPU / 12Gi`.
+- Depois do ajuste de probes, `concurrency=1`, `2`, `3` e `4` rodaram com `errors=0` e `restarts=0`; `concurrency=4` progrediu por centenas de paginas, com checkpoints de `Embedded` subindo de `598` ate pelo menos `1590`.
+- No trecho estavel pos-probes, TEI ficou tipicamente em `~1.3` a `1.7` CPU e `~1.4GiB` a `2.3GiB` RSS, com warmup perto de `7.9GiB`, abaixo do limite de `12Gi`. Picos de load/memoria do host vieram em parte de processos externos, nao do TEI.
+- Ajuste posterior de operacao diaria: TEI passou para `requests=1 CPU / 6Gi` e `limits=2 CPU / 12Gi`, sem autoscaling alem do limite maximo. Com esse teto, `concurrency=4` pode encostar no limite de CPU e deve continuar como override manual/temporario, nao default.
+- Resultado operacional final desta iteracao: `min=1`, `initial=2`, `max=3` continuam como baseline diario; `4` segue restrito a janela manual/turbo. Um timeout isolado de `/health` nao deve sozinho rebaixar o sistema.
 
-Validacao minima apos mudanca no governor:
+Validacao local e gate operacional apos mudanca no governor:
 
 ```bash
-go test ./service/embeddinggovernor ./relay -count=1
-ATIUS_ROUTER_TOKEN=... python3 scripts/smoke-embeddings.py --base-url http://127.0.0.1:3000/v1
+# Testes focados do guardrail de health/hysteresis
+/usr/local/go/bin/go test ./service/embeddinggovernor -run '^(TestHealthProbeDisabledByDefault|TestHealthHysteresisIgnoresSingleBadSample|TestHealthHysteresisReducesAfterConsecutiveBadWindows|TestHealthHysteresisHealthySampleResetsBadWindows)$' -count=1
+
+# Regressao do pacote do governor
+/usr/local/go/bin/go test ./service/embeddinggovernor -count=1
+
+# Gate Go mais amplo antes de deploy controlado
+/usr/local/go/bin/go test ./common ./controller ./service/modelcatalog ./relay/common ./service/embeddinggovernor ./relay -count=1
+
+# Smoke autenticado de embeddings locais (dimension 768)
+test -n "$ATIUS_ROUTER_TOKEN" && \
+  ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
+  ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-pt-v1 \
+  ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
+  python3 scripts/smoke-embeddings.py
+
+# Gate Graphify do checkout
+node /home/ubuntu/.codex/gsd-core/bin/gsd-tools.cjs graphify status
 ```
+
+Leitura correta desses gates:
+
+- Sem `ATIUS_ROUTER_TOKEN`, o smoke de embeddings deve falhar com `exit 2` antes da rede. Isso e limitacao de ambiente, nao passe livre.
+- Se `graphify status` retornar `stale=true` ou `commit_stale=true` num checkout com Graphify habilitado, rebuild e obrigatorio antes de assinar a mudanca. O rebuild faz parte do gate de validacao, nao do governor.
+- Deploy/restart nao e automatico em execucao de plano. Quando for validar em runtime, usar somente a user unit existente:
+
+```bash
+systemctl --user restart container-router-ai-atius.service
+```
+
+- Apos esse restart controlado, os monitor gates minimos sao:
+  - `bin/clianything status --strict`
+  - TEI `ready=true`
+  - `restarts=0`
+  - `/health` interpretado por janelas consecutivas, nunca por timeout isolado
+  - TEI CPU/memoria dentro do envelope diario (`limits.cpu=2`, `limits.memory=12Gi`)
+  - progresso do GBrain/Obsidian seguindo adiante
+  - zero embed errors no smoke/logs operacionais
 
 ## Fila anti-rate-limit do middleware legado
 

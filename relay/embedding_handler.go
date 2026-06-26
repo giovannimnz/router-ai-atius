@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -11,6 +13,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/embeddinggovernor"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +26,7 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	if !ok {
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected *dto.EmbeddingRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
+	publicModelName := embeddingReq.Model
 
 	request, err := common.DeepCopy(embeddingReq)
 	if err != nil {
@@ -67,8 +71,31 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	info.UpstreamRequestBodySize = size
 	var requestBody io.Reader = body
 	statusCodeMappingStr := c.GetString("status_code_mapping")
+
+	lease, reject := embeddinggovernor.Acquire(c.Request.Context(), embeddinggovernor.Request{
+		Model:       publicModelName,
+		ChannelID:   c.GetInt("channel_id"),
+		ChannelName: c.GetString("channel_name"),
+		Workload:    c.GetHeader("X-Embedding-Workload"),
+	})
+	if reject != nil {
+		if reject.RetryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(int(reject.RetryAfter.Seconds())))
+		}
+		return types.NewErrorWithStatusCode(fmt.Errorf("%s", reject.Message), types.ErrorCode(reject.Code), reject.StatusCode, types.ErrOptionWithSkipRetry())
+	}
+	governorStartedAt := time.Now()
+	finishGovernor := func(success bool, statusCode int) {
+		if lease == nil {
+			return
+		}
+		lease.Finish(success, statusCode, time.Since(governorStartedAt))
+		lease = nil
+	}
+
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
+		finishGovernor(false, http.StatusInternalServerError)
 		return types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
 	}
 
@@ -76,6 +103,7 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
+			finishGovernor(false, httpResp.StatusCode)
 			newAPIError = service.RelayErrorHandler(c.Request.Context(), httpResp, false)
 			// reset status code 重置状态码
 			service.ResetStatusCode(newAPIError, statusCodeMappingStr)
@@ -85,10 +113,16 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 
 	usage, newAPIError := adaptor.DoResponse(c, httpResp, info)
 	if newAPIError != nil {
+		statusCode := http.StatusInternalServerError
+		if httpResp != nil {
+			statusCode = httpResp.StatusCode
+		}
+		finishGovernor(false, statusCode)
 		// reset status code 重置状态码
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError
 	}
+	finishGovernor(true, http.StatusOK)
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
 	return nil
 }

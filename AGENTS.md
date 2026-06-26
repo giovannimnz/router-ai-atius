@@ -160,3 +160,19 @@ Prefer deterministic table tests with explicit inputs and exact expected outputs
 New or substantially rewritten Go backend tests MUST use `github.com/stretchr/testify/require` for setup and fatal assertions, and `github.com/stretchr/testify/assert` for non-fatal value checks. Avoid hand-written assertion helpers unless they encode a reusable project-specific invariant.
 
 When cleaning tests, preserve meaningful regression coverage. If a deleted test was covering a real contract indirectly, replace it with a smaller test that names and asserts that contract directly.
+
+### Rule 10: Atius Fork Sync Guard — Preserve Go-Native Routing Customizations
+
+This fork has production customizations that are not upstream `QuantumNous/new-api` defaults. During upstream sync, merge, conflict resolution, or automated refactor, these behaviors MUST be preserved unless Giovanni explicitly asks to replace them:
+
+- `GET /v1/models` is owned by the Go backend path, not by Python/model-detailed or a sidecar service.
+- Public `/v1/models` must keep root `{"data":[...]}`, must not expose top-level pagination/status fields, and must not expose internal fields such as `pricing_source`, `pricing_estimated`, or `pricing_version`.
+- Public model ordering must keep text before embeddings; provider order MiniMax, DeepSeek, OpenAI/OpenAI Codex when those providers are enabled; higher numeric versions first; `-highspeed` above the matching standard model; `pro` above `flash`.
+- Codex embeddings must use the existing `OpenAI - Codex` channel and its OAuth credential when enabled. Do not create or activate a separate OpenAI-key embeddings channel as the default route. If the shared Codex credential returns upstream `429 insufficient_quota`, keep `text-embedding-3-*` disabled until quota/licensing is corrected.
+- MiniMax and DeepSeek are one channel per provider when enabled: `MiniMax` type `35` at `https://api.minimax.io`, and `DeepSeek` type `43` at `https://api.deepseek.com`. Do not reintroduce separate `*-OpenAI-Compatible`, `*-Anthropic-Compatible`, or `*-Embeddings` active channels. If a provider key/quota is invalid, disable that provider/models rather than exposing broken models in `/v1/models`.
+- Provider base URLs may be configured either at provider root or with a trailing `/v1`; the Go relay must normalize both forms and must not emit duplicated `/v1/v1` paths. MiniMax/DeepSeek provider-root routes also normalize a trailing `/v1` before appending Anthropic/native paths.
+- The Codex adaptor in `relay/channel/codex/` must continue to support embeddings through `https://api.openai.com/v1/embeddings` without ChatGPT-only headers on that request.
+- Local TEI embeddings are governed inside the Go router through `service/embeddinggovernor/` and `relay/embedding_handler.go`. Do not reintroduce Python/model-detailed, a sidecar, or an extra container for this path. The default governed models are `embedding-pt-v1` and `embedding-pt-v1-batch`.
+- Runtime directories must stay out of build context through `.dockerignore`: `/backups`, `/data`, `/logs`, `/runtime`.
+
+When updating fork-sync protection, keep these paths protected or manually port their semantics before merging upstream changes: `.dockerignore`, `controller/model.go`, `controller/model_list_test.go`, `service/modelcatalog/`, `relay/common/relay_utils.go`, `relay/common/relay_utils_test.go`, `relay/embedding_handler.go`, `relay/channel/codex/`, `service/codex_*.go`, `service/embeddinggovernor/`, `docs/`, and `.planning/`.

@@ -1,0 +1,194 @@
+package embeddinggovernor
+
+import (
+	"context"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestAcquireNoopsForNonGovernedModel(t *testing.T) {
+	g := New(testConfig())
+
+	lease, reject := g.Acquire(context.Background(), Request{Model: "gpt-5.4"})
+
+	require.Nil(t, reject)
+	assert.Nil(t, lease)
+	assert.Equal(t, 0, g.Snapshot().Running)
+}
+
+func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 1
+		cfg.MaxConcurrency = 1
+		cfg.QueueLimit = 1
+	}))
+
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, first)
+
+	waitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	waiting := make(chan *Lease, 1)
+	waitingReject := make(chan *Reject, 1)
+	go func() {
+		lease, reject := g.Acquire(waitCtx, Request{Model: "embedding-pt-v1"})
+		waiting <- lease
+		waitingReject <- reject
+	}()
+	require.Eventually(t, func() bool {
+		return g.Snapshot().WaitingInteractive == 1
+	}, time.Second, 10*time.Millisecond)
+
+	third, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, third)
+	require.NotNil(t, reject)
+	assert.Equal(t, "embedding_governor_queue_full", reject.Code)
+	assert.Equal(t, http.StatusTooManyRequests, reject.StatusCode)
+
+	first.Finish(true, http.StatusOK, time.Millisecond)
+	second := <-waiting
+	secondReject := <-waitingReject
+	require.Nil(t, secondReject)
+	require.NotNil(t, second)
+	second.Finish(true, http.StatusOK, time.Millisecond)
+}
+
+func TestInteractiveRequestCanPassWhileBatchIsQueued(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 2
+		cfg.BatchConcurrency = 1
+	}))
+
+	batch := Request{Model: "embedding-pt-v1-batch"}
+	firstBatch, reject := g.Acquire(context.Background(), batch)
+	require.Nil(t, reject)
+	require.NotNil(t, firstBatch)
+
+	batchCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	batchWaiting := make(chan *Lease, 1)
+	batchReject := make(chan *Reject, 1)
+	go func() {
+		lease, reject := g.Acquire(batchCtx, batch)
+		batchWaiting <- lease
+		batchReject <- reject
+	}()
+	require.Eventually(t, func() bool {
+		return g.Snapshot().WaitingBatch == 1
+	}, time.Second, 10*time.Millisecond)
+
+	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, interactive)
+
+	select {
+	case lease := <-batchWaiting:
+		require.Nil(t, lease, "batch must not bypass its own concurrency limit")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	firstBatch.Finish(true, http.StatusOK, time.Millisecond)
+	secondBatch := <-batchWaiting
+	secondBatchReject := <-batchReject
+	require.Nil(t, secondBatchReject)
+	require.NotNil(t, secondBatch)
+
+	interactive.Finish(true, http.StatusOK, time.Millisecond)
+	secondBatch.Finish(true, http.StatusOK, time.Millisecond)
+}
+
+func TestInteractiveDemandCanScaleFromOneWhenHealthy(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 1
+		cfg.MaxConcurrency = 3
+		cfg.SuccessWindow = 100
+		cfg.ScaleUpMinInterval = 0
+		cfg.LatencyTarget = 0
+	}))
+
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, first)
+
+	second, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, second)
+	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
+
+	first.Finish(true, http.StatusOK, time.Millisecond)
+	second.Finish(true, http.StatusOK, time.Millisecond)
+}
+
+func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
+	now := time.Unix(100, 0)
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 3
+		cfg.MinConcurrency = 1
+		cfg.SuccessWindow = 2
+		cfg.Cooldown = time.Minute
+	}))
+	g.clock = func() time.Time {
+		return now
+	}
+
+	finishSequential(t, g, true, http.StatusOK)
+	finishSequential(t, g, true, http.StatusOK)
+	assert.Equal(t, 3, g.Snapshot().CurrentConcurrency)
+
+	finishSequential(t, g, false, http.StatusInternalServerError)
+	snapshot := g.Snapshot()
+	assert.Equal(t, 1, snapshot.CurrentConcurrency)
+	assert.True(t, snapshot.CooldownUntil.After(now))
+
+	finishSequential(t, g, true, http.StatusOK)
+	finishSequential(t, g, true, http.StatusOK)
+	assert.Equal(t, 1, g.Snapshot().CurrentConcurrency)
+
+	now = now.Add(time.Minute + time.Nanosecond)
+	finishSequential(t, g, true, http.StatusOK)
+	finishSequential(t, g, true, http.StatusOK)
+	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
+}
+
+func finishSequential(t *testing.T, g *Governor, success bool, statusCode int) {
+	t.Helper()
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, lease)
+	lease.Finish(success, statusCode, time.Millisecond)
+}
+
+func testConfig() Config {
+	return Config{
+		Enabled:             true,
+		Models:              parseCSVSet(defaultModels),
+		BatchModels:         parseCSVSet(defaultBatchModels),
+		InitialConcurrency:  2,
+		MinConcurrency:      1,
+		MaxConcurrency:      3,
+		BatchConcurrency:    1,
+		QueueLimit:          8,
+		BatchQueueLimit:     8,
+		InteractiveTimeout:  time.Second,
+		BatchTimeout:        time.Second,
+		Cooldown:            time.Minute,
+		SlowRequestDuration: 0,
+		LatencyTarget:       0,
+		ScaleUpMinInterval:  0,
+		ScaleDownIdle:       0,
+		SuccessWindow:       20,
+	}
+}
+
+func testConfigWith(update func(*Config)) Config {
+	cfg := testConfig()
+	update(&cfg)
+	return cfg
+}

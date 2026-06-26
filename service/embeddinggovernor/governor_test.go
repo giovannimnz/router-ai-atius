@@ -20,6 +20,150 @@ func TestAcquireNoopsForNonGovernedModel(t *testing.T) {
 	assert.Equal(t, 0, g.Snapshot().Running)
 }
 
+func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", "")
+	t.Setenv("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", "")
+	t.Setenv("EMBEDDING_GOVERNOR_MAX_CONCURRENCY", "")
+	t.Setenv("EMBEDDING_GOVERNOR_BATCH_CONCURRENCY", "")
+	t.Setenv("EMBEDDING_GOVERNOR_BATCH_TIMEOUT", "")
+	t.Setenv("EMBEDDING_GOVERNOR_BATCH_SLOW_REQUEST_DURATION", "")
+
+	cfg := LoadConfigFromEnv()
+
+	assert.Equal(t, 1, cfg.MinConcurrency)
+	assert.Equal(t, 2, cfg.InitialConcurrency)
+	assert.Equal(t, 3, cfg.MaxConcurrency)
+	assert.Equal(t, 1, cfg.BatchConcurrency)
+	assert.Equal(t, 10*time.Minute, cfg.BatchTimeout)
+	assert.Equal(t, 10*time.Minute, cfg.BatchSlowRequestDuration)
+}
+
+func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.BatchInputCountThreshold = 4
+		cfg.BatchInputCharsThreshold = 12000
+	}))
+
+	tests := []struct {
+		name string
+		req  Request
+		want bool
+	}{
+		{
+			name: "small unlabeled interactive request stays interactive",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				InputCount: 1,
+				InputChars: 640,
+			},
+			want: false,
+		},
+		{
+			name: "large unlabeled request by count becomes batch",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				InputCount: 4,
+				InputChars: 2000,
+			},
+			want: true,
+		},
+		{
+			name: "large unlabeled request by chars becomes batch",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				InputCount: 1,
+				InputChars: 12000,
+			},
+			want: true,
+		},
+		{
+			name: "configured batch model fallback still applies",
+			req: Request{
+				Model:      "embedding-pt-v1-batch",
+				InputCount: 1,
+				InputChars: 320,
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, g.isBatch(tc.req))
+		})
+	}
+}
+
+func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.BatchInputCountThreshold = 4
+		cfg.BatchInputCharsThreshold = 12000
+	}))
+
+	tests := []struct {
+		name string
+		req  Request
+		want bool
+	}{
+		{
+			name: "batch header forces batch below thresholds",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				Workload:   "batch",
+				InputCount: 1,
+				InputChars: 320,
+			},
+			want: true,
+		},
+		{
+			name: "bulk header forces batch below thresholds",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				Workload:   "bulk",
+				InputCount: 1,
+				InputChars: 320,
+			},
+			want: true,
+		},
+		{
+			name: "interactive header wins over count threshold",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				Workload:   "interactive",
+				InputCount: 8,
+				InputChars: 24000,
+			},
+			want: false,
+		},
+		{
+			name: "realtime header wins over chars threshold",
+			req: Request{
+				Model:      "embedding-pt-v1",
+				Workload:   "realtime",
+				InputCount: 2,
+				InputChars: 24000,
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, g.isBatch(tc.req))
+		})
+	}
+}
+
+func TestLoadConfigNormalizesWorkloadMetadataThresholds(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD", "-1")
+	t.Setenv("EMBEDDING_GOVERNOR_BATCH_INPUT_CHARS_THRESHOLD", "not-a-number")
+
+	cfg := LoadConfigFromEnv()
+
+	assert.Equal(t, defaultBatchInputCountThreshold, cfg.BatchInputCountThreshold)
+	assert.Equal(t, defaultBatchInputCharsThreshold, cfg.BatchInputCharsThreshold)
+}
+
 func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
 		cfg.InitialConcurrency = 1
@@ -125,6 +269,26 @@ func TestInteractiveDemandCanScaleFromOneWhenHealthy(t *testing.T) {
 	second.Finish(true, http.StatusOK, time.Millisecond)
 }
 
+func TestGovernorHoldsRequestsDuringCooldownBeforeReopening(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 3
+		cfg.MinConcurrency = 1
+		cfg.Cooldown = 30 * time.Millisecond
+		cfg.InteractiveTimeout = 200 * time.Millisecond
+	}))
+
+	finishSequential(t, g, false, http.StatusInternalServerError)
+
+	startedAt := time.Now()
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, lease)
+	assert.GreaterOrEqual(t, time.Since(startedAt), 25*time.Millisecond)
+
+	lease.Finish(true, http.StatusOK, time.Millisecond)
+}
+
 func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
 	now := time.Unix(100, 0)
 	g := New(testConfigWith(func(cfg *Config) {
@@ -147,14 +311,34 @@ func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
 	assert.Equal(t, 1, snapshot.CurrentConcurrency)
 	assert.True(t, snapshot.CooldownUntil.After(now))
 
-	finishSequential(t, g, true, http.StatusOK)
-	finishSequential(t, g, true, http.StatusOK)
-	assert.Equal(t, 1, g.Snapshot().CurrentConcurrency)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	lease, reject := g.Acquire(ctx, Request{Model: "embedding-pt-v1"})
+	require.Nil(t, lease)
+	require.NotNil(t, reject)
+	assert.Equal(t, "embedding_governor_queue_timeout", reject.Code)
 
 	now = now.Add(time.Minute + time.Nanosecond)
 	finishSequential(t, g, true, http.StatusOK)
 	finishSequential(t, g, true, http.StatusOK)
 	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
+}
+
+func TestBatchUsesBatchSlowRequestDuration(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.SlowRequestDuration = 2 * time.Minute
+		cfg.BatchSlowRequestDuration = 10 * time.Minute
+	}))
+
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	require.Nil(t, reject)
+	require.NotNil(t, lease)
+	lease.Finish(true, http.StatusOK, 5*time.Minute)
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, uint64(1), snapshot.Completed)
+	assert.Equal(t, uint64(0), snapshot.Failed)
+	assert.Equal(t, uint64(0), snapshot.Slow)
 }
 
 func finishSequential(t *testing.T, g *Governor, success bool, statusCode int) {

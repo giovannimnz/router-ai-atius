@@ -201,6 +201,7 @@
 **Resolution:** Nao pendente. Esta direcao foi substituida pelo cutover Go-native consolidado na `phase-20-go-native-model-router`, onde o Go passou a ser o owner de `GET /v1/models` e a dependencia do middleware Python foi removida do caminho canonico.
 
 **Current canonical state:**
+
 - `GET /v1/models` pertence ao backend Go
 - o middleware/FastAPI nao e o owner do catalogo publico
 - `model-detailed` pode permanecer apenas para superfícies auxiliares legadas/docs, nao como source of truth de `/v1/models`
@@ -209,7 +210,7 @@
 
 ## v2.12 — pt-native upstream sync [IN PROGRESS]
 
-**Status:** Phase 7 executed locally on `feat/pt-native`; Phase 8 pending authorization/planning
+**Status:** Phase 7 executed locally on `feat/pt-native`; legacy Phase 8 moved to Phase 21 for current sequencing; Phase 21 ready for planning
 **Goal:** Re-submeter a tradução PT-BR para o upstream QuantumNous/new-api em um PR limpo, com escopo mínimo (idioma nativo), sem inflar com código do fork Atius.
 
 **Background:** PR #5245 aberto pelo fork giovannimnz/router-ai-atius contra QuantumNous/new-api está poluído: 60 arquivos modificados, 49757 adições, 76 deleções, 15 commits. 95% do PR é fork Atius contaminando (PODMAN, model-detailed, .planning, docker-compose rebrand, login route, vitest, login.tsx, routeTree.gen.ts). Apenas 5 arquivos são escopo legítimo de tradução PT: i18n.go, pt.yaml, pt.json, config.ts, languages.ts.
@@ -226,17 +227,29 @@ Plans:
 
 - [x] 01-feat-pt-native-branch-PLAN.md (created via inline plan)
 
-### Phase 8: feat-pt-native-pr
+### Phase 8: feat-pt-native-pr [SUPERSEDED]
 
-**Goal:** Push do branch novo pro fork, fechar PR #5245 poluído com comentário, abrir PR novo limpo contra QuantumNous/new-api.
-**Status:** Pending authorization and plan breakdown
+**Goal:** Superseded numbering placeholder for the clean PT-BR upstream PR handoff. The active/current phase is now Phase 21.
+**Status:** Closed as moved to Phase 21 on 2026-06-26; do not plan or execute this phase number.
 **Requirements:** TBD
 **Depends on:** Phase 7
 **Plans:** 0 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 8 to break down)
+- [x] Moved to Phase 21 (phase number corrected after Phase 20 completion)
+
+### Phase 21: feat-pt-native-pr
+
+**Goal:** Push do branch novo pro fork, fechar PR #5245 poluído com comentário, abrir PR novo limpo contra QuantumNous/new-api.
+**Status:** Ready for planning
+**Requirements:** TBD
+**Depends on:** Phase 20
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 21 to break down)
 
 ---
 

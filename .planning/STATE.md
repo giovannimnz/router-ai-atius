@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: — Model Aliases & Token Management ✓
-current_phase: 20
-status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-06-26T18:09:28.970Z"
+current_phase: 21
+status: ready_for_planning
+stopped_at: Phase 21 context gathered
+last_updated: "2026-06-26T18:49:41-03:00"
 last_activity: 2026-06-26
 progress:
   total_phases: 2
@@ -19,11 +19,11 @@ progress:
 
 ## Current Position
 
-Phase: phase-20 (go-native-model-router) — EXECUTING
+Phase: phase-21 (feat-pt-native-pr) — READY FOR PLANNING
 Plan: Not started
-**Milestone:** v2.12 — pt-native upstream sync (next)
-**Phase:** 20
-**Status:** Milestone complete
+**Milestone:** v2.12 — pt-native upstream sync (current)
+**Phase:** 21
+**Status:** Ready for planning
 **Last activity:** 2026-06-26
 
 ## What Was Done
@@ -136,11 +136,11 @@ DB:      DBRouterAiAtius
 | v1.9 | GHCR Deploy | pending |
 | v2.0 | Podman Migration (legacy name) | ✅ superseded by v1.8 |
 | v2.10 | MiniMax Anthropic | ✅ done 2026-05-31 |
-| v2.12 | pt-native upstream sync | 🚧 in progress — Phase 7 local done; Phase 8 pending |
+| v2.12 | pt-native upstream sync | 🚧 in progress — Phase 7 local done; Phase 8 moved to Phase 21; Phase 21 ready for planning |
 
 ## Next actions
 
-1. **Plan/execute v2.12 Phase 8 — feat-pt-native-pr** (autorização necessária):
+1. **Plan/execute v2.12 Phase 21 — feat-pt-native-pr**:
    - Commitar o working tree atual de `feat/pt-native` com 1 commit limpo
    - Push branch novo pro fork (`giovannimnz/router-ai-atius`)
    - Fechar PR #5245 poluído com comentário
@@ -179,6 +179,6 @@ DB:      DBRouterAiAtius
 
 ## Session
 
-**Last session:** 2026-06-26T18:09:28.957Z
-**Stopped at:** Phase 8 context gathered
-**Resume file:** .planning/phases/08-feat-pt-native-pr/08-CONTEXT.md
+**Last session:** 2026-06-26T18:49:41-03:00
+**Stopped at:** Phase 21 context gathered
+**Resume file:** .planning/phases/21-feat-pt-native-pr/21-CONTEXT.md

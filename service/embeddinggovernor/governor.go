@@ -80,6 +80,12 @@ type Snapshot struct {
 	Failed               uint64    `json:"failed"`
 	Slow                 uint64    `json:"slow"`
 	AverageLatencyMs     int64     `json:"average_latency_ms"`
+	InteractiveAverageLatencyMs int64  `json:"interactive_average_latency_ms"`
+	BatchAverageLatencyMs       int64  `json:"batch_average_latency_ms"`
+	InteractiveCompleted        uint64 `json:"interactive_completed"`
+	BatchCompleted              uint64 `json:"batch_completed"`
+	InteractiveSlow             uint64 `json:"interactive_slow"`
+	BatchSlow                   uint64 `json:"batch_slow"`
 	LastSuccessAt        time.Time `json:"last_success_at,omitempty"`
 	LastFailureAt        time.Time `json:"last_failure_at,omitempty"`
 	LastScaleAt          time.Time `json:"last_scale_at,omitempty"`
@@ -102,6 +108,8 @@ type Governor struct {
 	successes          int
 	cooldownUntil      time.Time
 	latencyEWMA        time.Duration
+	interactiveLatencyEWMA time.Duration
+	batchLatencyEWMA       time.Duration
 	lastSuccessAt      time.Time
 	lastFailureAt      time.Time
 	lastScaleAt        time.Time
@@ -109,6 +117,10 @@ type Governor struct {
 	completed          uint64
 	failed             uint64
 	slow               uint64
+	interactiveCompleted uint64
+	batchCompleted       uint64
+	interactiveSlow      uint64
+	batchSlow            uint64
 	peakRunning        int
 	peakWaiting        int
 }
@@ -264,6 +276,12 @@ func (g *Governor) Snapshot() Snapshot {
 		Failed:               g.failed,
 		Slow:                 g.slow,
 		AverageLatencyMs:     g.latencyEWMA.Milliseconds(),
+		InteractiveAverageLatencyMs: g.interactiveLatencyEWMA.Milliseconds(),
+		BatchAverageLatencyMs:       g.batchLatencyEWMA.Milliseconds(),
+		InteractiveCompleted:        g.interactiveCompleted,
+		BatchCompleted:              g.batchCompleted,
+		InteractiveSlow:             g.interactiveSlow,
+		BatchSlow:                   g.batchSlow,
 		LastSuccessAt:        g.lastSuccessAt,
 		LastFailureAt:        g.lastFailureAt,
 		LastScaleAt:          g.lastScaleAt,
@@ -291,6 +309,13 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 		g.runningBatch--
 	}
 
+	g.latencyEWMA = blendDuration(g.latencyEWMA, latency)
+	if batch {
+		g.batchLatencyEWMA = blendDuration(g.batchLatencyEWMA, latency)
+	} else {
+		g.interactiveLatencyEWMA = blendDuration(g.interactiveLatencyEWMA, latency)
+	}
+
 	if statusCode >= http.StatusInternalServerError {
 		success = false
 	}
@@ -301,10 +326,14 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 	if slowRequestDuration > 0 && latency >= slowRequestDuration {
 		success = false
 		g.slow++
+		if batch {
+			g.batchSlow++
+		} else {
+			g.interactiveSlow++
+		}
 	}
 
 	now := g.clock()
-	g.latencyEWMA = blendDuration(g.latencyEWMA, latency)
 	if !success {
 		g.failed++
 		g.currentConcurrency = g.cfg.MinConcurrency
@@ -318,8 +347,13 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 	}
 
 	g.completed++
+	if batch {
+		g.batchCompleted++
+	} else {
+		g.interactiveCompleted++
+	}
 	g.lastSuccessAt = now
-	if g.currentConcurrency < g.cfg.MaxConcurrency && g.canIncreaseLocked(now) {
+	if g.currentConcurrency < g.cfg.MaxConcurrency && g.canIncreaseLocked(now, batch) {
 		g.successes++
 		if g.successes >= g.cfg.SuccessWindow {
 			g.currentConcurrency++
@@ -400,7 +434,7 @@ func (g *Governor) maybeScaleForDemandLocked(now time.Time) {
 	if g.running < g.currentConcurrency {
 		return
 	}
-	if !g.canIncreaseLocked(now) {
+	if !g.canIncreaseLocked(now, false) {
 		return
 	}
 	g.currentConcurrency++
@@ -409,7 +443,7 @@ func (g *Governor) maybeScaleForDemandLocked(now time.Time) {
 	g.cond.Broadcast()
 }
 
-func (g *Governor) canIncreaseLocked(now time.Time) bool {
+func (g *Governor) canIncreaseLocked(now time.Time, batch bool) bool {
 	if g.currentConcurrency >= g.cfg.MaxConcurrency {
 		return false
 	}
@@ -422,10 +456,23 @@ func (g *Governor) canIncreaseLocked(now time.Time) bool {
 	if g.cfg.ScaleUpMinInterval > 0 && !g.lastScaleAt.IsZero() && now.Sub(g.lastScaleAt) < g.cfg.ScaleUpMinInterval {
 		return false
 	}
-	if g.cfg.LatencyTarget > 0 && g.latencyEWMA > g.cfg.LatencyTarget {
+	if g.cfg.LatencyTarget > 0 && g.scaleUpLatencyLocked(batch) > g.cfg.LatencyTarget {
 		return false
 	}
 	return true
+}
+
+func (g *Governor) scaleUpLatencyLocked(batch bool) time.Duration {
+	if batch {
+		if g.batchLatencyEWMA > 0 {
+			return g.batchLatencyEWMA
+		}
+		return g.latencyEWMA
+	}
+	if g.interactiveLatencyEWMA > 0 {
+		return g.interactiveLatencyEWMA
+	}
+	return 0
 }
 
 func (g *Governor) updateIdleLocked(now time.Time) {

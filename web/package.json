@@ -1,6 +1,12 @@
 {
   "name": "new-api-web-workspace",
   "private": true,
+  "scripts": {
+    "build": "../scripts/ci-build-frontends.sh",
+    "build:default": "cd default && bun run build",
+    "build:classic": "cd classic && bun run build",
+    "typecheck": "cd default && bun run typecheck"
+  },
   "workspaces": [
     "default",
     "classic"

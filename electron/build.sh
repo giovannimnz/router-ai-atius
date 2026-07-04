@@ -5,9 +5,9 @@ set -e
 echo "Building New API Electron App..."
 
 echo "Step 1: Building frontend..."
-cd ../web
-DISABLE_ESLINT_PLUGIN='true' bun run build
-cd ../electron
+cd ..
+./scripts/ci-build-frontends.sh
+cd electron
 
 echo "Step 2: Building Go backend..."
 cd ..
@@ -16,24 +16,28 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Building for macOS..."
     CGO_ENABLED=1 go build -ldflags="-s -w" -o new-api
     cd electron
+    npm version "$(../scripts/normalize-electron-version.sh)" --no-git-tag-version --allow-same-version
     npm install
     npm run build:mac
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "Building for Linux..."
     CGO_ENABLED=1 go build -ldflags="-s -w" -o new-api
     cd electron
+    npm version "$(../scripts/normalize-electron-version.sh)" --no-git-tag-version --allow-same-version
     npm install
     npm run build:linux
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     echo "Building for Windows..."
     CGO_ENABLED=1 go build -ldflags="-s -w" -o new-api.exe
     cd electron
+    npm version "$(../scripts/normalize-electron-version.sh)" --no-git-tag-version --allow-same-version
     npm install
     npm run build:win
 else
     echo "Unknown OS, building for current platform..."
     CGO_ENABLED=1 go build -ldflags="-s -w" -o new-api
     cd electron
+    npm version "$(../scripts/normalize-electron-version.sh)" --no-git-tag-version --allow-same-version
     npm install
     npm run build
 fi

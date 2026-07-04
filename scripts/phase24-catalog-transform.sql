@@ -86,7 +86,7 @@ SET type = 1,
     name = 'Local TEI - GTE Embeddings',
     test_model = 'embedding-gte-v1',
     models = 'embedding-gte-v1',
-    model_mapping = '{"embedding-gte-v1":"text-embeddings-inference"}',
+    model_mapping = '{}',
     remark = 'Local TEI embeddings channel for embedding-gte-v1; preserved by Phase 24 candidate catalog restore.'
 WHERE id = 9;
 

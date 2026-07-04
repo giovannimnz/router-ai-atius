@@ -58,3 +58,18 @@
 ## Deferred Ideas
 
 None.
+
+---
+
+## Replanning: Native Upstream Language Parity
+
+**Date:** 2026-07-04
+**Prompt:** Giovanni asked to validate the current `QuantumNous/new-api` upstream language pattern and replan PT-BR as a fully native language implementation, implemented locally first and kept upstream-contributable.
+
+**Outcome:** The plan no longer treats the old clean commit as the final scope contract. It now uses current `upstream/main` as the source of truth and includes backend, default frontend, and classic frontend native language surfaces.
+
+**Clarification:** "Remove custom i18n" does not mean deleting upstream `i18n/`; it means avoiding fork-only translation mechanisms and adding `pt` through the existing upstream-native `i18n/` and frontend i18next patterns.
+
+**Replanning Review:** After subagent review, the original single broad plan was split into five focused plans: translation inventory/clean lane, backend, default frontend, classic frontend, and upstream handoff. The revised plan adds explicit parity/placeholder/normalization checks, issue/PR duplicate search including #2924 and #5801, failing path/leak checks, and a value-level reuse inventory so existing PT-BR translations are reused without cherry-picking polluted fork branches.
+
+**Linked Branch Revalidation:** Giovanni asked to re-check `https://github.com/giovannimnz/router-ai-atius/tree/feat/pt-native-i18n-clean`. The branch resolves to `cd8cb89bb72b1f5551a9f7536f104498ddfb4d75`, has backend PT 228/228, and covers 4655/4978 current default frontend keys with many screen/menu translations. The plan now treats this linked branch as the primary default source for covered keys and uses `/home/ubuntu/GitHub/containers/router-ai-atius-pt-native-clean` only to fill the 323 linked-branch gaps.

@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -209,39 +210,33 @@ func setupRepresentativeModelListFixture(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	withSelfUseModeEnabled(t)
+	ratio_setting.InitRatioSettings()
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.Create(&[]model.Channel{
-		{Id: 1, Type: constant.ChannelTypeMiniMax, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - OpenAI-Compatible"},
-		{Id: 2, Type: constant.ChannelTypeDeepSeek, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "DeepSeek - OpenAI-Compatible"},
-		{Id: 3, Type: constant.ChannelTypeCodex, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "OpenAI Codex OAuth"},
-		{Id: 4, Type: constant.ChannelTypeMiniMax, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - Embeddings"},
-		{Id: 5, Type: constant.ChannelTypeOpenAI, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "OpenAI - Embeddings"},
-		{Id: 6, Type: constant.ChannelTypeAnthropic, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax - Anthropic-Compatible"},
-		{Id: 7, Type: constant.ChannelTypeAnthropic, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "DeepSeek - Anthropic-Compatible"},
+		{Id: 1, Type: constant.ChannelTypeMiniMax, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "MiniMax"},
+		{Id: 2, Type: constant.ChannelTypeDeepSeek, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "DeepSeek"},
+		{Id: 3, Type: constant.ChannelTypeCodex, Key: "test-key", Status: common.ChannelStatusEnabled, Name: "OpenAI - Codex"},
 	}).Error)
 
 	require.NoError(t, db.Create(&[]model.Ability{
-		{Group: "default", Model: "text-embedding-3-small", ChannelId: 5, Enabled: true},
 		{Group: "default", Model: "MiniMax-M2.5", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "gpt-5.4-mini", ChannelId: 3, Enabled: true},
 		{Group: "default", Model: "deepseek-v4-flash", ChannelId: 2, Enabled: true},
 		{Group: "default", Model: "MiniMax-M2.7", ChannelId: 1, Enabled: true},
-		{Group: "default", Model: "embo-01", ChannelId: 4, Enabled: true},
+		{Group: "default", Model: "embo-01", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "gpt-5.3-codex-spark", ChannelId: 3, Enabled: true},
-		{Group: "default", Model: "MiniMax-M3", ChannelId: 6, Enabled: true},
+		{Group: "default", Model: "MiniMax-M3", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "deepseek-v4-pro", ChannelId: 2, Enabled: true},
-		{Group: "default", Model: "text-embedding-3-large", ChannelId: 5, Enabled: true},
+		{Group: "default", Model: "text-embedding-3-large", ChannelId: 3, Enabled: true},
 		{Group: "default", Model: "gpt-5.5", ChannelId: 3, Enabled: true},
 		{Group: "default", Model: "MiniMax-M2.5-highspeed", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "gpt-5.4", ChannelId: 3, Enabled: true},
-		{Group: "default", Model: "MiniMax-M2.7", ChannelId: 6, Enabled: true},
-		{Group: "default", Model: "MiniMax-M2.5-highspeed", ChannelId: 6, Enabled: true},
-		{Group: "default", Model: "MiniMax-M2.5", ChannelId: 6, Enabled: true},
-		{Group: "default", Model: "deepseek-v4-pro", ChannelId: 7, Enabled: true},
-		{Group: "default", Model: "deepseek-v4-flash", ChannelId: 7, Enabled: true},
+		{Group: "default", Model: "text-embedding-3-small", ChannelId: 3, Enabled: true},
 	}).Error)
 
 	require.NoError(t, db.Create(&[]model.Model{
+		{ModelName: "gpt-5.5", Description: "OpenAI Codex GPT-5.5", Endpoints: `["openai"]`, Status: 1},
+		{ModelName: "gpt-5.4", Description: "OpenAI Codex GPT-5.4", Endpoints: `["openai"]`, Status: 1},
 		{ModelName: "embo-01", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
 		{ModelName: "text-embedding-3-large", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
 		{ModelName: "text-embedding-3-small", Endpoints: `{"embeddings":"/v1/embeddings"}`, Status: 1},
@@ -384,6 +379,7 @@ func TestListModelsPayloadShapeAndPublicFields(t *testing.T) {
 	for _, modelItem := range itemMaps.Data {
 		assert.NotContains(t, modelItem, "pricing_source")
 		assert.NotContains(t, modelItem, "pricing_estimated")
+		assert.NotContains(t, modelItem, "pricing_version")
 	}
 }
 
@@ -394,6 +390,7 @@ func TestListModelsRepresentativeOrder(t *testing.T) {
 	models, _ := decodeListModelsPayload(t, recorder)
 
 	require.Equal(t, []string{
+		"MiniMax-M3",
 		"MiniMax-M2.7",
 		"MiniMax-M2.5-highspeed",
 		"MiniMax-M2.5",
@@ -403,11 +400,67 @@ func TestListModelsRepresentativeOrder(t *testing.T) {
 		"gpt-5.4",
 		"gpt-5.4-mini",
 		"gpt-5.3-codex-spark",
-		"MiniMax-M3",
 		"embo-01",
 		"text-embedding-3-large",
 		"text-embedding-3-small",
 	}, modelIDs(models))
+}
+
+func TestListModelsCodexContractAfterPhase24Restore(t *testing.T) {
+	setupRepresentativeModelListFixture(t)
+
+	recorder := requestListModels(t, "/v1/models", constant.ChannelTypeOpenAI)
+	models, raw := decodeListModelsPayload(t, recorder)
+
+	byID := make(map[string]dto.OpenAIModels, len(models))
+	for _, item := range models {
+		byID[item.Id] = item
+	}
+
+	tests := []struct {
+		id          string
+		name        string
+		inputPrice  float64
+		outputPrice float64
+	}{
+		{id: "gpt-5.5", name: "OpenAI Codex GPT-5.5", inputPrice: 5, outputPrice: 30},
+		{id: "gpt-5.4", name: "OpenAI Codex GPT-5.4", inputPrice: 5, outputPrice: 22.5},
+		{id: "gpt-5.4-mini", name: "gpt-5.4-mini", inputPrice: 0.75, outputPrice: 4.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			item, ok := byID[tt.id]
+			require.True(t, ok)
+			assert.Equal(t, "codex", item.OwnedBy)
+			assert.Equal(t, tt.name, item.Name)
+			assert.Equal(t, "OpenAI Codex", item.Provider)
+			assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, item.SupportedEndpointTypes)
+			assert.Equal(t, map[string]string{"openai": "/v1/chat/completions"}, item.EndpointRoutes)
+			require.NotNil(t, item.Pricing)
+			assert.Equal(t, tt.inputPrice, item.Pricing.Input)
+			assert.Equal(t, tt.outputPrice, item.Pricing.Output)
+		})
+	}
+
+	assert.NotContains(t, raw, `"supported_endpoint_type_labels"`)
+	assert.NotContains(t, raw, `"input_price"`)
+	assert.NotContains(t, raw, `"output_price"`)
+	assert.NotContains(t, raw, `"quota_type"`)
+	assert.NotContains(t, raw, `"enable_groups"`)
+	assert.NotContains(t, raw, `"unit"`)
+	for _, item := range models {
+		itemRaw, err := common.Marshal(item)
+		require.NoError(t, err)
+		assert.NotContains(t, string(itemRaw), `"supported_endpoint_type_labels"`)
+		assert.NotContains(t, string(itemRaw), `"input_price"`)
+		assert.NotContains(t, string(itemRaw), `"output_price"`)
+		assert.NotContains(t, string(itemRaw), `"quota_type"`)
+		assert.NotContains(t, string(itemRaw), `"enable_groups"`)
+		assert.NotContains(t, string(itemRaw), `"unit"`)
+	}
+	assert.NotContains(t, byID, "gpt-5.5-1m")
+	assert.NotContains(t, byID, "gpt-5.4-1m")
 }
 
 func TestListModelsAnthropicPayloadAndOrder(t *testing.T) {
@@ -422,12 +475,12 @@ func TestListModelsAnthropicPayloadAndOrder(t *testing.T) {
 	assert.NotContains(t, raw, "last_id")
 	assert.NotContains(t, raw, "has_more")
 	require.Equal(t, []string{
+		"MiniMax-M3",
 		"MiniMax-M2.7",
 		"MiniMax-M2.5-highspeed",
 		"MiniMax-M2.5",
 		"deepseek-v4-pro",
 		"deepseek-v4-flash",
-		"MiniMax-M3",
 	}, anthropicModelIDs(models))
 	for _, modelItem := range models {
 		assert.Equal(t, "model", modelItem.Type)

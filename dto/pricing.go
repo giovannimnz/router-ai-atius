@@ -11,16 +11,16 @@ type OpenAIModels struct {
 	Name                        string                  `json:"name,omitempty"`
 	Provider                    string                  `json:"provider,omitempty"`
 	SupportedEndpointTypes      []constant.EndpointType `json:"supported_endpoint_types"`
-	SupportedEndpointTypeLabels []string                `json:"supported_endpoint_type_labels,omitempty"`
+	SupportedEndpointTypeLabels []string                `json:"-"`
 	EndpointRoutes              map[string]string       `json:"endpoint_routes,omitempty"`
 	Pricing                     *ModelCatalogPricing    `json:"pricing,omitempty"`
-	InputPrice                  float64                 `json:"input_price"`
-	OutputPrice                 float64                 `json:"output_price"`
-	QuotaType                   int                     `json:"quota_type"`
+	InputPrice                  float64                 `json:"-"`
+	OutputPrice                 float64                 `json:"-"`
+	QuotaType                   int                     `json:"-"`
 	BillingMode                 string                  `json:"billing_mode,omitempty"`
 	BillingExpr                 string                  `json:"billing_expr,omitempty"`
 	PricingVersion              string                  `json:"pricing_version,omitempty"`
-	EnableGroups                []string                `json:"enable_groups,omitempty"`
+	EnableGroups                []string                `json:"-"`
 }
 
 type AnthropicModel struct {
@@ -77,5 +77,5 @@ type ModelCatalogEntry struct {
 type ModelCatalogPricing struct {
 	Input  float64 `json:"input"`
 	Output float64 `json:"output"`
-	Unit   string  `json:"unit"`
+	Unit   string  `json:"-"`
 }

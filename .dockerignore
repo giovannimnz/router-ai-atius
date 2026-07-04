@@ -1,5 +1,7 @@
 .github
 .git
+.planning
+__pycache__
 *.md
 .vscode
 .gitignore
@@ -7,6 +9,10 @@ Makefile
 docs
 .eslintcache
 .gocache
+/backups
+/data
+/logs
+/runtime
 /web/node_modules
 /web/default/node_modules
 /web/default/dist

@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	defaultModels                   = "embedding-pt-v1,embedding-pt-v1-batch"
-	defaultBatchModels              = "embedding-pt-v1-batch"
+	defaultModels                   = "embedding-gte-v1"
+	defaultBatchModels              = ""
 	defaultInitialConcurrency       = 2
 	defaultMinConcurrency           = 1
 	defaultMaxConcurrency           = 3

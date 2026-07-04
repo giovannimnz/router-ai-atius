@@ -5,11 +5,15 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,4 +83,63 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 2, userID)
+}
+
+func TestShouldUseStreamForChannelTest(t *testing.T) {
+	codexChannel := &model.Channel{Type: constant.ChannelTypeCodex}
+	openAIChannel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+
+	tests := []struct {
+		name         string
+		channel      *model.Channel
+		model        string
+		endpointType string
+		want         bool
+	}{
+		{
+			name:    "codex default test uses responses stream",
+			channel: codexChannel,
+			model:   "gpt-5.5",
+			want:    true,
+		},
+		{
+			name:         "codex responses endpoint uses stream",
+			channel:      codexChannel,
+			model:        "gpt-5.5",
+			endpointType: string(constant.EndpointTypeOpenAIResponse),
+			want:         true,
+		},
+		{
+			name:         "codex embeddings endpoint does not use stream",
+			channel:      codexChannel,
+			model:        "text-embedding-3-small",
+			endpointType: string(constant.EndpointTypeEmbeddings),
+			want:         false,
+		},
+		{
+			name:         "codex compact endpoint does not use stream",
+			channel:      codexChannel,
+			model:        "gpt-5.5" + ratio_setting.CompactModelSuffix,
+			endpointType: string(constant.EndpointTypeOpenAIResponseCompact),
+			want:         false,
+		},
+		{
+			name:    "non codex channel keeps non stream default",
+			channel: openAIChannel,
+			model:   "gpt-4o-mini",
+			want:    false,
+		},
+		{
+			name:  "nil channel keeps non stream default",
+			model: "gpt-5.5",
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldUseStreamForChannelTest(tt.channel, tt.model, tt.endpointType)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

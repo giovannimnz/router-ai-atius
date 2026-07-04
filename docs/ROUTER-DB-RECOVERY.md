@@ -2,11 +2,12 @@
 
 ## Estado atual
 
-- O runtime live do router usa `SQL_DSN` via host PgBouncer para o banco `newapi`.
-- O unit file ativo aponta para `10.1.1.1:6432/newapi`.
+- O runtime live do router usa `SQL_DSN` via host PgBouncer para o banco `DBRouterAiAtius`.
+- O unit file ativo aponta para `10.1.1.1:6432/DBRouterAiAtius`.
 - O banco live atual continua sendo a fonte de verdade para dados operacionais recentes.
 - `users, tokens e logs permanecem vindo do banco live`.
 - A recuperacao da Fase 24 nao pode sobrescrever esses dados com dumps antigos.
+- O alias legado `newapi` foi removido do PgBouncer em `2026-07-04` depois da validacao do cutover final.
 
 ## Fontes de restauracao
 
@@ -19,7 +20,7 @@
 ### Uso de cada fonte
 
 - O `catalogo 2026-07-01` e a melhor fonte para restaurar `OpenAI - Codex` e as linhas GPT/Codex ausentes no catalogo atual.
-- O banco `newapi` live atual permanece a fonte de verdade para `users`, `tokens`, `logs`, configuracoes recentes e o estado operacional ja corrigido de `embedding-gte-v1`.
+- O banco `DBRouterAiAtius` live atual permanece a fonte de verdade para `users`, `tokens`, `logs`, configuracoes recentes e o estado operacional ja corrigido de `embedding-gte-v1`.
 - O dump `/home/ubuntu/.backups/router-ai-atius-incident-20260703T231027-0300/newapi-before.fix.dump` fica reservado para rollback e comparacao, nao para replay cego sobre o banco live.
 
 ## Transformacoes obrigatorias
@@ -38,8 +39,8 @@
 ## Banco final canonico
 
 - A recuperacao da Fase 24 trabalha com o objetivo de voltar para a identidade canonica `DBRouterAiAtius` no host, sempre via PgBouncer.
-- O banco `newapi` atual deve ser preservado intacto ate a validacao final do cutover.
-- `newapi permanece intacto para rollback` durante toda a Fase 24, inclusive enquanto o candidato `DBRouterAiAtius` e montado e validado.
+- O banco legado `newapi` foi preservado apenas durante a janela de migracao e nao participa mais do runtime live.
+- O runtime final fica exclusivamente em `DBRouterAiAtius` via PgBouncer.
 - O contrato desta fase e copiar ou restaurar para um destino candidato, nunca mutar cegamente o banco live sem backup fresco validado.
 
 ## Backups obrigatorios
@@ -67,15 +68,14 @@ Sem esses artefatos, nenhuma restauracao, rename ou repoint de runtime pode come
    - contagens de catalogo
    - verificacao de `embedding-gte-v1`
 5. So depois disso repointar PgBouncer e runtime para o banco canonico.
+6. Depois da validacao final, remover o alias legado `newapi` do PgBouncer para deixar somente `DBRouterAiAtius` como rota ativa do router.
 
 ## Rollback
 
 - Se qualquer gate falhar, o rollback deve usar o backup fresco da Fase 24 como fonte primaria de restauracao.
-- `não fazer DROP nem rename destrutivo de newapi nesta fase`.
-- O passo de rollback minimo e:
-  - manter o banco `newapi` original intocado;
-  - recolocar o runtime no target anterior via PgBouncer;
-  - restaurar o dump fresco da Fase 24 no destino candidato, se necessario;
+- O rollback agora e manual e excepcional:
+  - reintroduzir temporariamente o alias `newapi` no PgBouncer ou restaurar o backup em `DBRouterAiAtius`;
+  - recolocar a unit do router no target anterior somente se houver falha real no banco canonico;
   - repetir as verificacoes de status e catalogo.
 - O dump `newapi-before.fix.dump` permanece como referencia secundaria de emergencia, nao substitui o backup fresco da Fase 24.
 
@@ -88,4 +88,4 @@ Sem esses artefatos, nenhuma restauracao, rename ou repoint de runtime pode come
 - DeepSeek permanece ativo de forma consolidada.
 - MiniMax permanece restaurado, mas desabilitado.
 - `embedding-gte-v1` continua sendo o unico alias publico governado.
-- O runtime final continua no host via PgBouncer e alinhado ao banco canonico definido para a Fase 24.
+- O runtime final continua no host via PgBouncer e alinhado exclusivamente ao banco canonico `DBRouterAiAtius`.

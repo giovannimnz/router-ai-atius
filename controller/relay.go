@@ -116,15 +116,26 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		return
 	}
+	requestedModelName := requestModelName(request)
 
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+	if relayInfo.OriginModelName == "" {
+		relayInfo.OriginModelName = requestedModelName
+	}
+	contextGuardInfo := relayInfo
+	if requestedModelName != "" {
+		contextGuardInfoCopy := *relayInfo
+		contextGuardInfoCopy.OriginModelName = requestedModelName
+		contextGuardInfo = &contextGuardInfoCopy
+	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
-	needCountToken := constant.CountToken
+	needCodexContextGuard := shouldValidateCodexContextWindow(contextGuardInfo)
+	needCountToken := constant.CountToken || needCodexContextGuard
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
 	if needSensitiveCheck || needCountToken {
@@ -149,6 +160,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+	if newAPIError = validateCodexContextWindow(contextGuardInfo, tokens, meta); newAPIError != nil {
+		return
+	}
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {

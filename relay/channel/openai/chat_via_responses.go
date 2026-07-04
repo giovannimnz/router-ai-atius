@@ -38,6 +38,16 @@ func stringDeltaFromPrefix(prev string, next string) string {
 	return next
 }
 
+func chatCompletionsPublicModel(info *relaycommon.RelayInfo) string {
+	if info == nil {
+		return ""
+	}
+	if info.OriginModelName != "" {
+		return info.OriginModelName
+	}
+	return info.UpstreamModelName
+}
+
 func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
@@ -63,6 +73,9 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	chatResp, usage, err := service.ResponsesResponseToChatCompletionsResponse(&responsesResp, chatId)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	if publicModel := chatCompletionsPublicModel(info); publicModel != "" {
+		chatResp.Model = publicModel
 	}
 
 	if usage == nil || usage.TotalTokens == 0 {
@@ -90,6 +103,141 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	return usage, nil
 }
 
+func OaiResponsesStreamToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+
+	defer service.CloseResponseBodyGracefully(resp)
+
+	responseId := helper.GetResponseID(c)
+	createAt := time.Now().Unix()
+	model := chatCompletionsPublicModel(info)
+	usage := &dto.Usage{}
+	var outputText strings.Builder
+
+	scanner := helper.NewStreamScanner(resp.Body)
+	for scanner.Scan() {
+		data := scanner.Text()
+		if len(data) < 6 {
+			continue
+		}
+		if strings.HasPrefix(data, "data:") {
+			data = strings.TrimSpace(data[5:])
+		} else if strings.HasPrefix(data, "[DONE]") {
+			break
+		} else {
+			continue
+		}
+		if data == "" {
+			continue
+		}
+		if strings.HasPrefix(data, "[DONE]") {
+			break
+		}
+
+		var streamResp dto.ResponsesStreamResponse
+		if err := common.UnmarshalJsonStr(data, &streamResp); err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+
+		switch streamResp.Type {
+		case "response.created":
+			if streamResp.Response != nil {
+				if streamResp.Response.Model != "" && model == "" {
+					model = streamResp.Response.Model
+				}
+				if streamResp.Response.CreatedAt != 0 {
+					createAt = int64(streamResp.Response.CreatedAt)
+				}
+			}
+		case "response.output_text.delta":
+			outputText.WriteString(streamResp.Delta)
+		case "response.completed":
+			if streamResp.Response != nil {
+				if streamResp.Response.Model != "" && model == "" {
+					model = streamResp.Response.Model
+				}
+				if streamResp.Response.CreatedAt != 0 {
+					createAt = int64(streamResp.Response.CreatedAt)
+				}
+				if streamResp.Response.Usage != nil {
+					if streamResp.Response.Usage.InputTokens != 0 {
+						usage.PromptTokens = streamResp.Response.Usage.InputTokens
+						usage.InputTokens = streamResp.Response.Usage.InputTokens
+					}
+					if streamResp.Response.Usage.OutputTokens != 0 {
+						usage.CompletionTokens = streamResp.Response.Usage.OutputTokens
+						usage.OutputTokens = streamResp.Response.Usage.OutputTokens
+					}
+					if streamResp.Response.Usage.TotalTokens != 0 {
+						usage.TotalTokens = streamResp.Response.Usage.TotalTokens
+					} else {
+						usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+					}
+					if streamResp.Response.Usage.InputTokensDetails != nil {
+						usage.PromptTokensDetails.CachedTokens = streamResp.Response.Usage.InputTokensDetails.CachedTokens
+						usage.PromptTokensDetails.ImageTokens = streamResp.Response.Usage.InputTokensDetails.ImageTokens
+						usage.PromptTokensDetails.AudioTokens = streamResp.Response.Usage.InputTokensDetails.AudioTokens
+					}
+					if streamResp.Response.Usage.CompletionTokenDetails.ReasoningTokens != 0 {
+						usage.CompletionTokenDetails.ReasoningTokens = streamResp.Response.Usage.CompletionTokenDetails.ReasoningTokens
+					}
+				}
+			}
+		case "response.error", "response.failed":
+			if oaiErr := dto.GetOpenAIError(streamResp.Error); oaiErr != nil && oaiErr.Type != "" {
+				return nil, types.WithOpenAIError(*oaiErr, http.StatusBadRequest)
+			}
+			if streamResp.Response != nil {
+				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
+					return nil, types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
+				}
+			}
+			return nil, types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResp.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+		case "error":
+			if oaiErr := dto.GetOpenAIError(streamResp.Error); oaiErr != nil && oaiErr.Type != "" {
+				return nil, types.WithOpenAIError(*oaiErr, http.StatusBadRequest)
+			}
+			return nil, types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResp.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+		default:
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+
+	if usage.TotalTokens == 0 {
+		usage = service.ResponseText2Usage(c, outputText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+	}
+
+	chatResp := &dto.OpenAITextResponse{
+		Id:      responseId,
+		Object:  "chat.completion",
+		Created: createAt,
+		Model:   model,
+		Choices: []dto.OpenAITextResponseChoice{
+			{
+				Index: 0,
+				Message: dto.Message{
+					Role:    "assistant",
+					Content: outputText.String(),
+				},
+				FinishReason: "stop",
+			},
+		},
+		Usage: *usage,
+	}
+
+	responseBody, err := common.Marshal(chatResp)
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
+	}
+	service.IOCopyBytesGracefully(c, resp, responseBody)
+	return usage, nil
+}
+
 func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
@@ -99,7 +247,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 	responseId := helper.GetResponseID(c)
 	createAt := time.Now().Unix()
-	model := info.UpstreamModelName
+	model := chatCompletionsPublicModel(info)
 
 	var (
 		usage       = &dto.Usage{}
@@ -312,7 +460,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		switch streamResp.Type {
 		case "response.created":
 			if streamResp.Response != nil {
-				if streamResp.Response.Model != "" {
+				if streamResp.Response.Model != "" && model == "" {
 					model = streamResp.Response.Model
 				}
 				if streamResp.Response.CreatedAt != 0 {
@@ -444,7 +592,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 		case "response.completed":
 			if streamResp.Response != nil {
-				if streamResp.Response.Model != "" {
+				if streamResp.Response.Model != "" && model == "" {
 					model = streamResp.Response.Model
 				}
 				if streamResp.Response.CreatedAt != 0 {
@@ -496,12 +644,26 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			}
 
 		case "response.error", "response.failed":
+			if oaiErr := dto.GetOpenAIError(streamResp.Error); oaiErr != nil && oaiErr.Type != "" {
+				streamErr = types.WithOpenAIError(*oaiErr, http.StatusBadRequest)
+				sr.Stop(streamErr)
+				return
+			}
 			if streamResp.Response != nil {
 				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
 					streamErr = types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
 					sr.Stop(streamErr)
 					return
 				}
+			}
+			streamErr = types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResp.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+			sr.Stop(streamErr)
+			return
+		case "error":
+			if oaiErr := dto.GetOpenAIError(streamResp.Error); oaiErr != nil && oaiErr.Type != "" {
+				streamErr = types.WithOpenAIError(*oaiErr, http.StatusBadRequest)
+				sr.Stop(streamErr)
+				return
 			}
 			streamErr = types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResp.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
 			sr.Stop(streamErr)

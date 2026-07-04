@@ -57,19 +57,20 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	fimBaseUrl := info.ChannelBaseUrl
+	baseURL := relaycommon.NormalizeProviderRootBaseURL(info.ChannelBaseUrl)
+	fimBaseUrl := baseURL
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
-		return fmt.Sprintf("%s/anthropic/v1/messages", info.ChannelBaseUrl), nil
+		return fmt.Sprintf("%s/anthropic/v1/messages", baseURL), nil
 	default:
-		if !strings.HasSuffix(info.ChannelBaseUrl, "/beta") {
+		if !strings.HasSuffix(baseURL, "/beta") {
 			fimBaseUrl += "/beta"
 		}
 		switch info.RelayMode {
 		case constant.RelayModeCompletions:
 			return fmt.Sprintf("%s/completions", fimBaseUrl), nil
 		default:
-			return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+			return fmt.Sprintf("%s/v1/chat/completions", baseURL), nil
 		}
 	}
 }

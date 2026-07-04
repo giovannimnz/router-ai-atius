@@ -186,8 +186,8 @@ scripts/
 
 ### Pattern 1: Request-Local Signals First
 
-**What:** Derive count and coarse size from `EmbeddingRequest.ParseInput()` before acquiring the governor, but pass only non-sensitive integers/enums to the governor. [VERIFIED: dto/embedding.go:59]  
-**When to use:** Always for governed embedding models, because it works without TEI/Kubernetes privileges. [VERIFIED: service/embeddinggovernor/governor.go:326]  
+**What:** Derive count and coarse size from `EmbeddingRequest.ParseInput()` before acquiring the governor, but pass only non-sensitive integers/enums to the governor. [VERIFIED: dto/embedding.go:59]
+**When to use:** Always for governed embedding models, because it works without TEI/Kubernetes privileges. [VERIFIED: service/embeddinggovernor/governor.go:326]
 **Example:**
 
 ```go
@@ -205,8 +205,8 @@ _ = inputs // count/size only; never store or log input text in governor state.
 
 ### Pattern 2: Separate Interactive And Batch Feedback
 
-**What:** Keep batch and interactive counters/EWMAs separate while preserving a global concurrency cap. [VERIFIED: service/embeddinggovernor/governor.go:61]  
-**When to use:** Use interactive EWMA for interactive scale-up decisions and batch EWMA for batch throttle decisions. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:100]  
+**What:** Keep batch and interactive counters/EWMAs separate while preserving a global concurrency cap. [VERIFIED: service/embeddinggovernor/governor.go:61]
+**When to use:** Use interactive EWMA for interactive scale-up decisions and batch EWMA for batch throttle decisions. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:100]
 **Example:**
 
 ```go
@@ -220,8 +220,8 @@ if batch {
 
 ### Pattern 3: Consecutive-Window Probe Hysteresis
 
-**What:** Optional health/probe samples should produce `healthy`, `degraded`, `unhealthy`, or `unknown`, and only sustained degraded/unhealthy windows should affect concurrency. [VERIFIED: operator context]  
-**When to use:** Only if `EMBEDDING_GOVERNOR_TEI_HEALTH_URL` or equivalent is configured; disabled/misconfigured probing must degrade to `unknown`, not failure. [CITED: https://huggingface.github.io/text-embeddings-inference/]  
+**What:** Optional health/probe samples should produce `healthy`, `degraded`, `unhealthy`, or `unknown`, and only sustained degraded/unhealthy windows should affect concurrency. [VERIFIED: operator context]
+**When to use:** Only if `EMBEDDING_GOVERNOR_TEI_HEALTH_URL` or equivalent is configured; disabled/misconfigured probing must degrade to `unknown`, not failure. [CITED: https://huggingface.github.io/text-embeddings-inference/]
 **Example:**
 
 ```go
@@ -260,30 +260,30 @@ if g.badHealthWindows >= cfg.HealthWindowThreshold {
 
 ### Pitfall 1: Single Health Timeout Causes Bad Reduction
 
-**What goes wrong:** The governor drops to `min=1` or enters cooldown after one slow health probe even though embedding requests still succeed. [VERIFIED: operator context]  
-**Why it happens:** TEI `/health` can lag during long CPU inference, and local logs show previous liveness/readiness conclusions were contaminated by aggressive probe settings. [VERIFIED: docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md:194]  
-**How to avoid:** Require multiple consecutive bad windows and combine health with request outcomes, restarts, and progress signals. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:366]  
+**What goes wrong:** The governor drops to `min=1` or enters cooldown after one slow health probe even though embedding requests still succeed. [VERIFIED: operator context]
+**Why it happens:** TEI `/health` can lag during long CPU inference, and local logs show previous liveness/readiness conclusions were contaminated by aggressive probe settings. [VERIFIED: docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md:194]
+**How to avoid:** Require multiple consecutive bad windows and combine health with request outcomes, restarts, and progress signals. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:366]
 **Warning signs:** `health=200` with high latency, no embed errors, pod ready, restarts zero, and GBrain `Embedded` still increasing. [VERIFIED: operator context]
 
 ### Pitfall 2: Batch Latency Poisons Interactive Latency
 
-**What goes wrong:** Long catch-up requests raise the single EWMA and block interactive scale-up. [VERIFIED: service/embeddinggovernor/governor.go:298]  
-**Why it happens:** Current EWMA is global even though batch and interactive requests have different slow thresholds. [VERIFIED: service/embeddinggovernor/governor.go:289]  
-**How to avoid:** Maintain separate batch and interactive EWMA/slow counters and use the matching signal in `canIncreaseLocked`. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:100]  
+**What goes wrong:** Long catch-up requests raise the single EWMA and block interactive scale-up. [VERIFIED: service/embeddinggovernor/governor.go:298]
+**Why it happens:** Current EWMA is global even though batch and interactive requests have different slow thresholds. [VERIFIED: service/embeddinggovernor/governor.go:289]
+**How to avoid:** Maintain separate batch and interactive EWMA/slow counters and use the matching signal in `canIncreaseLocked`. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:100]
 **Warning signs:** Batch catch-up is running, interactive queue exists, no failures, but `CurrentConcurrency` refuses to return from `1` or `2`. [VERIFIED: codebase grep]
 
 ### Pitfall 3: Client 4xx Closes The Circuit
 
-**What goes wrong:** A bad client request or validation error reduces all governed traffic to the minimum. [VERIFIED: relay/embedding_handler.go:105]  
-**Why it happens:** Relay currently passes `success=false` for any non-200 upstream response before the governor can classify the status. [VERIFIED: relay/embedding_handler.go:105]  
-**How to avoid:** Add a status classifier so only infrastructure pressure classes affect cooldown/reduction. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:104]  
+**What goes wrong:** A bad client request or validation error reduces all governed traffic to the minimum. [VERIFIED: relay/embedding_handler.go:105]
+**Why it happens:** Relay currently passes `success=false` for any non-200 upstream response before the governor can classify the status. [VERIFIED: relay/embedding_handler.go:105]
+**How to avoid:** Add a status classifier so only infrastructure pressure classes affect cooldown/reduction. [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-router-embedding-governor-go-native.md:104]
 **Warning signs:** `Failed` increases on ordinary `400`/`404` responses while TEI remains ready and healthy. [VERIFIED: service/embeddinggovernor/governor.go:300]
 
 ### Pitfall 4: Metrics Or Docs Leak Text/Secrets
 
-**What goes wrong:** New snapshot fields, logs, or docs accidentally include embedding input, Authorization tokens, or provider secrets. [VERIFIED: AGENTS.md:164]  
-**Why it happens:** Embedding request bodies contain raw user text, and relay currently has a debug log of the converted request body. [VERIFIED: relay/embedding_handler.go:64]  
-**How to avoid:** Only expose counts, coarse sizes, status classes, durations, and model/channel identifiers; preserve smoke script redaction patterns. [VERIFIED: scripts/smoke-embeddings.py]  
+**What goes wrong:** New snapshot fields, logs, or docs accidentally include embedding input, Authorization tokens, or provider secrets. [VERIFIED: AGENTS.md:164]
+**Why it happens:** Embedding request bodies contain raw user text, and relay currently has a debug log of the converted request body. [VERIFIED: relay/embedding_handler.go:64]
+**How to avoid:** Only expose counts, coarse sizes, status classes, durations, and model/channel identifiers; preserve smoke script redaction patterns. [VERIFIED: scripts/smoke-embeddings.py]
 **Warning signs:** A test fixture or docs snippet contains real input text, bearer tokens, OAuth JSON, or raw request bodies. [VERIFIED: docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md:292]
 
 ## Code Examples
@@ -347,20 +347,20 @@ for _, input := range inputs {
 
 ## Open Questions
 
-1. **Should this phase expose a governor snapshot endpoint?**  
-   - What we know: `CurrentSnapshot()` exists and returns non-sensitive counters/timestamps today. [VERIFIED: service/embeddinggovernor/governor.go:157]  
-   - What's unclear: There is no current caller found by grep, and the desired operator surface is not specified. [VERIFIED: rg CurrentSnapshot]  
-   - Recommendation: If needed, expose admin-only read access in a separate task with redaction tests; otherwise rely on logs and unit tests. [ASSUMED]
+1. **Should this phase expose a governor snapshot endpoint? (RESOLVED)**
+   - What we know: `CurrentSnapshot()` exists and returns non-sensitive counters/timestamps today. [VERIFIED: service/embeddinggovernor/governor.go:157]
+   - What's unclear: There is no current caller found by grep, and the desired operator surface is not specified. [VERIFIED: rg CurrentSnapshot]
+   - Decision: No snapshot endpoint in this follow-up. Keep snapshot fields internal/testable and document operator-facing behavior in the manual; any admin endpoint belongs in a separate explicit phase with route/auth/redaction tests. [RESOLVED]
 
-2. **Should optional TEI health probing ship now or wait?**  
-   - What we know: TEI documents `/health`, Prometheus, and OpenTelemetry support, and local ops recommend 30s health timeout. [CITED: https://huggingface.github.io/text-embeddings-inference/] [CITED: https://github.com/huggingface/text-embeddings-inference/blob/main/README.md] [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:349]  
-   - What's unclear: The router deployment config for a TEI health URL and whether the router should ever make Kubernetes-aware decisions are not specified. [ASSUMED]  
-   - Recommendation: Include only a disabled-by-default HTTP health sampler if the planner can keep it read-only and hysteresis-based; otherwise defer probing and implement request-local signals first. [VERIFIED: operator context]
+2. **Should optional TEI health probing ship now or wait? (RESOLVED)**
+   - What we know: TEI documents `/health`, Prometheus, and OpenTelemetry support, and local ops recommend 30s health timeout. [CITED: https://huggingface.github.io/text-embeddings-inference/] [CITED: https://github.com/huggingface/text-embeddings-inference/blob/main/README.md] [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:349]
+   - What's unclear: The router deployment config for a TEI health URL and whether the router should ever make Kubernetes-aware decisions are not specified. [ASSUMED]
+   - Decision: Include only a disabled-by-default HTTP health sampler. It must be read-only, env-gated, use no Kubernetes client, use a timeout default of at least 30s, and require consecutive bad windows before influencing scale decisions. [RESOLVED]
 
-3. **Should router-side sub-batching be in this phase?**  
-   - What we know: GBrain provider sub-batch size is `4`, and TEI max client batch size is `4`. [VERIFIED: operator context] [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:325]  
-   - What's unclear: Router-side splitting would need response recomposition, index preservation, usage aggregation, and partial failure policy. [VERIFIED: scripts/smoke-embeddings.py]  
-   - Recommendation: Treat sub-batching as a separate future phase unless the user explicitly says it is part of this follow-up. [ASSUMED]
+3. **Should router-side sub-batching be in this phase? (RESOLVED)**
+   - What we know: GBrain provider sub-batch size is `4`, and TEI max client batch size is `4`. [VERIFIED: operator context] [VERIFIED: /home/ubuntu/GitHub/obsidian-vault/ideaverse/60-LOGS/2026-06-26-gbrain-obsidian-tei-atius-router-service-management.md:325]
+   - What's unclear: Router-side splitting would need response recomposition, index preservation, usage aggregation, and partial failure policy. [VERIFIED: scripts/smoke-embeddings.py]
+   - Decision: Defer router-side sub-batching out of this follow-up. GBrain/provider-side sub-batch size remains the active control, and router splitting/recomposition needs a separate explicit plan because it changes ordering, usage, and partial-failure semantics. [RESOLVED]
 
 ## Environment Availability
 
@@ -472,5 +472,5 @@ for _, input := range inputs {
 - Architecture: HIGH - based on AGENTS.md, current governor code, relay integration, and Phase 20 artifacts. [VERIFIED: AGENTS.md] [VERIFIED: codebase grep]
 - Pitfalls: HIGH for local operational pitfalls from logs and code; MEDIUM for TEI official health/metrics details via Context7. [VERIFIED: local Obsidian log] [CITED: https://github.com/huggingface/text-embeddings-inference/blob/main/README.md]
 
-**Research date:** 2026-06-26 [VERIFIED: system date]  
+**Research date:** 2026-06-26 [VERIFIED: system date]
 **Valid until:** 2026-07-03 for runtime/TEI threshold details; 2026-07-26 for codebase architecture if no upstream sync lands. [ASSUMED]

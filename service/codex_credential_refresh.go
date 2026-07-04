@@ -28,6 +28,28 @@ type CodexOAuthKey struct {
 	Expired     string `json:"expired,omitempty"`
 }
 
+type CodexCredentialMetadata struct {
+	OAuth         bool   `json:"oauth"`
+	Authenticated bool   `json:"authenticated"`
+	ExpiresAt     string `json:"expires_at,omitempty"`
+}
+
+func ReadCodexCredentialMetadata(raw string) CodexCredentialMetadata {
+	meta := CodexCredentialMetadata{OAuth: true}
+	oauthKey, err := parseCodexOAuthKey(strings.TrimSpace(raw))
+	if err != nil || oauthKey == nil {
+		return meta
+	}
+
+	hasAccessToken := strings.TrimSpace(oauthKey.AccessToken) != ""
+	hasRefreshToken := strings.TrimSpace(oauthKey.RefreshToken) != ""
+	hasAccountID := strings.TrimSpace(oauthKey.AccountID) != ""
+
+	meta.Authenticated = hasAccessToken && (hasAccountID || hasRefreshToken)
+	meta.ExpiresAt = strings.TrimSpace(oauthKey.Expired)
+	return meta
+}
+
 func parseCodexOAuthKey(raw string) (*CodexOAuthKey, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, errors.New("codex channel: empty oauth key")

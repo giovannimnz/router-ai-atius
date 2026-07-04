@@ -45,7 +45,7 @@ import { DescriptionCell } from './description-cell'
 function getCompactModelIcon(iconKey: string) {
   const baseIconKey = iconKey.split('.')[0]
 
-  return getLobeIcon(`${baseIconKey}.Avatar.type={'platform'}`, 20)
+  return getLobeIcon(baseIconKey, 14)
 }
 
 /**
@@ -115,7 +115,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const icon = getCompactModelIcon(iconKey)
 
         return (
-          <div className='ms-1 flex size-5 items-center justify-center overflow-hidden'>
+          <div className='ms-1 flex size-5 items-center justify-center overflow-hidden text-foreground'>
             {icon}
           </div>
         )

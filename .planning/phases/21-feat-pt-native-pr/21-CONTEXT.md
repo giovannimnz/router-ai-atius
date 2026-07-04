@@ -1,120 +1,153 @@
 # Phase 21: feat-pt-native-pr - Context
 
 **Gathered:** 2026-06-26
-**Status:** Ready for planning
+**Replanned:** 2026-07-04
+**Status:** Ready for native PT-BR implementation planning
 **Migration note:** This context was first captured under legacy Phase 8 and moved to Phase 21 on 2026-06-26 so the work follows the current post-Phase-20 sequence.
 
 <domain>
 ## Phase Boundary
 
-This phase prepares a clean upstream handoff for Brazilian Portuguese support:
-push a clean branch to Giovanni's fork, close the polluted PR #5245 with a replacement note, and open a new focused PR against `QuantumNous/new-api`.
+This phase implements Brazilian Portuguese first in this fork, using only the native language extension points that exist in current `QuantumNous/new-api` upstream. If the local result is accepted, the same diff should be suitable for a clean upstream PR with no fork-specific runtime, provider, Graphify, GSD, Obsidian, Podman, DB, catalog, or Atius branding changes.
 
-The upstream PR must contain only Brazilian Portuguese localization and the minimum wiring required for that locale to be selectable and functional. It must not carry Atius fork runtime customizations, Graphify/GSD artifacts, router/provider/governor work, local docs, or unrelated upstream drift.
+The phrase "remove custom i18n" means remove or avoid any fork-only translation mechanism. It does **not** mean deleting upstream `i18n/` directories. Current upstream still uses:
+
+- backend `i18n/` with `go-i18n` and embedded YAML files;
+- default frontend `web/default/src/i18n/` with i18next and flat JSON files;
+- classic frontend `web/classic/src/i18n/` with i18next and flat JSON files.
 
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### Clean PR Source
-- **D-01:** Use `feat/pt-native-i18n-clean` as the canonical source lane for the new upstream PR.
-- **D-02:** Treat commit `cd8cb89bb72b1f5551a9f7536f104498ddfb4d75` (`feat: add Portuguese localization`) as the operational source commit. Its direct file list is the expected source set for planning.
-- **D-03:** Do not trust a broad `origin/main...HEAD` diff from the clean worktree as the final PR scope by itself. That diff currently includes unrelated upstream drift; planning must reconstruct or filter the PR so the final review diff matches the PT-BR scope.
+### Upstream Baseline
+- **D-01:** Use current `QuantumNous/new-api` `upstream/main` as the implementation baseline. The baseline validated during replanning was `1ae757475f9e8dad4ffedf89b3e707756fe8ecf9` on 2026-07-04.
+- **D-02:** Revalidate `upstream/main` before execution if any time has passed; do not assume the old clean commit `cd8cb89bb72b1f5551a9f7536f104498ddfb4d75` is still complete.
+- **D-03:** The older clean branch remains useful as translation source material only. It is no longer the final scope contract.
 
-### Commit Strategy
-- **D-04:** The upstream PR should be one single commit, not a preserved local history stack.
-- **D-05:** The commit message can use a standard upstream-friendly form such as `feat: add Brazilian Portuguese localization`, unless the planner finds a stronger repo-local convention.
+### Native Language Scope
+- **D-04:** Backend Portuguese must be added through upstream-native `i18n/locales/pt.yaml` plus the minimal `i18n/i18n.go` wiring (`LangPt`, file load, pre-created localizer, normalize, supported languages).
+- **D-05:** Do not add root-level `i18n/pt.yaml`. PR #5801 currently does that and is therefore related but not equivalent to this phase's full native implementation.
+- **D-06:** Default frontend Portuguese must be added through `web/default/src/i18n/locales/pt.json`, `web/default/src/i18n/config.ts`, and `web/default/src/i18n/languages.ts`, plus sync-script support for `pt` untranslated detection if needed.
+- **D-07:** Classic frontend Portuguese must also be added for 100% native parity, because upstream still ships and wires `web/classic` language support independently.
+- **D-08:** Existing language pickers already iterate upstream language lists in default UI, but classic UI has explicit language selector/preference lists. Add `pt` there using the same pattern as `fr`, `ru`, `ja`, and `vi`.
 
-### Upstream PR Scope
-- **D-06:** Include Brazilian Portuguese locale files plus the minimum i18n wiring required for the language to appear and work.
-- **D-07:** Exclude `.planning/`, local Atius docs, fork-specific router/channel/model/governor changes, production runtime notes, protected-path/fork-sync docs, and any unrelated UI/backend changes.
-- **D-08:** The expected PT-BR source set from the clean commit is:
-  - `i18n/i18n.go`
-  - `i18n/locales/pt.yaml`
-  - `web/default/scripts/sync-i18n.mjs`
-  - `web/default/src/i18n/config.ts`
-  - `web/default/src/i18n/languages.ts`
-  - `web/default/src/i18n/locales/_reports/_sync-report.json`
-  - `web/default/src/i18n/locales/en.json`
-  - `web/default/src/i18n/locales/fr.json`
-  - `web/default/src/i18n/locales/ja.json`
-  - `web/default/src/i18n/locales/pt.json`
-  - `web/default/src/i18n/locales/ru.json`
-  - `web/default/src/i18n/locales/vi.json`
-  - `web/default/src/i18n/locales/zh.json`
+### Coverage and Quality
+- **D-09:** PT-BR coverage target is 100% parity with upstream base locale key sets for backend, default frontend, and classic frontend.
+- **D-10:** Default frontend `bun run i18n:sync` must report `missingCount=0`, `extrasCount=0`, and `untranslatedCount=0` for `pt`.
+- **D-11:** Preserve placeholders such as `{{count}}`, ICU plural suffixes, JSON examples, URLs, model names, brand names, and protected project identity strings.
+- **D-12:** Add tests only where they protect observable language behavior. Do not add reward-hacking tests that merely count files or private implementation details.
+- **D-13:** Reuse existing PT-BR translations before creating any new translation. Current fork files, the previous clean PT lane, and historical `pt`/`pt-BR` artifacts are translation sources, not final scope contracts.
+- **D-14:** For classic frontend, first reuse matching default-frontend PT strings for identical English keys, then translate only the remaining classic-specific gaps.
+- **D-15:** Do not cherry-pick or copy whole historical branches. Reuse translation values through an inventory/mapping, because historical branches include unrelated fork/runtime/planning changes.
+- **D-16:** Same-as-English values must be classified as legitimate brand/code literals or unresolved translation gaps before claiming 100% coverage.
 
-### PR Hygiene
-- **D-09:** Use the upstream PR template at `.github/PULL_REQUEST_TEMPLATE.md`; do not replace it with an ad hoc body.
-- **D-10:** Because current git user `giovannimnz <munizgiovanni@hotmail.com>` is not one of the historical core upstream authors observed in local git history, the PR body should state that the contribution was AI-assisted when appropriate.
-- **D-11:** Close polluted PR #5245 with a concise comment pointing maintainers to the replacement clean PR. Exact wording is planner discretion.
-
-### the agent's Discretion
-The planner may choose the safest mechanical route to produce the final branch: cherry-pick with cleanup, branch from upstream `main` and apply only the source commit's PT-BR changes, or another equivalent method. The invariant is the final PR diff, not the local intermediate commands.
+### Upstream PR Hygiene
+- **D-17:** Keep implementation commits upstream-ready: no `.planning/`, Graphify, Obsidian, runtime docs, provider routing, DB/catalog, Podman, or fork-only changes in the code branch.
+- **D-18:** Use `.github/PULL_REQUEST_TEMPLATE.md` if a PR is prepared.
+- **D-19:** Search upstream PRs/issues for duplicate Portuguese work before opening a PR. During replanning, issue #2924 was open as the Portuguese translation request and PR #5801 was open but only touched `i18n/pt.yaml`; re-check both before PR creation.
+- **D-20:** Treat closed PRs #5238 and #5245 as contaminated historical context only. They are evidence for why a replacement clean PR is needed, not a reusable scope.
+- **D-21:** Because local git user `giovannimnz <munizgiovanni@hotmail.com>` is not one of the historical core upstream authors observed previously, the PR body should disclose AI assistance when appropriate.
+- **D-22:** Leak checks must fail when forbidden fork/planning/runtime/secrets text appears in either the code diff or PR/comment draft text.
 
 </decisions>
 
 <canonical_refs>
 ## Canonical References
 
-**Downstream agents MUST read these before planning or implementing.**
+**Downstream execution must read these before editing code.**
 
 ### GSD Scope
-- `.planning/ROADMAP.md` - Phase 21 goal and boundary: clean replacement PR for `feat-pt-native`.
-- `.planning/STATE.md` - Historical v2.12 handoff notes. Treat as context, not as a source of truth when it conflicts with the decisions above.
+- `.planning/ROADMAP.md` - Phase 21 goal and boundaries.
+- `.planning/REQUIREMENTS.md` - Phase 21 requirements.
+- `.planning/STATE.md` - Active project state; treat as context, not as a substitute for upstream source.
+- `.planning/phases/21-feat-pt-native-pr/21-RESEARCH.md` - Current upstream validation.
+- `.planning/phases/21-feat-pt-native-pr/21-TRANSLATION-INVENTORY.md` - PT-BR reuse source order and unsafe reuse rules.
 
 ### Upstream PR Rules
-- `AGENTS.md` - Project rules, especially protected upstream identity and PR disclosure/template requirements.
-- `.github/PULL_REQUEST_TEMPLATE.md` - Required upstream PR body structure.
+- `AGENTS.md` - Project rules, especially i18n, protected identity, tests, and PR disclosure/template rules.
+- `.github/PULL_REQUEST_TEMPLATE.md` - Required PR body structure.
+- `web/default/AGENTS.md` - Frontend i18n, Bun, typecheck, lint, and build expectations.
 
-### I18n Implementation Rules
-- `web/default/AGENTS.md` - Frontend i18n and Bun/typecheck expectations.
-- `i18n/i18n.go` - Backend locale registration point touched by the clean PT-BR commit.
-- `web/default/src/i18n/config.ts` - Frontend i18next config touched by the clean PT-BR commit.
-- `web/default/src/i18n/languages.ts` - Frontend language list touched by the clean PT-BR commit.
-- `web/default/scripts/sync-i18n.mjs` - Locale sync script touched by the clean PT-BR commit.
+### Backend Native Language
+- `i18n/i18n.go` - Backend locale registration, normalization, and supported language list.
+- `i18n/locales/en.yaml` - Backend base locale.
+- `i18n/locales/zh-CN.yaml`, `i18n/locales/zh-TW.yaml` - Existing backend locale examples.
+
+### Default Frontend Native Language
+- `web/default/src/i18n/config.ts` - i18next resources and supported languages.
+- `web/default/src/i18n/languages.ts` - user-facing interface language list and normalization.
+- `web/default/src/i18n/static-keys.ts` - default frontend dynamic/static translation keys that may not be discovered by regex extraction.
+- `web/default/src/i18n/locales/en.json` - default frontend base locale.
+- `web/default/scripts/sync-i18n.mjs` - default frontend locale parity and untranslated report tool.
+- `web/default/src/components/language-switcher.tsx` and `web/default/src/features/profile/components/language-preferences-card.tsx` - default UI consumers of `INTERFACE_LANGUAGE_OPTIONS`.
+
+### Classic Frontend Native Language
+- `web/classic/src/i18n/i18n.js` - classic i18next resource registry.
+- `web/classic/src/i18n/language.js` - classic supported languages and normalization.
+- `web/classic/src/i18n/locales/en.json` - classic base locale.
+- `web/classic/src/components/layout/headerbar/LanguageSelector.jsx` - classic top-bar language selector.
+- `web/classic/src/components/settings/personal/cards/PreferencesSettings.jsx` - classic profile language preferences.
 
 </canonical_refs>
 
 <code_context>
 ## Existing Code Insights
 
-### Reusable Assets
-- Clean worktree: `/home/ubuntu/GitHub/containers/router-ai-atius-pt-native-clean` is on branch `feat/pt-native-i18n-clean` and was clean when context was gathered.
-- Source commit: `cd8cb89bb72b1f5551a9f7536f104498ddfb4d75` adds PT-BR with 13 changed files and 5137 insertions / 11 deletions.
+### Current Upstream Pattern Validated on 2026-07-04
+- Backend upstream has only `i18n/locales/en.yaml`, `zh-CN.yaml`, and `zh-TW.yaml`.
+- Default frontend upstream has only `web/default/src/i18n/locales/en.json`, `zh.json`, `fr.json`, `ru.json`, `ja.json`, `vi.json`, and `_reports/_sync-report.json`.
+- Default frontend also has `web/default/src/i18n/static-keys.ts`; execution should treat it as coverage input for dynamic labels even if the sync script does not currently import it.
+- Classic frontend upstream has `en.json`, `fr.json`, `ja.json`, `ru.json`, `vi.json`, `zh.json`, `zh-CN.json`, and `zh-TW.json`.
+- Backend `i18n/i18n.go` currently normalizes `zh-*` and `en`; PT support should match this switch style.
+- Default `normalizeInterfaceLanguage` collapses `zh*` to `zh` and otherwise accepts codes present in `INTERFACE_LANGUAGE_OPTIONS`.
+- Classic `normalizeLanguage` preserves supported codes from `supportedLanguages`; `pt-BR` should normalize to `pt` if `pt` is the supported code.
 
-### Established Patterns
-- Backend i18n lives under `i18n/` with YAML locale files.
-- Default frontend i18n lives under `web/default/src/i18n/` with flat JSON locale files.
-- Frontend scripts use Bun conventions from `web/default/AGENTS.md`.
-- The PR template requires human-reviewed summary, duplicate PR/issue check, focused scope, local validation, and no secrets.
+### Existing Open Upstream Work
+- Issue #2924 (`Portuguese translation`) was open during replanning and is the current upstream request for Portuguese translation.
+- PR #5801 (`Add Portuguese translations for various messages`) was open during replanning.
+- #5801 currently touches only `i18n/pt.yaml`, not `i18n/locales/pt.yaml`, default frontend, or classic frontend.
+- Treat #5801 as a duplicate-risk preflight item, not as a blocker, unless it changes scope before execution.
+- Closed PRs #5238 and #5245 carried useful PT translation attempts but were contaminated with fork/runtime/planning changes; they should not be reused as PR scope.
 
-### Integration Points
-- The branch currently has only `origin` pointing to `https://github.com/giovannimnz/router-ai-atius.git`; planning should ensure a valid `QuantumNous/new-api` upstream remote or equivalent base before producing the PR branch.
-- The final PR diff should be checked against the actual upstream base, not just the fork's local `origin/main`.
-- The current main repo worktree is dirty with unrelated Phase 20 and fork customization work; Phase 21 execution should happen in the clean PT-native worktree or another isolated branch/worktree.
+### Worktree Safety
+- The main checkout is dirty with unrelated Phase 20/24 and runtime work.
+- Implementation should happen in a clean worktree or branch based on `upstream/main`.
+- Do not revert unrelated dirty files in the main checkout.
+
+### Translation Reuse Sources
+- Current fork/local files such as `i18n/locales/pt.yaml`, `web/default/src/i18n/locales/pt.json`, and any `pt-BR` locale files if present.
+- Previous clean lane `/home/ubuntu/GitHub/containers/router-ai-atius-pt-native-clean`, especially its PT locale files and the amended clean commit if it still exists.
+- Historical v1.6 PT-BR artifacts documented in Obsidian as prior coverage evidence.
+- Matching default-frontend PT strings for classic frontend keys with identical English source text.
+- Read-only audit and recheck on 2026-07-04 found the linked branch source at 228/228 backend keys and 4655/4978 current default frontend keys, including substantial screen/menu translations; the external clean worktree supplements exactly the 323 current default keys missing from the linked branch. No complete classic frontend PT source was found.
+- Translation reuse must be value-level reuse, not branch-level cherry-pick, because old PT work includes extras and unrelated sync changes. For default frontend, prefer linked-branch translation values first, then supplement its current-key gaps from the external clean worktree.
 
 </code_context>
 
 <specifics>
 ## Specific Ideas
 
-Giovanni explicitly chose:
+Giovanni explicitly wants:
 
-- canonical source lane: `feat/pt-native-i18n-clean`;
-- one single commit for upstream review;
-- scope: PT-BR localization plus minimum wiring only.
+- validate against current `QuantumNous/new-api` upstream, not the older local plan;
+- remove any custom i18n approach;
+- implement Portuguese as a fully native language in the same pattern as existing upstream languages;
+- implement locally first in this fork;
+- keep the result upstream-contributable if approved.
 
 </specifics>
 
 <deferred>
 ## Deferred Ideas
 
-None. The discussion stayed within Phase 21 scope.
+- Actually opening the upstream PR is deferred until Giovanni approves the local implementation.
+- Runtime deployment/UAT is deferred to execution/verification; planning only defines the code and validation path.
 
 </deferred>
 
 ---
 
 *Phase: 21-feat-pt-native-pr*
-*Context gathered: 2026-06-26*
+*Context replanned: 2026-07-04*

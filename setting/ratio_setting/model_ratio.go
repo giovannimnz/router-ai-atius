@@ -93,6 +93,10 @@ var defaultModelRatio = map[string]float64{
 	"gpt-4.5-preview-2025-02-27":       37.5,
 	"gpt-5":                            0.625,
 	"gpt-5-2025-08-07":                 0.625,
+	"gpt-5.5":                          2.5,
+	"gpt-5.4":                          2.5,
+	"gpt-5.4-mini":                     0.375,
+	"gpt-5.3-codex-spark":              0.875,
 	"gpt-5-chat-latest":                0.625,
 	"gpt-5-mini":                       0.125,
 	"gpt-5-mini-2025-08-07":            0.125,
@@ -411,6 +415,9 @@ func GetModelRatio(name string) (float64, bool, string) {
 
 	ratio, ok := modelRatioMap.Get(name)
 	if !ok {
+		if defaultRatio, ok := defaultModelRatio[name]; ok {
+			return defaultRatio, true, name
+		}
 		if strings.HasSuffix(name, CompactModelSuffix) {
 			if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
 				return wildcardRatio, true, name
@@ -525,6 +532,9 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 				return 6, true
 			}
 			if strings.HasPrefix(name, "gpt-5.4") {
+				if name == "gpt-5.4" {
+					return 4.5, true
+				}
 				if strings.HasPrefix(name, "gpt-5.4-nano") {
 					return 6.25, true
 				}

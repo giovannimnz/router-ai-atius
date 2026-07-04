@@ -1,30 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: — Model Aliases & Token Management ✓
-current_phase: 21
-status: ready_for_planning
-stopped_at: Phase 21 context gathered
-last_updated: "2026-06-26T18:49:41-03:00"
-last_activity: 2026-06-26
+milestone: v2.13
+milestone_name: Router DB/catalog recovery on canonical host DB
+current_phase: 24
+status: in_progress
+stopped_at: Phase 24 runtime fully standardized on DBRouterAiAtius after PgBouncer cleanup and provider validation
+last_updated: "2026-07-04T16:27:00-03:00"
+last_activity: 2026-07-04
+last_activity_desc: Phase 24 runtime fully standardized on DBRouterAiAtius; Codex and DeepSeek validated, MiniMax disabled and removed from public catalog
 progress:
-  total_phases: 2
+  total_phases: 26
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 9
+  completed_plans: 4
+  percent: 44
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: phase-21 (feat-pt-native-pr) — READY FOR PLANNING
-Plan: Not started
-**Milestone:** v2.12 — pt-native upstream sync (current)
-**Phase:** 21
-**Status:** Ready for planning
-**Last activity:** 2026-06-26
+Phase: phase-24 (router-db-catalog-recovery-and-canonical-host-db) — IN PROGRESS
+Plan: 4/4 execution plans executed with residual upstream blockers
+**Milestone:** v2.13 — router DB/catalog recovery on canonical host DB (current)
+**Phase:** 24
+**Status:** In Progress
+**Last activity:** 2026-07-04 — Phase 24 runtime finalized on `DBRouterAiAtius`; Codex and DeepSeek validated, MiniMax disabled and removed from public catalog
 
 ## What Was Done
 
@@ -40,19 +41,26 @@ Plan: Not started
 - Validado em runtime: log do new-api mostra
   `i18n initialized with languages: zh-CN, zh-TW, en, pt`
 
-**v1.8 — Podman Migration** (closed):
+**v1.8 — Podman Migration** (closed, reconciled 2026-06-29):
 
-- `podman-compose.yml` — rebrand v2.11 + tag `:latest` canônico
-- 4 systemd quadlets: `podman/quadlets/router-ai-atius-*.container`
-- 6 scripts operacionais: `podman-{up,down,validate,prepare-images,migrate-from-docker,quadlets-install}.sh`
-- `docs/PODMAN.md` (160+ linhas) — referência operacional completa
-- `.env.example` + `podman/systemd/router-ai-atius.env.example` — env templates
-- `docker-compose.yml` + `docker-compose.dev.yml` alinhados (legacy mantido)
-- `.planning/PROJECT.md` rebrand v2.11 + seção Podman
-- `./scripts/podman-validate.sh` passa: 4 services v2.11 + spec render OK
-- 5 commits pushed em 2026-06-04: `091ef482a`, `cd49cc5f3`, `32c01aa51`,
-  `7fd0f455e`, `8fe7e01bb` (squash de `:local` → `:latest`),
-  `243df2d48` (pre-rebrand cleanup). Final head: `e6c617f00`.
+- Runtime production is already rootless Podman in
+  `/home/ubuntu/GitHub/containers/router-ai-atius`.
+
+- User systemd source of truth: `container-router-ai-atius.service`.
+- Production pod: `atius-ai-router`; containers: `router-ai-atius`, `postgres`,
+  `redis`, infra pause.
+
+- Canonical `/v1/` path is full-Go on `127.0.0.1:3000`; no Python
+  `model-detailed` container participates in the active relay path.
+
+- Dev stack source is `podman-compose.yml`; `make dev-api`,
+  `make dev-api-rebuild`, and `make reset-setup` use `podman compose`.
+
+- `docs/PODMAN.md` is the current Podman runbook and
+  `scripts/podman-validate.sh` is the lightweight config gate.
+
+- `Dockerfile`, `Dockerfile.dev`, and `.dockerignore` remain OCI/upstream build
+  surfaces and are valid with Podman/Buildah.
 
 ### Pending operational work (not committed)
 
@@ -63,10 +71,9 @@ Plan: Not started
   `web/default/src/i18n/locales/pt.json`
   No commit/push yet by design.
 
-- **SRV-1 migration to Podman** — quando Giovanni marcar janela
-  de manutenção, rodar `./scripts/podman-migrate-from-docker.sh` no
-  SRV-1 (137.131.190.161). Sem push do `:v2.11.1-rebrand` pro GHCR
-  ainda — Docker local build é suficiente.
+- **Podman config/docs reconciliation** — completed 2026-06-29 in this
+  checkout. Remaining Docker references are upstream/legacy compatibility or
+  OCI build terminology, not the active production path.
 
 - **Limpar backup tag** `backup/before-squash-20260604` depois de
   confirmar produção estável por ≥ 7 dias.
@@ -75,22 +82,22 @@ Plan: Not started
 
 ```
 Apache (router.atius.com.br:443)
-├── /docs          → router-ai-atius-model-detailed:3300/docs
-├── /openapi.json  → router-ai-atius-model-detailed:3300/openapi.json
-├── /v1/*          → router-ai-atius-model-detailed:3300/v1/* (relay)
-├── /api/*         → router-ai-atius:3030/api/*
-├── /login         → router-ai-atius:3030/sign-in
-├── /logoff        → router-ai-atius:3030/logout
-└── /              → router-ai-atius:3030/ (SPA)
+├── /v1/*          → router-ai-atius Go backend: 127.0.0.1:3000/v1/*
+├── /api/*         → router-ai-atius Go backend: 127.0.0.1:3000/api/*
+├── /health        → router-ai-atius Go backend: 127.0.0.1:3000/api/status
+├── /login         → router-ai-atius Go backend: 127.0.0.1:3000/sign-in
+├── /logoff        → router-ai-atius Go backend: 127.0.0.1:3000/logout
+└── /              → router-ai-atius Go backend: 127.0.0.1:3000/ (SPA)
 
-Containers (SRV-1, atualmente em Docker, alvo = Podman):
-router-ai-atius               Go AI gateway       port 3030:host → 3000
-router-ai-atius-model-detailed FastAPI middleware port 3300:host → 3001
-router-ai-atius-db            PostgreSQL 15       port 5432 (internal)
-router-ai-atius-redis         Redis 7             port 6379 (internal)
+Runtime (rootless Podman, current host):
+router-ai-atius        Go AI gateway       local 127.0.0.1:3000
+postgres               PostgreSQL          pod-internal
+redis                  Redis               pod-internal
 
-Network: atius-ai-router_internal (rootless podman bridge)
+Pod:     atius-ai-router
 DB:      DBRouterAiAtius
+Unit:    container-router-ai-atius.service
+Runbook: docs/PODMAN.md
 ```
 
 ## Phase Status (v1.6 — closed)
@@ -107,12 +114,12 @@ DB:      DBRouterAiAtius
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Podman compose file | ✅ done | `podman-compose.yml` v2.11 |
-| Systemd quadlets | ✅ done | 4 .container files |
-| Helper scripts | ✅ done | 6 scripts (up/down/validate/prepare/migrate/quadlets-install) |
-| Validation script | ✅ done | `podman-validate.sh` passa |
+| Podman compose file | ✅ done | `podman-compose.yml` dev stack |
+| User systemd runtime | ✅ done | `container-router-ai-atius.service` owns production backend |
+| Makefile dev targets | ✅ done | `make dev-api`, `make dev-api-rebuild`, `make reset-setup` use Podman |
+| Validation script | ✅ done | `scripts/podman-validate.sh` |
 | Documentation | ✅ done | `docs/PODMAN.md` |
-| SRV-1 cutover | ⏳ pending | Janela de manutenção |
+| Production cutover | ✅ done | runtime is Podman/full-Go in `/home/ubuntu/GitHub/containers` |
 
 ## Blocker
 
@@ -132,7 +139,7 @@ DB:      DBRouterAiAtius
 | v1.5 | API Unification & Model Listing | ✅ |
 | v1.6 | Internacionalização PT-BR | ✅ done 2026-06-04 |
 | v1.7 | Documentação PT-BR | deferred (lower priority) |
-| v1.8 | Podman Migration | ✅ done 2026-06-04 (code); SRV-1 cutover pending |
+| v1.8 | Podman Migration | ✅ done; reconciled 2026-06-29 |
 | v1.9 | GHCR Deploy | pending |
 | v2.0 | Podman Migration (legacy name) | ✅ superseded by v1.8 |
 | v2.10 | MiniMax Anthropic | ✅ done 2026-05-31 |
@@ -145,12 +152,19 @@ DB:      DBRouterAiAtius
    - Push branch novo pro fork (`giovannimnz/router-ai-atius`)
    - Fechar PR #5245 poluído com comentário
    - Abrir PR novo limpo contra `QuantumNous/new-api`
-2. **SRV-1 Podman cutover** (quando Giovanni marcar):
-   - Build/populate `:latest` images
-   - Janela de manutenção
-   - `./scripts/podman-migrate-from-docker.sh`
-   - Smoke test: `curl https://router.atius.com.br/api/status`
-3. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+2. **Execute v2.13 Phase 24 — router DB/catalog recovery**:
+   - 24-01: freeze runtime truth, fresh backups, source ranking
+   - 24-02: create canonical host DB target and restore transformed catalog
+   - 24-03: reconcile `OpenAI - Codex`, DeepSeek, MiniMax disabled state, and governor-facing docs/tests ✅ completed locally without commits due to pre-dirty target files
+   - 24-04: cut over runtime/docs/CLI to the canonical DB name and validate rollback ✅ executed and finalized on 2026-07-04
+
+3. **Podman runtime guardrail**:
+   - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
+   - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
+   - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
+     phase explicitly removes or renames them.
+
+4. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 
@@ -170,15 +184,35 @@ DB:      DBRouterAiAtius
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase phase-20 P02 | 14 min | 6 tasks | 15 files |
+| Phase 24 P02 | 8 min | 3 tasks | 4 files |
+| Phase 24 P03 | 12 min | 3 tasks | 4 files |
 
 ## Decisions
 
 - [Phase ?]: Use existing GET /v1/models as the only public Go catalog endpoint — Avoids a second source of truth and satisfies the corrected Phase 20 contract.
 - [Phase ?]: Use api_format=anthropic and Anthropic headers for model-list intent — Lets Go serve Anthropic-selected model lists under the same root data-only payload contract.
 - [Phase ?]: Keep pricing provenance internal to JSON output — pricing_source and pricing_estimated are useful internally but must not leak from public /v1/models.
+- [Phase 24]: Candidate DB build stays dry-run by default and requires explicit source/target confirmations.
+- [Phase 24]: Transformed catalog restore injects the Codex credential only from a secure runtime variable instead of git.
+- [Phase 24]: newapi remains intact as rollback holdback throughout Phase 24 Plan 24-02.
+- [Phase 24]: Plan 24-03 keeps `gpt-5.4` as the default long-context Codex model and removes final-state `-1m` alias expectations from code, tests, and docs.
+- [Phase 24]: Plan 24-03 documents DeepSeek as the single active consolidated provider and MiniMax as restored but disabled in the final state.
+- [Phase 24]: Plan 24-03 preserves `embedding-gte-v1` as the only governed public embedding alias with `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` unchanged.
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 22 added: k3s migration preflight and cutover plan for router-ai-atius. Phase 21 (`feat-pt-native-pr`) remains a separate PT-native upstream PR handoff. Podman remains the current production source of truth until Phase 22 shadow/cutover gates pass.
+- Phase 23 added: long-context alias validation for `gpt-5.5-1m` and `gpt-5.4-1m`. This is an operational validation track for progressive reasoning/context tests up to approximately 1M tokens. It is independent of Phase 21 and blocked on deploying the alias pricing fix before accepting production UAT evidence.
+- Phase 24 added: router DB/catalog recovery and canonical host DB restoration. This phase owns the post-2026-07-02 runtime drift: canonical host PostgreSQL/PgBouncer path, full `OpenAI - Codex` catalog recovery, DeepSeek recovery, MiniMax consolidated-but-disabled recovery, and preservation of the Go embedding governor path. Phase 21 remains parked, not deleted.
+
+### Active execution note
+
+- Phase 24 execution finalized the live cutover on `2026-07-04`: runtime points only to `DBRouterAiAtius` via PgBouncer, the legacy `newapi` mapping was removed from PgBouncer, `embedding-gte-v1` validates at `768` dims, `gpt-5.4` validates via Codex after reloading channel 5 from `~/.codex/auth.json`, DeepSeek validates after key replacement, and MiniMax was disabled in channels/abilities and no longer appears in authenticated `/v1/models`. Phase 21 remains parked, not deleted.
 
 ## Session
 
-**Last session:** 2026-06-26T18:49:41-03:00
-**Stopped at:** Phase 21 context gathered
-**Resume file:** .planning/phases/21-feat-pt-native-pr/21-CONTEXT.md
+**Last session:** 2026-07-04T05:00:19.031Z
+**Stopped at:** Phase 24 runtime fully standardized on DBRouterAiAtius after PgBouncer cleanup and provider validation
+**Resume file:** .planning/phases/24-router-db-catalog-recovery-and-canonical-host-db/24-04-PLAN.md

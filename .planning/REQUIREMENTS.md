@@ -120,8 +120,128 @@ Cutover cannot be claimed without SDK/runtime validation:
 - MiniMax, DeepSeek, Codex OAuth streaming and embeddings routes are represented in the routing matrix when enabled; disabled routes must be covered by negative tests proving they do not route.
 - Known upstream quota/rate-limit failures are classified as upstream, not local router failures.
 
+## Phase 21 Requirements
+
+### PHASE-21-UPSTREAM-NATIVE-I18N
+
+Brazilian Portuguese must be implemented through the same native language surfaces that exist in `QuantumNous/new-api` upstream, not through a fork-only translation layer:
+
+- Backend uses the existing upstream `i18n/` package and `i18n/locales/*.yaml` embed pattern.
+- Default frontend uses the existing upstream `web/default/src/i18n/` i18next resources, `supportedLngs`, and `INTERFACE_LANGUAGE_OPTIONS`.
+- Classic frontend uses the existing upstream `web/classic/src/i18n/` i18next resources, `supportedLanguages`, language selector, and preferences list.
+- Do not create `i18n/pt.yaml`; backend Portuguese must live at `i18n/locales/pt.yaml`.
+- Do not remove or rename upstream `i18n/` directories, because they are the native upstream mechanism.
+- Do not introduce runtime-specific, Atius-specific, or sidecar translation behavior.
+
+### PHASE-21-PT-BR-COVERAGE
+
+Portuguese support must be complete enough to behave like every existing upstream language:
+
+- Backend `pt` YAML keeps key parity with `i18n/locales/en.yaml`.
+- Default frontend `pt.json` keeps key parity with `web/default/src/i18n/locales/en.json`.
+- Classic frontend `pt.json` keeps key parity with `web/classic/src/i18n/locales/en.json`.
+- Default frontend locale sync reports `missingCount=0`, `extrasCount=0`, and `untranslatedCount=0` for `pt`.
+- Backend, default frontend, and classic frontend checks must fail on placeholder-token drift.
+- Default frontend dynamic/static translation keys in `web/default/src/i18n/static-keys.ts` must remain covered wherever those keys are part of the upstream base locale.
+- Portuguese labels use the native name `Português` in user-visible language pickers.
+- Locale normalization accepts `pt`, `pt-BR`, and underscore variants where the upstream code normalizes other language variants.
+
+### PHASE-21-REUSE-EXISTING-TRANSLATIONS
+
+Existing PT-BR translation work must be reused before any new translation is created:
+
+- Inventory existing fork/local translation sources before editing locale files.
+- Record the inventory in `.planning/phases/21-feat-pt-native-pr/21-TRANSLATION-INVENTORY.md`.
+- Reuse current or historical PT-BR strings for matching keys whenever placeholders and semantics still match.
+- Reuse translations from the previous clean PT lane, current fork PT files, and any existing `pt`/`pt-BR` locale artifacts.
+- For classic frontend, reuse default frontend PT strings for identical English keys before translating gaps manually.
+- Do not cherry-pick or copy whole historical branches when only the PT translation map is usable.
+- Do not replace an existing correct PT-BR translation with an English fallback just because sync tooling filled a missing key.
+- New translation work is limited to true upstream-current gaps after reuse.
+- Preserve placeholders, plural suffixes, markdown/code fragments, URLs, API/model names, and protected project identity text exactly.
+- Classify same-as-English values as brand/code literals or unresolved gaps before claiming 100% coverage.
+
+### PHASE-21-LOCAL-FIRST-VALIDATION
+
+The implementation must be validated locally before any upstream PR is prepared:
+
+- Build the implementation against a branch based on current `upstream/main`, not against dirty fork history.
+- Keep the final code diff limited to native language files, native wiring, and narrowly justified validation/tests.
+- Run backend i18n validation with Go.
+- Run default frontend `bun run i18n:sync`, typecheck, and scoped lint/build checks required by upstream rules.
+- Run classic frontend language parity and build checks when classic files are changed.
+- Verify the resulting app can select/persist Portuguese in default and classic UI through the existing shared/native language controls, without adding custom UI flows.
+- Use explicit machine checks for key parity, placeholder parity, default sync-report zero counts, and `pt-BR`/`pt_BR` normalization rather than relying only on build success.
+
+### PHASE-21-UPSTREAM-PR-HYGIENE
+
+If the local result is promoted upstream, the PR must follow `QuantumNous/new-api` contribution rules:
+
+- Use `.github/PULL_REQUEST_TEMPLATE.md` without replacing its structure.
+- Search existing upstream issues and PRs for Portuguese/PT-BR duplicates before opening.
+- Treat issue #2924 as the current upstream Portuguese translation request unless it has changed or closed.
+- Treat PR #5801 as related but not equivalent unless it has changed scope; it currently adds only `i18n/pt.yaml`, which is not the full native pattern.
+- Treat closed PRs #5238 and #5245 as contaminated historical context, not reusable PR scope.
+- Compare current git user to upstream core authors and disclose AI assistance in the PR body when required.
+- Do not alter protected upstream project identity, organization identity, branding, metadata, module paths, or attribution.
+- Do not include `.planning/`, Graphify, Obsidian, runtime docs, provider/router/governor changes, secrets, or fork-only infrastructure in the upstream PR.
+- Leak checks must fail when forbidden fork/planning/runtime/secrets text appears in either the code diff or PR/comment drafts.
+
 ## Out Of Scope
 
 - Removing protected upstream project identity/branding.
 - Printing or committing provider secrets, tokens, OAuth files or channel keys.
 - Pruning containers or resetting runtime DB state.
+
+## Phase 24 Requirements
+
+### PHASE-24-CANONICAL-HOST-DB
+
+The router runtime must use a single canonical host PostgreSQL database through PgBouncer, and the database name must match the intended production identity:
+
+- The canonical runtime DB path remains on the host via PgBouncer, not inside a Podman `postgres` container.
+- The router must not depend on `container-postgres.service` to serve production traffic after recovery.
+- The final DB name must be the intended canonical name for `router-ai-atius`, not an accidental fallback/legacy name left by a recovery flow.
+- Recovery planning must explicitly inventory the current `newapi` contents, the target canonical DB name, PgBouncer bindings, and any required rename/copy/restore sequence before changing the runtime.
+- No destructive DB rename or drop is allowed without a fresh validated backup and a rollback path.
+
+### PHASE-24-CATALOG-RESTORE
+
+The active DB must recover the full router catalog that was known-good on 2026-07-01, subject to the new exclusions requested by the user:
+
+- Restore the `OpenAI - Codex` channel and its GPT/Codex catalog/routing surfaces.
+- Restore `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.3-codex-spark`.
+- Do not recreate `gpt-5.4-1m` or `gpt-5.5-1m`.
+- Do not restore `text-embedding-3-small` or `text-embedding-3-large`.
+- Restore `embedding-gte-v1` as the governed local embedding alias.
+- Recovery must compare live DB state against local SQL snapshots/dumps and document exactly which rows are restored, transformed, skipped, or disabled.
+
+### PHASE-24-PROVIDER-CONSOLIDATION
+
+Provider/channel recovery must preserve the Go-native consolidated routing design:
+
+- DeepSeek must end in one active channel with automatic OpenAI/Anthropic routing behavior owned by Go.
+- MiniMax must end in one consolidated channel with automatic OpenAI/Anthropic routing behavior owned by Go.
+- MiniMax provider/channel and its models must be restored but left disabled per the user request.
+- DeepSeek V4 Flash and DeepSeek V4 Pro must be restored.
+- `OpenAI - Codex` must not restore `channels.model_mapping` entries for `gpt-5.5-1m` or `gpt-5.4-1m`.
+- Recovery must not reintroduce split active channels as the intended final design.
+
+### PHASE-24-EMBEDDING-GOVERNOR-PRESERVE
+
+The Go-native embedding path must remain intact through recovery:
+
+- `embedding-gte-v1` remains the only governed public embedding alias.
+- The Go governor path in `service/embeddinggovernor/` and `relay/embedding_handler.go` remains canonical.
+- Recovery must verify that `EMBEDDING_GOVERNOR_*` settings remain aligned with the intended contract.
+- Recovery must verify that the embeddings channel, model row, abilities row, and token/routing behavior still pass real `/v1/embeddings` and catalog checks after broader DB restoration.
+- Recovery must not reintroduce Python/model-detailed ownership for embeddings.
+
+### PHASE-24-CUTOVER-ROLLBACK
+
+Recovery is not complete until runtime, docs, and verification agree:
+
+- All DB/catalog mutations require a fresh full backup plus a catalog-only backup before execution.
+- The final runtime must pass `bin/clianything status --strict`, authenticated `/v1/models`, authenticated `/v1/embeddings`, and representative GPT/DeepSeek routing checks.
+- Documentation must be reconciled so the runtime DB path, provider inventory, and backup/restore story match reality after recovery.
+- The rollback plan must name the exact backup artifacts and runtime re-point steps needed to undo the recovery if validation fails.

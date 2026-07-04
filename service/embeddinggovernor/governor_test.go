@@ -39,6 +39,9 @@ func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
 	assert.Equal(t, 1, cfg.BatchConcurrency)
 	assert.Equal(t, 10*time.Minute, cfg.BatchTimeout)
 	assert.Equal(t, 10*time.Minute, cfg.BatchSlowRequestDuration)
+	assert.True(t, cfg.Models["embedding-gte-v1"])
+	assert.False(t, cfg.Models["embedding-gte-v1-batch"])
+	assert.Empty(t, cfg.BatchModels)
 }
 
 func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
@@ -55,7 +58,7 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 		{
 			name: "small unlabeled interactive request stays interactive",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				InputCount: 1,
 				InputChars: 640,
 			},
@@ -64,7 +67,7 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 		{
 			name: "large unlabeled request by count becomes batch",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				InputCount: 4,
 				InputChars: 2000,
 			},
@@ -73,18 +76,9 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 		{
 			name: "large unlabeled request by chars becomes batch",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				InputCount: 1,
 				InputChars: 12000,
-			},
-			want: true,
-		},
-		{
-			name: "configured batch model fallback still applies",
-			req: Request{
-				Model:      "embedding-pt-v1-batch",
-				InputCount: 1,
-				InputChars: 320,
 			},
 			want: true,
 		},
@@ -111,7 +105,7 @@ func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 		{
 			name: "batch header forces batch below thresholds",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				Workload:   "batch",
 				InputCount: 1,
 				InputChars: 320,
@@ -121,7 +115,7 @@ func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 		{
 			name: "bulk header forces batch below thresholds",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				Workload:   "bulk",
 				InputCount: 1,
 				InputChars: 320,
@@ -131,7 +125,7 @@ func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 		{
 			name: "interactive header wins over count threshold",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				Workload:   "interactive",
 				InputCount: 8,
 				InputChars: 24000,
@@ -141,7 +135,7 @@ func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 		{
 			name: "realtime header wins over chars threshold",
 			req: Request{
-				Model:      "embedding-pt-v1",
+				Model:      "embedding-gte-v1",
 				Workload:   "realtime",
 				InputCount: 2,
 				InputChars: 24000,
@@ -332,12 +326,12 @@ func TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately(t *testing.T) {
 		cfg.BatchSlowRequestDuration = 10 * time.Minute
 	}))
 
-	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, interactive)
 	interactive.Finish(true, http.StatusOK, 2*time.Second)
 
-	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1", Workload: "batch"})
 	require.Nil(t, reject)
 	require.NotNil(t, batch)
 	batch.Finish(true, http.StatusOK, 5*time.Minute)
@@ -360,16 +354,16 @@ func TestBatchLatencyDoesNotBlockInteractiveScaleUp(t *testing.T) {
 		cfg.BatchSlowRequestDuration = 10 * time.Minute
 	}))
 
-	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	batch, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1", Workload: "batch"})
 	require.Nil(t, reject)
 	require.NotNil(t, batch)
 	batch.Finish(true, http.StatusOK, 5*time.Minute)
 
-	firstInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	firstInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, firstInteractive)
 
-	secondInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	secondInteractive, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, secondInteractive)
 	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
@@ -384,7 +378,7 @@ func TestSnapshotContainsOnlyAggregateEmbeddingGovernorMetadata(t *testing.T) {
 	}))
 
 	interactive, reject := g.Acquire(context.Background(), Request{
-		Model:      "embedding-pt-v1",
+		Model:      "embedding-gte-v1",
 		InputCount: 3,
 		InputChars: 4096,
 		Workload:   "interactive",
@@ -394,7 +388,7 @@ func TestSnapshotContainsOnlyAggregateEmbeddingGovernorMetadata(t *testing.T) {
 	interactive.Finish(true, http.StatusOK, 1500*time.Millisecond)
 
 	batch, reject := g.Acquire(context.Background(), Request{
-		Model:      "embedding-pt-v1-batch",
+		Model:      "embedding-gte-v1",
 		InputCount: 4,
 		InputChars: 16000,
 		Workload:   "batch",
@@ -440,7 +434,7 @@ func TestStatusClassificationIgnoresClientErrors(t *testing.T) {
 				cfg.Cooldown = time.Minute
 			}))
 
-			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 			require.Nil(t, reject)
 			require.NotNil(t, lease)
 			lease.Finish(false, status, 250*time.Millisecond)
@@ -470,7 +464,7 @@ func TestStatusClassificationReducesOnPressureFailures(t *testing.T) {
 				cfg.Cooldown = time.Minute
 			}))
 
-			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+			lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 			require.Nil(t, reject)
 			require.NotNil(t, lease)
 			lease.Finish(false, status, 250*time.Millisecond)
@@ -494,14 +488,14 @@ func TestStatusClassificationKeepsSlowRequestsAsPressure(t *testing.T) {
 	}{
 		{
 			name:                    "interactive slow request still applies pressure",
-			req:                     Request{Model: "embedding-pt-v1"},
+			req:                     Request{Model: "embedding-gte-v1"},
 			latency:                 3 * time.Minute,
 			expectedSlow:            1,
 			expectedInteractiveSlow: 1,
 		},
 		{
 			name:              "batch slow request still applies pressure",
-			req:               Request{Model: "embedding-pt-v1-batch"},
+			req:               Request{Model: "embedding-gte-v1", Workload: "batch"},
 			latency:           11 * time.Minute,
 			expectedSlow:      1,
 			expectedBatchSlow: 1,
@@ -541,7 +535,7 @@ func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {
 		cfg.QueueLimit = 1
 	}))
 
-	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, first)
 
@@ -550,7 +544,7 @@ func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {
 	waiting := make(chan *Lease, 1)
 	waitingReject := make(chan *Reject, 1)
 	go func() {
-		lease, reject := g.Acquire(waitCtx, Request{Model: "embedding-pt-v1"})
+		lease, reject := g.Acquire(waitCtx, Request{Model: "embedding-gte-v1"})
 		waiting <- lease
 		waitingReject <- reject
 	}()
@@ -558,7 +552,7 @@ func TestAcquireRejectsWhenQueueIsFull(t *testing.T) {
 		return g.Snapshot().WaitingInteractive == 1
 	}, time.Second, 10*time.Millisecond)
 
-	third, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	third, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, third)
 	require.NotNil(t, reject)
 	assert.Equal(t, "embedding_governor_queue_full", reject.Code)
@@ -579,7 +573,7 @@ func TestInteractiveRequestCanPassWhileBatchIsQueued(t *testing.T) {
 		cfg.BatchConcurrency = 1
 	}))
 
-	batch := Request{Model: "embedding-pt-v1-batch"}
+	batch := Request{Model: "embedding-gte-v1", Workload: "batch"}
 	firstBatch, reject := g.Acquire(context.Background(), batch)
 	require.Nil(t, reject)
 	require.NotNil(t, firstBatch)
@@ -597,7 +591,7 @@ func TestInteractiveRequestCanPassWhileBatchIsQueued(t *testing.T) {
 		return g.Snapshot().WaitingBatch == 1
 	}, time.Second, 10*time.Millisecond)
 
-	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	interactive, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, interactive)
 
@@ -626,11 +620,11 @@ func TestInteractiveDemandCanScaleFromOneWhenHealthy(t *testing.T) {
 		cfg.LatencyTarget = 0
 	}))
 
-	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, first)
 
-	second, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	second, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, second)
 	assert.Equal(t, 2, g.Snapshot().CurrentConcurrency)
@@ -651,7 +645,7 @@ func TestGovernorHoldsRequestsDuringCooldownBeforeReopening(t *testing.T) {
 	finishSequential(t, g, false, http.StatusInternalServerError)
 
 	startedAt := time.Now()
-	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, lease)
 	assert.GreaterOrEqual(t, time.Since(startedAt), 25*time.Millisecond)
@@ -683,7 +677,7 @@ func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	lease, reject := g.Acquire(ctx, Request{Model: "embedding-pt-v1"})
+	lease, reject := g.Acquire(ctx, Request{Model: "embedding-gte-v1"})
 	require.Nil(t, lease)
 	require.NotNil(t, reject)
 	assert.Equal(t, "embedding_governor_queue_timeout", reject.Code)
@@ -700,7 +694,7 @@ func TestBatchUsesBatchSlowRequestDuration(t *testing.T) {
 		cfg.BatchSlowRequestDuration = 10 * time.Minute
 	}))
 
-	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1-batch"})
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1", Workload: "batch"})
 	require.Nil(t, reject)
 	require.NotNil(t, lease)
 	lease.Finish(true, http.StatusOK, 5*time.Minute)
@@ -713,7 +707,7 @@ func TestBatchUsesBatchSlowRequestDuration(t *testing.T) {
 
 func finishSequential(t *testing.T, g *Governor, success bool, statusCode int) {
 	t.Helper()
-	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-pt-v1"})
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, lease)
 	lease.Finish(success, statusCode, time.Millisecond)

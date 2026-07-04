@@ -108,6 +108,7 @@ import {
   fetchModels,
   getAllModels,
   getChannel,
+  getCodexCredentialMetadata,
   getChannelKey,
   getGroups,
   getPrefillGroups,
@@ -244,6 +245,14 @@ function formatUnixTime(timestamp: unknown): string {
   return new Date(seconds * 1000).toLocaleString()
 }
 
+function formatDateTimeString(value: unknown): string {
+  const raw = String(value || '').trim()
+  if (!raw) return '-'
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return raw
+  return date.toLocaleString()
+}
+
 function CardHeading({ title, icon }: { title: string; icon?: ReactNode }) {
   return (
     <div className='flex items-center gap-3'>
@@ -309,6 +318,16 @@ export function ChannelMutateDrawer({
     enabled: isEditing && Boolean(currentRow?.id),
   })
 
+  const {
+    data: codexCredentialMetadataData,
+    isLoading: isCodexCredentialMetaLoading,
+  } =
+    useQuery({
+      queryKey: ['channel_codex_credential', channelId],
+      queryFn: () => getCodexCredentialMetadata(channelId!),
+      enabled: isEditing && Boolean(channelId) && currentRow?.type === 57,
+    })
+
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['groups'],
@@ -369,6 +388,8 @@ export function ChannelMutateDrawer({
   const currentModels = form.watch('models')
   const currentName = form.watch('name')
   const currentModelMapping = form.watch('model_mapping')
+  const isEditingCodex =
+    isEditing && (channelData?.data?.type ?? currentRow?.type ?? currentType) === 57
   const awsKeyType = form.watch('aws_key_type')
   const vertexKeyType = form.watch('vertex_key_type')
   const upstreamModelUpdateCheckEnabled = form.watch(
@@ -742,6 +763,9 @@ export function ChannelMutateDrawer({
       toast.success(t('Credential refreshed'))
       queryClient.invalidateQueries({
         queryKey: channelsQueryKeys.detail(channelId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['channel_codex_credential', channelId],
       })
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('Refresh failed'))
@@ -1870,6 +1894,81 @@ export function ChannelMutateDrawer({
                         control={form.control}
                         name='key'
                         render={({ field }) => {
+                          if (isEditingCodex) {
+                            const codexMeta = codexCredentialMetadataData?.data
+                            return (
+                              <FormItem>
+                                <div className='border-border/60 flex flex-col gap-4 border-y py-4'>
+                                  <div className='grid gap-4 sm:grid-cols-2'>
+                                    <div className='rounded-md border p-3'>
+                                      <div className='mb-2 text-sm font-medium'>
+                                        {t('OAuth')}
+                                      </div>
+                                      {isCodexCredentialMetaLoading ? (
+                                        <Skeleton className='h-6 w-12' />
+                                      ) : (
+                                        <Switch
+                                          checked={codexMeta?.oauth === true}
+                                          disabled
+                                        />
+                                      )}
+                                    </div>
+                                    <div className='rounded-md border p-3'>
+                                      <div className='mb-2 text-sm font-medium'>
+                                        {t('Authenticated')}
+                                      </div>
+                                      {isCodexCredentialMetaLoading ? (
+                                        <Skeleton className='h-6 w-12' />
+                                      ) : (
+                                        <Switch
+                                          checked={
+                                            codexMeta?.authenticated === true
+                                          }
+                                          disabled
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className='rounded-md border p-3'>
+                                    <div className='mb-2 text-sm font-medium'>
+                                      {t('Expiration')}
+                                    </div>
+                                    {isCodexCredentialMetaLoading ? (
+                                      <Skeleton className='h-5 w-56' />
+                                    ) : (
+                                      <p className='text-sm'>
+                                        {formatDateTimeString(
+                                          codexMeta?.expires_at
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className='flex justify-start'>
+                                    {channelId && (
+                                      <Button
+                                        type='button'
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={handleRefreshCodexCredential}
+                                        disabled={isCodexCredentialRefreshing}
+                                      >
+                                        {isCodexCredentialRefreshing ? (
+                                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                        ) : (
+                                          <RefreshCw className='mr-2 h-4 w-4' />
+                                        )}
+                                        {isCodexCredentialRefreshing
+                                          ? t('Refreshing...')
+                                          : t('Refresh credential')}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )
+                          }
+
                           const keyPlaceholder = (() => {
                             if (isEditing) {
                               return t('Leave empty to keep existing key')
@@ -1948,7 +2047,7 @@ export function ChannelMutateDrawer({
                                   )}
                                 </div>
                               </FormDescription>
-                              {isEditing && (
+                              {isEditing && !isEditingCodex && (
                                 <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
                                   <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                                     <div>
@@ -2010,7 +2109,7 @@ export function ChannelMutateDrawer({
                         }}
                       />
 
-                      {currentType === 57 && (
+                      {currentType === 57 && !isEditingCodex && (
                         <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
                           <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                             <div className='text-muted-foreground text-xs'>

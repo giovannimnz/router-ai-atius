@@ -664,7 +664,16 @@ func validateTestResponseBody(respBody []byte, isStream bool) error {
 }
 
 func shouldUseStreamForAutomaticChannelTest(channel *model.Channel) bool {
-	return channel != nil && channel.Type == constant.ChannelTypeCodex
+	return shouldUseStreamForChannelTest(channel, "", "")
+}
+
+func shouldUseStreamForChannelTest(channel *model.Channel, modelName string, endpointType string) bool {
+	if channel == nil || channel.Type != constant.ChannelTypeCodex {
+		return false
+	}
+
+	normalizedEndpoint := normalizeChannelTestEndpoint(channel, strings.TrimSpace(modelName), endpointType)
+	return constant.EndpointType(normalizedEndpoint) == constant.EndpointTypeOpenAIResponse
 }
 
 func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {
@@ -850,7 +859,11 @@ func TestChannel(c *gin.Context) {
 	//}()
 	testModel := c.Query("model")
 	endpointType := c.Query("endpoint_type")
-	isStream, _ := strconv.ParseBool(c.Query("stream"))
+	streamParam := c.Query("stream")
+	isStream, _ := strconv.ParseBool(streamParam)
+	if streamParam == "" {
+		isStream = shouldUseStreamForChannelTest(channel, testModel, endpointType)
+	}
 	testUserID, err := resolveChannelTestUserID(c)
 	if err != nil {
 		common.ApiError(c, err)

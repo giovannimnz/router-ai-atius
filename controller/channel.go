@@ -547,6 +547,34 @@ func RefreshCodexChannelCredential(c *gin.Context) {
 	})
 }
 
+func GetCodexChannelCredentialMetadata(c *gin.Context) {
+	channelId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, fmt.Errorf("invalid channel id: %w", err))
+		return
+	}
+
+	ch, err := model.GetChannelById(channelId, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if ch == nil {
+		common.ApiError(c, fmt.Errorf("channel not found"))
+		return
+	}
+	if ch.Type != constant.ChannelTypeCodex {
+		common.ApiError(c, fmt.Errorf("channel type is not Codex"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    service.ReadCodexCredentialMetadata(ch.Key),
+	})
+}
+
 type AddChannelRequest struct {
 	Mode                      string                `json:"mode"`
 	MultiKeyMode              constant.MultiKeyMode `json:"multi_key_mode"`
@@ -1081,6 +1109,14 @@ func FetchModels(c *gin.Context) {
 	key := strings.TrimSpace(req.Key)
 	key = strings.Split(key, "\n")[0]
 
+	if req.Type == constant.ChannelTypeCodex {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    fetchCodexModelIDs(),
+		})
+		return
+	}
+
 	if req.Type == constant.ChannelTypeOllama {
 		models, err := ollama.FetchOllamaModels(baseURL, key)
 		if err != nil {
@@ -1158,7 +1194,7 @@ func FetchModels(c *gin.Context) {
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+	if err := common.DecodeJson(response.Body, &result); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": err.Error(),

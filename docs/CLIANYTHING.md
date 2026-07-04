@@ -19,10 +19,10 @@ O CLI foi criado para operar o deployment vivo do `router-ai-atius` sem depender
 ```
 
 - O comando `query` aceita somente SQL read-only (`select`, `with`, `show`, `explain`) e bloqueia verbos de escrita.
-- Para endpoints de API que exigem autenticacao, use `--bearer` ou `ATIUS_ROUTER_ADMIN_TOKEN`; nao salve tokens em docs, shell history compartilhado ou vault.
+- Para endpoints de API que exigem autenticacao, recupere tokens do HashiCorp Vault machine/automation e passe via `--bearer`, `ATIUS_ROUTER_ADMIN_TOKEN` ou `ATIUS_ROUTER_TOKEN` somente no processo atual; nao salve tokens em docs, shell history compartilhado, logs ou issues.
 - `clianything api`, `clianything endpoint invoke` e `clianything call` tambem sao dry-run para `POST`, `PUT`, `PATCH`, `DELETE` e endpoints classificados como `api-action`, mesmo quando o metodo HTTP e `GET`. No caso de `api`, essa classificacao vale quando o path bate no manifesto; path fora do manifesto segue protegido por metodo mutante.
 - Respostas JSON e corpos HTTP nao-JSON passam por redaction antes de imprimir.
-- `clianything coverage --strict` falha se a documentacao MDX e o manifesto de paridade divergirem, ou se qualquer endpoint depender de `cli_command` iniciado por `clianything api`.
+- `clianything coverage --strict` falha se a documentacao MDX e o manifesto de paridade divergirem, se qualquer endpoint depender de `cli_command` iniciado por `clianything api`, ou se a arvore de docs management nao estiver presente no checkout.
 
 ## Gates obrigatorios
 
@@ -30,14 +30,15 @@ Use estes comandos antes de declarar paridade do CLI:
 
 ```bash
 cd /home/ubuntu/GitHub/containers/router-ai-atius
-python3 -m py_compile tools/clianything.py tools/generate_clianything_endpoints.py scripts/smoke-openai-sdk.py scripts/smoke-anthropic-sdk.py scripts/smoke-embeddings.py scripts/smoke-routing-matrix.py
+python3 -m py_compile tools/clianything.py scripts/smoke-provider-consolidation.py scripts/smoke-embeddings.py
 python3 -m json.tool tools/clianything_endpoints.json >/dev/null
 python3 -m unittest discover -s tests -p 'test_clianything*.py'
+# Quando docs/atius-router-docs/content/docs/en/api/management existir:
 bin/clianything coverage --strict
-python3 scripts/smoke-routing-matrix.py
+ATIUS_ROUTER_ACTIVE_ONLY=1 python3 scripts/smoke-provider-consolidation.py
 ```
 
-`bin/clianything status --strict` tambem deve ser rodado. O contrato atual de `/v1/models` e Go-owned: o backend Go monta o catalogo enriquecido e retorna root `{"data":[...]}`. `/v1/models` sem token continua retornando HTTP 401 esperado.
+`bin/clianything status --strict` tambem deve ser rodado. O contrato atual de `/v1/models` e Go-owned: o backend Go monta o catalogo enriquecido e retorna root `{"data":[...]}`. `/v1/models` sem token continua retornando HTTP 401 esperado. O relay Go normaliza `base_url` com ou sem `/v1`, evitando paths duplicados como `/v1/v1/...`.
 
 ## Comandos principais
 
@@ -76,8 +77,12 @@ clianything update channels --id 3 --set status=1
 
 # Escrita real com backup automatico
 clianything update channels --id 3 --set status=1 --execute
-clianything channel clone-keyed --source-id 2 --name 'DeepSeek - Anthropic-Compatible' --type 14 --base-url https://api.deepseek.com/anthropic --models deepseek-v4-flash,deepseek-v4-pro
+
+# Consolidacao Go-native de providers; compat legado do nome Phase 19
 clianything channel phase19-apply --execute
+
+# Clone manual fica disabled por default e bloqueia splits legados sem override explicito
+clianything channel clone-keyed --source-id 2 --name 'DeepSeek Teste' --type 43 --base-url https://api.deepseek.com --models deepseek-v4-pro,deepseek-v4-flash
 
 # Chamada HTTP local
 clianything api GET /api/status
@@ -101,7 +106,7 @@ O manifesto de paridade fica em:
 Ele e gerado a partir dos MDX de management:
 
 ```bash
-python3 tools/generate_clianything_endpoints.py
+python3 -m json.tool tools/clianything_endpoints.json >/dev/null
 bin/clianything coverage --strict
 ```
 
@@ -289,22 +294,21 @@ clianything api GET /api/channel/test/1
 
 ## Smoke SDK
 
-Os scripts abaixo nao embutem token; exigem `ATIUS_ROUTER_TOKEN` via env:
+Os scripts abaixo nao embutem token; exigem `ATIUS_ROUTER_TOKEN` via env. Para automacao, a fonte canonica e o HashiCorp Vault path `kv/atius/srv1/shell-exports/home-ubuntu-merged`, lendo `ATIUS_ROUTER_API_KEY` e mapeando para `ATIUS_ROUTER_TOKEN` no shell efemero do teste:
 
 ```bash
-export ATIUS_ROUTER_TOKEN='<token-local>'
+VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
+eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
 
-# OpenAI-compatible: default http://127.0.0.1:3000/v1, model MiniMax-M3
-scripts/smoke-openai-sdk.py
+# Matriz ativa: modelos anunciados em /v1/models precisam responder 200.
+ATIUS_ROUTER_ACTIVE_ONLY=1 scripts/smoke-provider-consolidation.py
 
-# Anthropic-compatible: default http://127.0.0.1:3000, model MiniMax-M3
-scripts/smoke-anthropic-sdk.py
-
-# Embeddings: default http://127.0.0.1:3001/v1, model embo-01
+# Embeddings legacy-only: default http://127.0.0.1:3000/v1, model embo-01.
 scripts/smoke-embeddings.py
 
-# Matrix: provider/model/embeddings routing snapshot
-scripts/smoke-routing-matrix.py
+# Chat/model-list neste checkout: validar via curl ou SDK efemero
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'
 ```
 
 Overrides:
@@ -313,7 +317,7 @@ Overrides:
 ATIUS_ROUTER_OPENAI_BASE_URL=http://127.0.0.1:3000/v1
 ATIUS_ROUTER_ANTHROPIC_BASE_URL=http://127.0.0.1:3000
 ATIUS_ROUTER_MODEL=MiniMax-M3
-ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3001/v1
+ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1
 ATIUS_ROUTER_EMBEDDING_TYPE=query
 ```
 
@@ -322,7 +326,7 @@ ATIUS_ROUTER_EMBEDDING_TYPE=query
 Comandos executados:
 
 ```bash
-python3 -m py_compile tools/clianything.py tools/generate_clianything_endpoints.py scripts/smoke-openai-sdk.py scripts/smoke-anthropic-sdk.py scripts/smoke-embeddings.py scripts/smoke-routing-matrix.py
+python3 -m py_compile tools/clianything.py scripts/smoke-provider-consolidation.py scripts/smoke-embeddings.py
 python3 -m json.tool tools/clianything_endpoints.json
 python3 -m unittest discover -s tests -p 'test_clianything*.py'
 bin/clianything coverage --strict
@@ -339,11 +343,7 @@ bin/clianything api GET /api/status
 bin/clianything api GET /api/channel/test/1
 bin/clianything api POST /api/setup --data '{}'
 bin/clianything channel balance --id 1
-python3 scripts/smoke-openai-sdk.py
-python3 scripts/smoke-anthropic-sdk.py
-python3 scripts/smoke-embeddings.py
-python3 scripts/smoke-routing-matrix.py
-ATIUS_ROUTER_MODEL=gpt-5.5 ATIUS_ROUTER_STREAM=1 python3 scripts/smoke-openai-sdk.py
+ATIUS_ROUTER_ACTIVE_ONLY=1 python3 scripts/smoke-provider-consolidation.py
 ```
 
 Resultado:
@@ -353,32 +353,37 @@ Resultado:
 - DB `DBRouterAiAtius` acessivel via container `postgres`.
 - Pod `atius-ai-router` running com 5 containers.
 - Backend `/api/status` HTTP 200.
-- `model-detailed /health` HTTP 200 com `healthy` apos ajuste do healthcheck para nao depender de `/v1/models` autenticado.
+- Runtime full-Go validado em 2026-06-18: `model-detailed` parado; `clianything status` valida `backend`, `v1-models` e DB sem check de middleware Python.
 - `/v1/models` sem token retorna HTTP 401 esperado.
 - Dry-run de update e dry-run de `POST /api/setup` nao alteraram banco/API.
 - Unit/integration tests: 37 OK, 1 skip intencional (`CLIANYTHING_RUN_BACKUP_TEST=1`).
 - Smoke OpenAI/Anthropic SDK sem `ATIUS_ROUTER_TOKEN`: exit 2 esperado, sem importar SDK nem chamar rede.
 - Smoke embeddings e routing matrix sem `ATIUS_ROUTER_TOKEN`: exit 2 esperado.
 - Smoke real com token operacional via ambiente efemero `uv`: OpenAI SDK `MiniMax-M3` OK, Anthropic SDK `MiniMax-M3` OK, OpenAI SDK `gpt-5.5` OK com `ATIUS_ROUTER_STREAM=1`.
-- Middleware `model-detailed-hotfix` usa fila anti-rate-limit por provider/model-family por padrao. Quando a fila atua, validar os headers `X-Atius-Rate-Queue`, `X-Atius-Rate-Queue-Wait-Ms` e `X-Atius-Rate-Retry-Count`.
-- Go `/v1/models` agora enriquece pricing e metadados diretamente a partir do catalogo Go; os campos publicos esperados para modelos conhecidos sao `pricing`, `input_price` e `output_price`.
+- O antigo middleware `model-detailed-hotfix` nao fica mais no caminho runtime de `/v1/`; nao use headers de fila como gate do estado full-Go.
+- Go `/v1/models` agora enriquece pricing e metadados diretamente a partir do catalogo Go; o campo publico esperado para precos e `pricing` com `input` e `output`.
+- O payload publico de `/v1/models` nao expoe `input_price`, `output_price`, `quota_type`, `enable_groups`, `supported_endpoint_type_labels` ou `pricing.unit`.
+- Go relay normaliza `base_url` com ou sem `/v1`; providers MiniMax/DeepSeek tambem removem `/v1` antes de montar paths Anthropic/native.
 - O root publico de `/v1/models` contem somente `data` em modos model-list. Nao expor top-level `object`, `success`, `first_id`, `last_id` ou `has_more`.
-- `pricing_source` e `pricing_estimated` permanecem internos e nao sao campos publicos de `/v1/models`.
+- `pricing_source`, `pricing_estimated` e `pricing_version` permanecem internos e nao sao campos publicos de `/v1/models`.
 - A ordenacao publica e deterministica: modelos de texto antes de embeddings; providers MiniMax, DeepSeek e OpenAI/OpenAI Codex; dentro de cada provider, variantes mais recentes/capazes primeiro.
 - `api_format=anthropic` ou headers Anthropic selecionam modelos Anthropic-capable pelo catalogo Go, preservando o mesmo root `{"data":[...]}`.
-- O workflow GSD deste contrato exige Graphify ativo/fresco antes e depois de mudancas de codigo/docs.
+- O workflow GSD deste contrato usa Graphify quando habilitado; no checkout atual de runtime, `graphify status` retornou `disabled`, entao registrar indisponibilidade e validar por testes/CLI/smokes.
 - Precificacao cadastrada no backend para `MiniMax-M2.1`, variantes MiniMax highspeed, Codex OAuth `gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`/`gpt-5.3-codex-spark`, `embo-01` e OpenAI embeddings `text-embedding-3-small`/`text-embedding-3-large`.
+- Em 2026-06-18, `text-embedding-3-small` e `text-embedding-3-large` foram ligados conceitualmente ao `OpenAI - Codex` channel 5, compartilhando a credencial OAuth do Codex; runtime atual os deixa desativados porque o upstream retornou `429 insufficient_quota`.
+- Em 2026-06-18, MiniMax e DeepSeek foram consolidados para um canal por provider. Runtime atual: `MiniMax` tipo `35` ativo para chat/messages; `DeepSeek` tipo `43` desativado por `401 invalid api key`; canais duplicados antigos seguem disabled.
 - Testes unitarios cobrem conversao de `ModelRatio`/`CompletionRatio` para preco por token e enriquecimento de catalogo OpenAI/Anthropic/embeddings.
 - Secret scan em `tools`, `scripts`, `tests`, docs e Phase 18 sem hits.
-- Em 2026-06-15, `scripts/router-model-battery.py --token-id 8 --rate-requests 20 --rate-delay 0.2` validou MiniMax-M3 com 20/20 OK e embeddings `embo-01` roteando via `http://127.0.0.1:3001/v1`, bloqueado por upstream `429 rate limit exceeded(RPM)`.
-- Em 2026-06-15, `uv run --with openai --with anthropic python scripts/smoke-routing-matrix.py` validou o dominio publico `https://router.atius.com.br`: catalogos OpenAI/Anthropic OK, OpenAI SDK OK, Anthropic SDK OK, Codex OAuth `gpt-5.5` OK, embeddings `embo-01` roteando mas bloqueados por upstream `429`.
+- Em 2026-06-15, `scripts/router-model-battery.py --token-id 8 --rate-requests 20 --rate-delay 0.2` validou MiniMax-M3 com 20/20 OK e embeddings `embo-01` roteando no caminho historico, bloqueado por upstream `429 rate limit exceeded(RPM)`.
+- Em 2026-06-15, uma matriz efemera com OpenAI/Anthropic SDK validou o dominio publico `https://router.atius.com.br`: catalogos OpenAI/Anthropic OK, SDKs OK, Codex `gpt-5.5` OK, embeddings `embo-01` roteando mas bloqueados por upstream `429`.
 
 Validacao rapida do catalogo enriquecido:
 
 ```bash
 bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
-curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3001/models
+curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'
+ATIUS_ROUTER_ACTIVE_ONLY=1 scripts/smoke-provider-consolidation.py
 ```
 
 Snapshot esperado em 2026-06-15:

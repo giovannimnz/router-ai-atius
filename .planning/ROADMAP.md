@@ -241,15 +241,82 @@ Plans:
 
 ### Phase 21: feat-pt-native-pr
 
-**Goal:** Push do branch novo pro fork, fechar PR #5245 poluído com comentário, abrir PR novo limpo contra QuantumNous/new-api.
-**Status:** Ready for planning
-**Requirements:** TBD
+**Goal:** Implementar primeiro neste fork o suporte PT-BR 100% nativo conforme o `upstream/main` atual de `QuantumNous/new-api`, sem camada i18n custom e sem arquivo fora do padrão; depois preparar um PR upstream limpo se o resultado local for aprovado.
+**Status:** Planned
+**Requirements:** PHASE-21-UPSTREAM-NATIVE-I18N, PHASE-21-REUSE-EXISTING-TRANSLATIONS, PHASE-21-PT-BR-COVERAGE, PHASE-21-LOCAL-FIRST-VALIDATION, PHASE-21-UPSTREAM-PR-HYGIENE
 **Depends on:** Phase 20
-**Plans:** 0 plans
+**Plans:** 5 plans (4 waves)
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 21 to break down)
+**Wave 1**
+
+- [ ] 21-01-PLAN.md - clean upstream lane and translation inventory
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 21-02-PLAN.md - backend native PT-BR locale and go-i18n validation
+- [ ] 21-03-PLAN.md - default frontend native PT-BR locale, wiring, and sync validation
+
+**Wave 3** *(blocked on Wave 2 default frontend completion)*
+
+- [ ] 21-04-PLAN.md - classic frontend native PT-BR locale, wiring, and build validation
+
+**Wave 4** *(blocked on all implementation validation)*
+
+- [ ] 21-05-PLAN.md - upstream-ready single commit, leak checks, duplicate search, and PR handoff
+
+### Phase 22: K3s migration preflight and cutover plan for router-ai-atius
+
+**Goal:** Preparar e validar a migração do runtime `router-ai-atius` de Podman rootless para k3s sem perder o contrato full-Go, sem reintroduzir `model-detailed`, com backup/rollback testado e cutover bloqueado por aprovação manual.
+**Status:** Planned
+**Requirements:** PHASE-22-K3S-PREFLIGHT, PHASE-22-RUNTIME-PARITY, PHASE-22-STATEFUL-DATA, PHASE-22-CUTOVER-ROLLBACK
+**Depends on:** Phase 20 runtime full-Go. Independe da Phase 21, mas deve evitar contaminar o worktree/branch `feat/pt-native`.
+**Plans:** 4 plans (4 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 22-01-PLAN.md - k3s cluster/runtime preflight and migration contract
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 22-02-PLAN.md - Kubernetes manifests, secret templates, and dry-run validation
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 22-03-PLAN.md - backup, restore rehearsal, and shadow deployment validation
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 22-04-PLAN.md - production cutover, rollback, and operator handoff
+
+### Phase 23: long-context-alias-validation
+
+**Goal:** Validar os aliases experimentais `gpt-5.5-1m` e `gpt-5.4-1m` com testes progressivos de raciocinio/contexto ate aproximadamente 1M tokens, preservando seguranca operacional, custos explicitos, rastreabilidade de alias/upstream e pricing long-context.
+**Status:** Planned
+**Requirements:** PHASE-23-LONG-CONTEXT-CATALOG, PHASE-23-LONG-CONTEXT-STREAMING, PHASE-23-LONG-CONTEXT-REASONING, PHASE-23-LONG-CONTEXT-BILLING-TRACE
+**Depends on:** Phase 20 runtime full-Go and deployed alias pricing fix. Independe da Phase 21 e nao altera o plano de migracao da Phase 22.
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] 23-01-PLAN.md - progressive 1M long-context alias validation harness and UAT
+
+### Phase 24: router-db-catalog-recovery-and-canonical-host-db
+
+**Goal:** Recuperar totalmente o runtime/catalogo do `router-ai-atius` no banco canonico do host via PgBouncer, restaurando `OpenAI - Codex`, DeepSeek e o caminho Go-native de embeddings, eliminando o drift entre `newapi` e o nome correto do banco, e reaplicando a consolidacao de canais/provedores sem reintroduzir aliases `-1m` nem embeddings Codex desabilitados.
+**Status:** Planned
+**Requirements:** PHASE-24-CANONICAL-HOST-DB, PHASE-24-CATALOG-RESTORE, PHASE-24-PROVIDER-CONSOLIDATION, PHASE-24-EMBEDDING-GOVERNOR-PRESERVE, PHASE-24-CUTOVER-ROLLBACK
+**Depends on:** Phase 20 runtime full-Go; uses the local evidence and backups collected on 2026-07-03/04. Supersedes the partial embedding-only repair as the next recovery step. Independent of Phases 21, 22, and 23.
+**Plans:** 3/4 plans executed
+
+Plans:
+
+- [x] 24-01-PLAN.md - canonical host DB inventory, freeze, backup, and restore source selection
+- [x] 24-02-PLAN.md - canonical DB rename/migration and full router catalog restore
+- [x] 24-03-PLAN.md - provider/channel consolidation, OpenAI Codex/GPT recovery, and embedding governor preservation
+- [ ] 24-04-PLAN.md - runtime cutover, docs reconciliation, and end-to-end validation
 
 ---
 

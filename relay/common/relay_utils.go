@@ -23,17 +23,37 @@ type HasImage interface {
 }
 
 func GetFullRequestURL(baseURL string, requestURL string, channelType int) string {
-	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
+	baseURL = NormalizeBaseURL(baseURL)
+	requestURL = normalizeRequestPath(requestURL)
 
 	if strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") {
 		switch channelType {
 		case constant.ChannelTypeOpenAI:
-			fullRequestURL = fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/v1"))
+			return fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/v1"))
 		case constant.ChannelTypeAzure:
-			fullRequestURL = fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/openai/deployments"))
+			return fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/openai/deployments"))
 		}
 	}
-	return fullRequestURL
+	if strings.HasSuffix(baseURL, "/v1") && strings.HasPrefix(requestURL, "/v1/") {
+		requestURL = strings.TrimPrefix(requestURL, "/v1")
+	}
+	return fmt.Sprintf("%s%s", baseURL, requestURL)
+}
+
+func NormalizeBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
+}
+
+func NormalizeProviderRootBaseURL(baseURL string) string {
+	return strings.TrimSuffix(NormalizeBaseURL(baseURL), "/v1")
+}
+
+func normalizeRequestPath(requestURL string) string {
+	requestURL = strings.TrimSpace(requestURL)
+	if requestURL == "" || strings.HasPrefix(requestURL, "/") {
+		return requestURL
+	}
+	return "/" + requestURL
 }
 
 func GetAPIVersion(c *gin.Context) string {

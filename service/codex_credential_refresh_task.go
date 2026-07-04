@@ -21,6 +21,7 @@ const (
 	codexCredentialRefreshThreshold    = 24 * time.Hour
 	codexCredentialRefreshBatchSize    = 200
 	codexCredentialRefreshTimeout      = 15 * time.Second
+	sharedCodexCredentialPrefix        = "shared:codex"
 )
 
 var (
@@ -100,6 +101,9 @@ func runCodexCredentialAutoRefreshOnce() {
 			if rawKey == "" {
 				continue
 			}
+			if isSharedCodexCredentialReference(rawKey) {
+				continue
+			}
 
 			oauthKey, err := parseCodexOAuthKey(rawKey)
 			if err != nil {
@@ -145,4 +149,9 @@ func runCodexCredentialAutoRefreshOnce() {
 	if common.DebugEnabled {
 		logger.LogDebug(ctx, "codex credential auto-refresh: scanned=%d refreshed=%d", scanned, refreshed)
 	}
+}
+
+func isSharedCodexCredentialReference(rawKey string) bool {
+	key := strings.TrimSpace(rawKey)
+	return key == sharedCodexCredentialPrefix || strings.HasPrefix(key, sharedCodexCredentialPrefix+":")
 }

@@ -10,16 +10,21 @@
 | Admin / fork-sync | `/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router` |
 | CLI operacional | `/home/ubuntu/GitHub/containers/router-ai-atius/bin/clianything` |
 | Docs locais | `/home/ubuntu/GitHub/containers/router-ai-atius/docs` |
+| Runbook Podman | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/PODMAN.md` |
+| Runbook OpenAI Codex e 1M context | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md` |
 
 Registro dedicado do corte full-Go 2026-06-18: `docs/FULL-GO-V1-MODELS-CUTOVER-2026-06-18.md`.
+Registro dedicado do provider `OpenAI - Codex`, aliases `-1m`, mapping upstream e custos long-context: `docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md`.
 
 ## Status atual validado
 
 - Podman pod: `atius-ai-router`
-- Containers em runtime atual: `router-ai-atius`, `postgres`, `redis`, infra pause. O antigo `model-detailed-hotfix` foi parado em 2026-06-18 apos cutover full-Go.
+- Containers em runtime atual: `router-ai-atius`, `redis`, infra pause. O antigo `model-detailed-hotfix` foi parado em 2026-06-18 apos cutover full-Go.
 - Backend local: `http://127.0.0.1:3000`
+- Caminho canônico de banco do runtime live: PgBouncer `10.1.1.1:6432` -> database `DBRouterAiAtius`
 - Nao ha model proxy Python ativo no caminho `/v1/`.
 - Alias Apache para `/v1/`: `http://127.0.0.1:3000`
+- `data/postgres_data` é cluster PostgreSQL legado/desanexado; não é a fonte de verdade do runtime live
 - Publico: `https://router.atius.com.br`
 - Deploy full-Go + base URL `/v1` normalization 2026-06-18: imagem `ghcr.io/giovannimnz/router-ai-atius:latest` id `e389110f98fb8e3fce80ac8cf691a04c1c74b6268d91d5fb304bb6f574344151`.
 - Rollback imediato antes da normalizacao `/v1`: `ghcr.io/giovannimnz/router-ai-atius:rollback-before-baseurl-v1-normalize-20260618122124`.
@@ -29,6 +34,7 @@ Validacao rapida:
 
 ```bash
 cd /home/ubuntu/GitHub/containers/router-ai-atius
+scripts/podman-validate.sh
 bin/clianything status
 bin/clianything providers --all
 ```
@@ -61,8 +67,8 @@ Estado validado pelo banco:
 
 | Channel | Tipo | Status | Base URL | Modelos |
 |---|---:|---:|---|---|
-| `MiniMax` | `35` | enabled | `https://api.minimax.io` | `MiniMax-M3`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.7` |
-| `DeepSeek` | `43` | disabled | `https://api.deepseek.com` | desativado temporariamente: upstream retornou `401 invalid api key` |
+| `MiniMax` | `35` | disabled | `https://api.minimax.io` | restaurado como canal consolidado unico, mas mantido desabilitado no estado final |
+| `DeepSeek` | `43` | enabled | `https://api.deepseek.com` | `deepseek-v4-pro`, `deepseek-v4-flash` via canal consolidado unico |
 | `OpenAI - Codex` | `57` | enabled | OAuth local / sem `base_url` | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark` |
 | `MiniMax - Anthropic-Compatible`, `MiniMax - Embeddings`, `DeepSeek - Anthropic-Compatible`, `Codex - Embeddings` | legado | disabled | historico | rotas substituidas pelos canais unificados |
 
@@ -84,11 +90,14 @@ Estado validado em 2026-06-18:
 
 - O backend Go e o dono do catalogo enriquecido em `/v1/models`; o middleware Python nao e fonte do contrato de model-list.
 - O root publico de `/v1/models` em modos model-list contem somente `data`: nao expor top-level `object`, `success`, `first_id`, `last_id` ou `has_more`.
-- Os campos enriquecidos publicos esperados por item sao `pricing`, `input_price`, `output_price`, `supported_endpoint_types`, `supported_endpoint_type_labels` e `billing_mode` quando disponivel.
+- Os campos enriquecidos publicos esperados por item sao `pricing`, `supported_endpoint_types`, `endpoint_routes` e `billing_mode` quando disponivel.
+- O objeto publico `pricing` expoe somente `input` e `output`; nao expoe `unit`.
+- O payload publico nao expoe os aliases redundantes `input_price`/`output_price`, `quota_type`, `enable_groups` ou `supported_endpoint_type_labels`.
 - `pricing_version` e campo interno e nao deve aparecer no payload publico de `/v1/models`.
 - `pricing_source` e `pricing_estimated` ficam internos e nao devem aparecer no payload publico de `/v1/models`.
 - A ordenacao publica e deterministica: texto antes de embeddings; providers MiniMax, DeepSeek e OpenAI/OpenAI Codex; dentro do provider, modelos mais recentes/capazes primeiro.
 - Regras de variante: versao numerica maior sobe; `-highspeed` fica acima da variante sem `-highspeed`; `pro` fica acima de `flash`, que fica como variante secundaria.
+- Contrato final da Phase 24 para Codex: `gpt-5.4` e o modelo default de long-context; nao republicar `gpt-5.4-1m` nem `gpt-5.5-1m`.
 - `api_format=anthropic` e headers Anthropic selecionam modelos Anthropic-capable no catalogo Go, mantendo o mesmo root `{"data":[...]}`.
 - Graphify fica obrigatorio no fluxo GSD desta area quando habilitado no checkout. Em 2026-06-18, este checkout retornou `graphify status: disabled` e nao tinha `.planning/config.json`; nesse caso registrar Graphify como indisponivel e usar testes/CLI/smoke como evidencias.
 - Para modelos ainda sem preco cadastrado, o comportamento esperado do catalogo enriquecido e retornar `0.00` ate o cadastro real ou estimado ser feito.
@@ -109,7 +118,7 @@ Precos cadastrados/validados no backend:
 | `deepseek-v4-flash` | 0.14 | 0.28 | backend |
 | `deepseek-v4-pro` | 0.435 | 0.87 | backend |
 | `gpt-5.5` | 5.00 | 30.00 | estimado/standard |
-| `gpt-5.4` | 2.50 | 15.00 | estimado/standard |
+| `gpt-5.4` | 5.00 | 22.50 | OpenAI standard long-context |
 | `gpt-5.4-mini` | 0.75 | 4.50 | estimado/standard |
 | `gpt-5.3-codex-spark` | 1.75 | 14.00 | estimado |
 | `embo-01` | 0.069 | 0.069 | estimado |
@@ -119,6 +128,9 @@ Precos cadastrados/validados no backend:
 Comandos de verificacao:
 
 ```bash
+VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
+eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
+
 bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'
@@ -140,14 +152,14 @@ Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
 - Para clientes Anthropic-Compatible, usar `/v1/messages` com `base_url=https://router.atius.com.br` ou `https://router.atius.com.br/v1` conforme SDK/cliente.
-- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. No runtime atual, o provider ativo e `Local TEI - GTE Embeddings` com o alias publico `embedding-pt-v1`, dimensao `768`, apontando para `http://10.1.1.4:3000`.
-- Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o modelo fica fora de `channels.models` ate o RPM/quota upstream estabilizar.
+- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. No runtime atual, o provider ativo e `Local TEI - GTE Embeddings` com o alias publico `embedding-gte-v1`, dimensao `768`, apontando para `http://10.1.1.4:3000`.
+- Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
 - Provider de embeddings Codex: `OpenAI - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
 - MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido (`/v1/chat/completions`, `/v1/messages`, `/v1/embeddings`).
 - `/v1/models` sem token deve retornar 401. Isso nao indica falha.
-- DeepSeek esta desativado no runtime atual porque o upstream retornou `401 invalid api key`. Reativar somente apos trocar a chave e passar a matriz UAT.
-- MiniMax embeddings pode retornar `429` quando o upstream bloquear por quota/RPM persistente; nesse caso manter `embo-01` fora do catalogo ativo ate o smoke rigido passar.
+- DeepSeek deve permanecer ativo como canal consolidado unico no estado final restaurado.
+- MiniMax embeddings pode retornar `429` quando o upstream bloquear por quota/RPM persistente; nesse caso manter `embo-01` fora do catalogo ativo e manter o provider MiniMax desabilitado no estado final.
 - `MiniMax` e `DeepSeek` devem preferir `base_url` no provider root (`https://api.minimax.io`, `https://api.deepseek.com`), mas o relay Go tambem aceita base URL com `/v1` e normaliza automaticamente. Nao usar sufixos especificos como `/anthropic` no canal consolidado.
 
 ## Governor de embeddings Go-native
@@ -156,12 +168,13 @@ Estado atualizado em 2026-06-26:
 
 - O governor de embeddings roda dentro do proprio processo Go do router; nao ha sidecar, middleware Python, container adicional ou rota `model-detailed` no caminho canonico.
 - Implementacao principal: `service/embeddinggovernor/` e integracao em `relay/embedding_handler.go`.
-- Escopo default: `embedding-pt-v1` e `embedding-pt-v1-batch`. Outros modelos passam pelo relay normal sem fila do governor.
+- Escopo default: somente `embedding-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
+- `embedding-gte-v1` e o unico alias publico governado; `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` nao muda durante a recuperacao/catalog restore.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=3`, `batch_concurrency=1`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. O valor `4` continua reservado para override/manual turbo window; nao faz parte da escala automatica diaria.
 - Classificacao de workload e metadata-only. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
-  2. thresholds locais derivados do request (`InputCount >= 4` ou `InputChars >= 12000`);
-  3. fallback por modelo configurado (`embedding-pt-v1-batch`).
+  2. thresholds locais derivados do request (`InputCount >= 4` ou `InputChars >= 12000`).
+- Nao exponha um alias publico `*-batch`: batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
 - Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
@@ -176,8 +189,8 @@ Variaveis de ambiente suportadas:
 
 ```bash
 EMBEDDING_GOVERNOR_ENABLED=true
-EMBEDDING_GOVERNOR_MODELS=embedding-pt-v1,embedding-pt-v1-batch
-EMBEDDING_GOVERNOR_BATCH_MODELS=embedding-pt-v1-batch
+EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1
+EMBEDDING_GOVERNOR_BATCH_MODELS=
 EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY=2
 EMBEDDING_GOVERNOR_MIN_CONCURRENCY=1
 EMBEDDING_GOVERNOR_MAX_CONCURRENCY=3
@@ -237,7 +250,7 @@ Validacao local e gate operacional apos mudanca no governor:
 # Smoke autenticado de embeddings locais (dimension 768)
 test -n "$ATIUS_ROUTER_TOKEN" && \
   ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
-  ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-pt-v1 \
+  ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
   ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
   python3 scripts/smoke-embeddings.py
 
@@ -247,6 +260,7 @@ node /home/ubuntu/.codex/gsd-core/bin/gsd-tools.cjs graphify status
 
 Leitura correta desses gates:
 
+- Para automacao e validacao, recupere `ATIUS_ROUTER_API_KEY` do HashiCorp Vault machine/automation e exporte como `ATIUS_ROUTER_TOKEN` apenas no shell efemero do teste.
 - Sem `ATIUS_ROUTER_TOKEN`, o smoke de embeddings deve falhar com `exit 2` antes da rede. Isso e limitacao de ambiente, nao passe livre.
 - Se `graphify status` retornar `stale=true` ou `commit_stale=true` num checkout com Graphify habilitado, rebuild e obrigatorio antes de assinar a mudanca. O rebuild faz parte do gate de validacao, nao do governor.
 - Deploy/restart nao e automatico em execucao de plano. Quando for validar em runtime, usar somente a user unit existente:
@@ -297,20 +311,38 @@ Estado observado em 2026-06-15:
 
 ### Hermes via Atius Router
 
-Exemplo conceitual, sem secrets:
+Estado validado em 2026-07-01:
+
+- Documentacao dedicada: `docs/HERMES-ATIUS-ROUTER-PROVIDER.md`.
+- O Hermes deve usar o Atius Router como OpenAI-compatible, nao como
+  Anthropic-compatible, para modelos GPT/Codex.
+- `api_mode` correto para `gpt-5.4` e `gpt-5.5`:
+  `chat_completions`.
+- `base_url` correto: `https://router.atius.com.br`, sem sufixo `/v1`.
+- `model.aliases` deve apontar os modelos GPT/Codex para
+  `custom:atius-router/...`, evitando autodeteccao ambigua do Hermes quando se
+  usa `hermes -m <modelo>`.
+
+Exemplo sem secrets:
 
 ```yaml
 model:
   provider: custom
-  default: MiniMax-M3
-  base_url: ${ATIUS_ROUTER_BASE_URL}
-  api_mode: anthropic_messages
+  default: gpt-5.4
+  context_length: 1048576
+  base_url: https://router.atius.com.br
+  api_key: ${ATIUS_ROUTER_API_KEY}
+  api_mode: chat_completions
+  aliases:
+    gpt-5.4: custom:atius-router/gpt-5.4
+    gpt-5.5: custom:atius-router/gpt-5.5
 fallback_providers:
   - provider: custom
     model: MiniMax-M3
 ```
 
-No `.env`, `ATIUS_ROUTER_BASE_URL` deve apontar para `https://router.atius.com.br`.
+Nao usar `ATIUS_ROUTER_BASE_URL=https://router.atius.com.br/v1` nesse modo,
+pois o cliente OpenAI-compatible monta `/v1/chat/completions`.
 
 ### Hermes via MiniMax direto
 
@@ -349,7 +381,7 @@ Valido em 2026-06-18:
 - OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `MiniMax-M3`: OK.
 - Anthropic SDK local contra `http://127.0.0.1:3000` com `MiniMax-M3`: OK.
 - OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `gpt-5.5` via `OpenAI - Codex`: OK com `ATIUS_ROUTER_STREAM=1`.
-- Router Go deve rotear Anthropic/OpenAI automaticamente via canal unico do provider quando o provider estiver ativo. Runtime atual: `MiniMax` channel 1 ativo; `DeepSeek` channel 2 desativado por `401 invalid api key`.
+- Router Go deve rotear Anthropic/OpenAI automaticamente via canal unico do provider quando o provider estiver ativo. Contrato final da Phase 24: `DeepSeek` channel 2 ativo; `MiniMax` channel 1 restaurado, mas desabilitado.
 - `OpenAI - Codex` esta ativo no channel 5 com modelos `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`.
 - Embeddings Codex devem usar o mesmo channel 5 e a mesma credencial OAuth do Codex, sem servico/container adicional nem copia de chave; runtime atual deixa `text-embedding-3-*` desativado por `429 insufficient_quota`.
 - `data/codex-home/.codex/auth.json` existe e tem `auth_mode: chatgpt`; esse arquivo e credencial de runtime e nao deve ser copiado para docs/logs.
@@ -392,8 +424,8 @@ Estado atualizado em 2026-06-26 apos a instalacao do TEI local:
 
 - Wrapper ativo: `/home/ubuntu/.local/bin/gbrain`.
 - O wrapper define `GBRAIN_STATEMENT_TIMEOUT=0`, `GBRAIN_IDLE_TX_TIMEOUT=0`, `OPENAI_BASE_URL=http://127.0.0.1:3000/v1` e `OPENAI_API_KEY` a partir de `~/.gbrain/config.json`.
-- `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-pt-v1` e `embedding_dimensions: 768`.
-- O GBrain deve chegar direto ao Go router; o endpoint ativo de embeddings e o canal `Local TEI - GTE Embeddings`, alias `embedding-pt-v1`, upstream `http://10.1.1.4:3000`.
+- `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-gte-v1` e `embedding_dimensions: 768`.
+- O GBrain deve chegar direto ao Go router; o endpoint ativo de embeddings e o canal `Local TEI - GTE Embeddings`, alias `embedding-gte-v1`, upstream `http://10.1.1.4:3000`.
 - O governor Go-native protege esse caminho antes de despachar a chamada ao TEI.
 - `embo-01` e `text-embedding-3-*` ficam como historico/desativados ate MiniMax/Codex aceitarem chamadas reais sem `429`.
 - Backup antes da mudanca: `/home/ubuntu/.gbrain/config.json.bak-router-embeddings-20260615_030827`.
@@ -455,7 +487,8 @@ bin/clianything endpoint list --classification api-action
 Smoke local:
 
 ```bash
-export ATIUS_ROUTER_TOKEN='<token operacional>'
+VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
+eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
 ATIUS_ROUTER_ACTIVE_ONLY=1 python3 scripts/smoke-provider-consolidation.py
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'
@@ -463,11 +496,11 @@ curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v
 
 Sem `ATIUS_ROUTER_TOKEN`, os scripts de smoke retornam `exit 2` antes de chamar rede.
 
-Ultima bateria operacional estrita em 2026-06-18:
+Ultima bateria operacional estrita em 2026-06-18 (historico pre-Phase 24):
 
-- MiniMax ativo: `MiniMax-M3`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.7` passaram via OpenAI-compatible e Anthropic-compatible.
+- MiniMax ativo naquele momento: `MiniMax-M3`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.7` passaram via OpenAI-compatible e Anthropic-compatible.
 - OpenAI - Codex ativo: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark` passaram via OpenAI-compatible.
-- DeepSeek fica desativado porque a chave upstream cadastrada retornou `401 invalid api key`.
+- DeepSeek ficou desativado naquele momento porque a chave upstream cadastrada retornou `401 invalid api key`.
 - Embeddings ficam fora do catalogo ativo: `embo-01` por `429 rate limit exceeded(RPM)` e `text-embedding-3-*` por `429 insufficient_quota`.
 - Rotas desativadas foram cobertas por negativo no smoke e nao devem gerar log de selecao de canal antigo.
 

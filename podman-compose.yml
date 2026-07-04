@@ -1,0 +1,80 @@
+# Podman development stack for the Atius router fork.
+#
+# Runtime production is managed by user systemd units on this host. This file is
+# only for local development/CI checks and intentionally binds the API to 3001 by
+# default so it does not collide with the live router on 3000.
+#
+# Usage:
+#   podman compose -f podman-compose.yml up -d
+#   DEV_API_PORT=3002 podman compose -f podman-compose.yml up -d
+#   podman compose -f podman-compose.yml down
+
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: router-ai-atius-dev:local
+    container_name: router-ai-atius-dev
+    cpus: 2.0
+    cpuset: "0-1"
+    mem_limit: "11987M"
+    memswap_limit: "11987M"
+    restart: unless-stopped
+    ports:
+      - "${DEV_API_PORT:-3001}:3000"
+    volumes:
+      - podman_dev_data:/data
+    environment:
+      - SQL_DSN=postgresql://root:123456@postgres:5432/new-api
+      - REDIS_CONN_STRING=redis://redis
+      - TZ=America/Sao_Paulo
+      - BATCH_UPDATE_ENABLED=true
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - podman-dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: router-ai-atius-dev-redis
+    cpus: 2.0
+    cpuset: "0-1"
+    mem_limit: "11987M"
+    memswap_limit: "11987M"
+    restart: unless-stopped
+    networks:
+      - podman-dev
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: router-ai-atius-dev-pg
+    cpus: 2.0
+    cpuset: "0-1"
+    mem_limit: "11987M"
+    memswap_limit: "11987M"
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: new-api
+    volumes:
+      - podman_dev_pg_data:/var/lib/postgresql/data
+    networks:
+      - podman-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d new-api"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  podman_dev_data:
+  podman_dev_pg_data:
+
+networks:
+  podman-dev:
+    driver: bridge

@@ -11,8 +11,11 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetRequestURLForImageGeneration(t *testing.T) {
@@ -34,6 +37,105 @@ func TestGetRequestURLForImageGeneration(t *testing.T) {
 	if got != want {
 		t.Fatalf("GetRequestURL() = %q, want %q", got, want)
 	}
+}
+
+func TestGetRequestURLForEmbeddings(t *testing.T) {
+	t.Parallel()
+
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeEmbeddings,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl: "https://api.minimax.io",
+		},
+	}
+
+	got, err := GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.minimax.io/v1/embeddings", got)
+}
+
+func TestGetRequestURLForEmbeddingsNormalizesBaseURLWithV1(t *testing.T) {
+	t.Parallel()
+
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeEmbeddings,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl: "https://api.minimax.io/v1",
+		},
+	}
+
+	got, err := GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.minimax.io/v1/embeddings", got)
+}
+
+func TestGetRequestURLForClaudeFormat(t *testing.T) {
+	t.Parallel()
+
+	info := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatClaude,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl: "https://api.minimax.io",
+		},
+	}
+
+	got, err := GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.minimax.io/anthropic/v1/messages", got)
+}
+
+func TestGetRequestURLForClaudeFormatNormalizesBaseURLWithV1(t *testing.T) {
+	t.Parallel()
+
+	info := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatClaude,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl: "https://api.minimax.io/v1",
+		},
+	}
+
+	got, err := GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.minimax.io/anthropic/v1/messages", got)
+}
+
+func TestConvertEmbeddingRequestUsesMiniMaxNativeShape(t *testing.T) {
+	t.Parallel()
+
+	adaptor := &Adaptor{}
+	request := dto.EmbeddingRequest{
+		Model: "embo-01",
+		Input: []string{"hello", "world"},
+		Type:  "db",
+	}
+
+	got, err := adaptor.ConvertEmbeddingRequest(nil, &relaycommon.RelayInfo{}, request)
+	require.NoError(t, err)
+
+	payload, ok := got.(embeddingRequest)
+	require.True(t, ok)
+	assert.Equal(t, "embo-01", payload.Model)
+	assert.Equal(t, []string{"hello", "world"}, payload.Texts)
+	assert.Equal(t, "db", payload.Type)
+}
+
+func TestConvertEmbeddingRequestDefaultsInvalidMiniMaxTypeToQuery(t *testing.T) {
+	t.Parallel()
+
+	adaptor := &Adaptor{}
+	request := dto.EmbeddingRequest{
+		Model: "embo-01",
+		Input: "hello",
+		Type:  "invalid",
+	}
+
+	got, err := adaptor.ConvertEmbeddingRequest(nil, &relaycommon.RelayInfo{}, request)
+	require.NoError(t, err)
+
+	payload, ok := got.(embeddingRequest)
+	require.True(t, ok)
+	assert.Equal(t, []string{"hello"}, payload.Texts)
+	assert.Equal(t, "query", payload.Type)
 }
 
 func TestConvertImageRequest(t *testing.T) {
@@ -82,6 +184,56 @@ func TestConvertImageRequest(t *testing.T) {
 	if payload["response_format"] != "url" {
 		t.Fatalf("response_format = %#v, want %q", payload["response_format"], "url")
 	}
+}
+
+func TestDoResponseForEmbedding(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeEmbeddings,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "embo-01",
+		},
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       ioNopCloser(`{"vectors":[[0.1,0.2],[0.3,0.4]],"total_tokens":7,"base_resp":{"status_code":0}}`),
+	}
+
+	usage, err := (&Adaptor{}).DoResponse(c, resp, info)
+	require.Nil(t, err)
+	require.NotNil(t, usage)
+
+	body := recorder.Body.String()
+	assert.Contains(t, body, `"object":"list"`)
+	assert.Contains(t, body, `"model":"embo-01"`)
+	assert.Contains(t, body, `"embedding":[0.1,0.2]`)
+	assert.Contains(t, body, `"prompt_tokens":7`)
+	assert.Equal(t, "minimax-embo-01", recorder.Header().Get("X-Embeddings-Adapter"))
+}
+
+func TestDoResponseForEmbeddingMapsMiniMaxRateLimitError(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	info := &relaycommon.RelayInfo{RelayMode: relayconstant.RelayModeEmbeddings}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       ioNopCloser(`{"base_resp":{"status_code":1002,"status_msg":"rate limit exceeded"}}`),
+	}
+
+	usage, err := (&Adaptor{}).DoResponse(c, resp, info)
+	require.Nil(t, usage)
+	require.NotNil(t, err)
+	assert.Equal(t, http.StatusTooManyRequests, err.StatusCode)
+	assert.Contains(t, err.Error(), "rate limit exceeded")
 }
 
 func TestDoResponseForImageGeneration(t *testing.T) {

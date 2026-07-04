@@ -1,0 +1,30 @@
+package openaicompat
+
+import (
+	"testing"
+
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestShouldChatCompletionsUseResponsesPolicyAlwaysEnablesCodex(t *testing.T) {
+	policy := model_setting.ChatCompletionsToResponsesPolicy{
+		Enabled:       false,
+		AllChannels:   false,
+		ModelPatterns: nil,
+	}
+
+	assert.True(t, ShouldChatCompletionsUseResponsesPolicy(policy, 5, constant.ChannelTypeCodex, "gpt-5.4"))
+}
+
+func TestShouldChatCompletionsUseResponsesPolicyStillHonorsGlobalPolicyForOtherChannels(t *testing.T) {
+	policy := model_setting.ChatCompletionsToResponsesPolicy{
+		Enabled:       true,
+		AllChannels:   true,
+		ModelPatterns: []string{`^gpt-5\.`},
+	}
+
+	assert.True(t, ShouldChatCompletionsUseResponsesPolicy(policy, 1, constant.ChannelTypeOpenAI, "gpt-5.4"))
+	assert.False(t, ShouldChatCompletionsUseResponsesPolicy(policy, 1, constant.ChannelTypeOpenAI, "MiniMax-M3"))
+}

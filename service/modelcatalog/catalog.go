@@ -15,22 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-var knownModelOrder = map[string]int{
-	"MiniMax-M2.7":           0,
-	"MiniMax-M2.5-highspeed": 1,
-	"MiniMax-M2.5":           2,
-	"deepseek-v4-pro":        3,
-	"deepseek-v4-flash":      4,
-	"gpt-5.5":                5,
-	"gpt-5.4":                6,
-	"gpt-5.4-mini":           7,
-	"gpt-5.3-codex-spark":    8,
-	"MiniMax-M3":             9,
-	"embo-01":                10,
-	"text-embedding-3-large": 11,
-	"text-embedding-3-small": 12,
-}
-
 var versionTokenPattern = regexp.MustCompile(`\d+(?:\.\d+)*`)
 
 func EndpointTypeLabel(endpointType constant.EndpointType) string {
@@ -255,11 +239,6 @@ func SortOpenAIModels(models []dto.OpenAIModels) {
 }
 
 func compareModels(leftName string, leftProvider string, leftEndpoints []constant.EndpointType, rightName string, rightProvider string, rightEndpoints []constant.EndpointType) int {
-	if leftRank, ok := knownModelOrder[leftName]; ok {
-		if rightRank, ok := knownModelOrder[rightName]; ok {
-			return leftRank - rightRank
-		}
-	}
 	leftCategory := categoryRank(leftName, leftEndpoints)
 	rightCategory := categoryRank(rightName, rightEndpoints)
 	if leftCategory != rightCategory {

@@ -70,6 +70,8 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 }
 
 func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, request *dto.GeneralOpenAIRequest) (*dto.Usage, *types.NewAPIError) {
+	clientRequestedStream := info.IsStream
+
 	chatJSON, err := common.Marshal(request)
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -96,17 +98,27 @@ func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, ad
 	if err != nil {
 		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
+	forcedCodexUpstreamStream := info.ChannelType == constant.ChannelTypeCodex && !clientRequestedStream
+	if forcedCodexUpstreamStream {
+		stream := true
+		responsesReq.Stream = &stream
+	}
 	info.AppendRequestConversion(types.RelayFormatOpenAIResponses)
 
 	savedRelayMode := info.RelayMode
 	savedRequestURLPath := info.RequestURLPath
+	savedIsStream := info.IsStream
 	defer func() {
 		info.RelayMode = savedRelayMode
 		info.RequestURLPath = savedRequestURLPath
+		info.IsStream = savedIsStream
 	}()
 
 	info.RelayMode = relayconstant.RelayModeResponses
 	info.RequestURLPath = "/v1/responses"
+	if forcedCodexUpstreamStream {
+		info.IsStream = true
+	}
 
 	convertedRequest, err := adaptor.ConvertOpenAIResponsesRequest(c, info, *responsesReq)
 	if err != nil {
@@ -152,8 +164,16 @@ func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, ad
 		return nil, newApiErr
 	}
 
-	if info.IsStream {
+	if clientRequestedStream {
 		usage, newApiErr := openaichannel.OaiResponsesToChatStreamHandler(c, info, httpResp)
+		if newApiErr != nil {
+			service.ResetStatusCode(newApiErr, statusCodeMappingStr)
+			return nil, newApiErr
+		}
+		return usage, nil
+	}
+	if forcedCodexUpstreamStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream") {
+		usage, newApiErr := openaichannel.OaiResponsesStreamToChatHandler(c, info, httpResp)
 		if newApiErr != nil {
 			service.ResetStatusCode(newApiErr, statusCodeMappingStr)
 			return nil, newApiErr

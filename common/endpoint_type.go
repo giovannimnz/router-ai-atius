@@ -1,10 +1,18 @@
 package common
 
-import "github.com/QuantumNous/new-api/constant"
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/constant"
+)
 
 // GetEndpointTypesByChannelType 获取渠道最优先端点类型（所有的渠道都支持 OpenAI 端点）
 func GetEndpointTypesByChannelType(channelType int, modelName string) []constant.EndpointType {
 	var endpointTypes []constant.EndpointType
+	lowerModelName := strings.ToLower(modelName)
+	if strings.Contains(lowerModelName, "embedding") || strings.HasPrefix(lowerModelName, "embo-") {
+		return []constant.EndpointType{constant.EndpointTypeEmbeddings}
+	}
 	switch channelType {
 	case constant.ChannelTypeJina:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeJinaRerank}
@@ -20,6 +28,20 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 		fallthrough
 	case constant.ChannelTypeAnthropic:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeAnthropic, constant.EndpointTypeOpenAI}
+	case constant.ChannelTypeMiniMax:
+		if modelName == "embo-01" {
+			endpointTypes = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+		} else {
+			endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic}
+		}
+	case constant.ChannelTypeDeepSeek:
+		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic}
+	case constant.ChannelTypeCodex:
+		if strings.HasPrefix(lowerModelName, "text-embedding-") {
+			endpointTypes = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+		} else {
+			endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
+		}
 	case constant.ChannelTypeVertexAi:
 		fallthrough
 	case constant.ChannelTypeGemini:

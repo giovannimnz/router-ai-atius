@@ -67,6 +67,16 @@ export type CodexCredentialRefreshResponse = {
   }
 }
 
+export type CodexCredentialMetadataResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    oauth: boolean
+    authenticated: boolean
+    expires_at?: string
+  }
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -273,6 +283,16 @@ export async function refreshCodexCredential(
     `/api/channel/${channelId}/codex/refresh`,
     {},
     channelActionConfig()
+  )
+  return res.data
+}
+
+export async function getCodexCredentialMetadata(
+  channelId: number
+): Promise<CodexCredentialMetadataResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/codex/credential`,
+    channelActionConfig({ disableDuplicate: true })
   )
   return res.data
 }

@@ -109,7 +109,7 @@ func (a *Adaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dt
 }
 
 func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.EmbeddingRequest) (any, error) {
-	return request, nil
+	return openAIEmbeddingRequestToMiniMax(request), nil
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
@@ -126,6 +126,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 	if info.RelayMode == constant.RelayModeImagesGenerations {
 		return miniMaxImageHandler(c, resp, info)
+	}
+	if info.RelayMode == constant.RelayModeEmbeddings {
+		return miniMaxEmbeddingHandler(c, info, resp)
 	}
 
 	switch info.RelayFormat {

@@ -175,7 +175,6 @@ func buildOpenAIModelFromCatalog(entry dto.ModelCatalogEntry) dto.OpenAIModels {
 	modelItem.QuotaType = entry.QuotaType
 	modelItem.BillingMode = entry.BillingMode
 	modelItem.BillingExpr = entry.BillingExpr
-	modelItem.PricingVersion = entry.PricingVersion
 	modelItem.EnableGroups = entry.EnableGroups
 	return modelItem
 }

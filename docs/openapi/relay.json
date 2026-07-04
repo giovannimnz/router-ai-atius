@@ -2426,13 +2426,6 @@
               "type": "string"
             }
           },
-          "supported_endpoint_type_labels": {
-            "type": "array",
-            "description": "Human-readable endpoint labels.",
-            "items": {
-              "type": "string"
-            }
-          },
           "pricing": {
             "type": "object",
             "description": "Public price values in USD per 1M tokens.",
@@ -2442,28 +2435,13 @@
               },
               "output": {
                 "type": "number"
-              },
-              "unit": {
-                "type": "string",
-                "example": "usd_per_1m_tokens"
               }
             }
-          },
-          "input_price": {
-            "type": "number",
-            "description": "Input price in USD per 1M tokens. Missing prices are represented as 0.00."
-          },
-          "output_price": {
-            "type": "number",
-            "description": "Output price in USD per 1M tokens. Missing prices are represented as 0.00."
           },
           "billing_mode": {
             "type": "string"
           },
           "billing_expr": {
-            "type": "string"
-          },
-          "pricing_version": {
             "type": "string"
           }
         }

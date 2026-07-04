@@ -32,14 +32,14 @@ func TestEmbeddingHelperPassesGovernorRequestMetadata(t *testing.T) {
 	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
 	common.SetContextKey(c, constant.ContextKeyChannelId, 77)
 	common.SetContextKey(c, constant.ContextKeyChannelName, "Local TEI - GTE Embeddings")
-	common.SetContextKey(c, constant.ContextKeyOriginalModel, "embedding-pt-v1")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "embedding-gte-v1")
 
 	request := &dto.EmbeddingRequest{
-		Model: "embedding-pt-v1",
+		Model: "embedding-gte-v1",
 		Input: []string{first, second},
 	}
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "embedding-pt-v1",
+		OriginModelName: "embedding-gte-v1",
 		Request:         request,
 	}
 
@@ -66,7 +66,7 @@ func TestEmbeddingHelperPassesGovernorRequestMetadata(t *testing.T) {
 	assert.Equal(t, constant.ChannelTypeOpenAI, info.ChannelType)
 	assert.Equal(t, "3", recorder.Header().Get("Retry-After"))
 	assert.Equal(t, "embedding_governor_queue_full", string(err.GetErrorCode()))
-	assert.Equal(t, "embedding-pt-v1", captured.Model)
+	assert.Equal(t, "embedding-gte-v1", captured.Model)
 	assert.Equal(t, 77, captured.ChannelID)
 	assert.Equal(t, "Local TEI - GTE Embeddings", captured.ChannelName)
 	assert.Equal(t, "batch", captured.Workload)

@@ -25,9 +25,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
+DB_BACKEND = os.environ.get("CLIANYTHING_DB_BACKEND", "host").lower()
 DB_CONTAINER = os.environ.get("CLIANYTHING_DB_CONTAINER", "postgres")
-DB_NAME = os.environ.get("CLIANYTHING_DB_NAME", "DBRouterAiAtius")
+DB_NAME = os.environ.get("CLIANYTHING_DB_NAME", "DBRouterAiAtius" if DB_BACKEND == "host" else "DBRouterAiAtius")
 DB_USER = os.environ.get("CLIANYTHING_DB_USER", "admin")
+HOST_PSQL_SUDO_USER = os.environ.get("CLIANYTHING_HOST_PSQL_SUDO_USER", "postgres")
 POD_NAME = os.environ.get("CLIANYTHING_POD_NAME", "atius-ai-router")
 DEFAULT_BASE_URL = os.environ.get("CLIANYTHING_BASE_URL", "http://127.0.0.1:3000")
 REPO_ROOT = Path(os.environ.get("CLIANYTHING_ROOT", "/home/ubuntu/GitHub/containers/router-ai-atius"))
@@ -36,8 +38,18 @@ MANAGEMENT_DOCS_ROOT = REPO_ROOT / "docs" / "atius-router-docs" / "content" / "d
 ENDPOINTS_MANIFEST = REPO_ROOT / "tools" / "clianything_endpoints.json"
 ENDPOINT_CLASSIFICATIONS = {"db-crud", "api-action", "read-only", "auth-flow", "external-webhook", "unsupported-safe"}
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-PHASE19_DEEPSEEK_ANTHROPIC_MODELS = {"deepseek-v4-flash", "deepseek-v4-pro"}
+PROVIDER_CONSOLIDATION_MINIMAX_MODELS = ("MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5-highspeed", "MiniMax-M2.5", "embo-01")
+PROVIDER_CONSOLIDATION_DEEPSEEK_MODELS = ("deepseek-v4-pro", "deepseek-v4-flash")
 PHASE19_MINIMAX_EMBEDDING_TYPES = {"query", "db"}
+LEGACY_SPLIT_CHANNEL_NAMES = {
+    "MiniMax - OpenAI-Compatible",
+    "MiniMax - Anthropic-Compatible",
+    "MiniMax - Embeddings",
+    "DeepSeek - OpenAI-Compatible",
+    "DeepSeek - Anthropic-Compatible",
+    "OpenAI - Embeddings",
+    "Codex - Embeddings",
+}
 
 
 @dataclass(frozen=True)
@@ -155,17 +167,18 @@ def run(cmd: list[str], *, input_text: str | None = None, check: bool = True) ->
     return proc
 
 
+def psql_base_cmd(binary: str) -> list[str]:
+    if DB_BACKEND == "podman":
+        return ["podman", "exec", "-i", DB_CONTAINER, binary, "-U", DB_USER, "-d", DB_NAME]
+    if DB_BACKEND == "host":
+        prefix = ["sudo", "-u", HOST_PSQL_SUDO_USER] if HOST_PSQL_SUDO_USER else []
+        return [*prefix, binary, "-d", DB_NAME]
+    raise CliError("CLIANYTHING_DB_BACKEND invalido: use 'host' ou 'podman'")
+
+
 def run_psql(sql: str, *, raw: bool = False) -> str:
     cmd = [
-        "podman",
-        "exec",
-        "-i",
-        DB_CONTAINER,
-        "psql",
-        "-U",
-        DB_USER,
-        "-d",
-        DB_NAME,
+        *psql_base_cmd("psql"),
         "-X",
         "-q",
         "-v",
@@ -227,6 +240,21 @@ def sql_literal(value: str) -> str:
             raise CliError(f"Arquivo para valor @ nao encontrado: {path}")
         value = path.read_text(encoding="utf-8")
     return "'" + value.replace("'", "''") + "'"
+
+
+def is_legacy_split_channel(name: str, base_url: str) -> bool:
+    normalized_name = name.strip()
+    normalized_base_url = base_url.strip().lower().rstrip("/")
+    if normalized_name in LEGACY_SPLIT_CHANNEL_NAMES:
+        return True
+    if normalized_name.startswith(("MiniMax - ", "DeepSeek - ")) and (
+        normalized_name.endswith("-Compatible") or normalized_name.endswith("- Embeddings")
+    ):
+        return True
+    return normalized_base_url in {
+        "https://api.minimax.io/anthropic",
+        "https://api.deepseek.com/anthropic",
+    }
 
 
 def normalize_resource(name: str) -> Resource:
@@ -366,14 +394,7 @@ def backup_table(resource: Resource) -> Path:
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     path = BACKUP_ROOT / f"{stamp}_{resource.table}.sql"
     cmd = [
-        "podman",
-        "exec",
-        DB_CONTAINER,
-        "pg_dump",
-        "-U",
-        DB_USER,
-        "-d",
-        DB_NAME,
+        *psql_base_cmd("pg_dump"),
         "--data-only",
         "--column-inserts",
         "-t",
@@ -487,124 +508,72 @@ def build_channel_insert_sql(
 
 
 def build_phase19_provider_actions(openai_api_key: str | None = None) -> list[tuple[Resource, str, str]]:
+    _ = openai_api_key
     actions: list[tuple[Resource, str, str]] = []
     channel_resource = normalize_resource("channels")
     abilities_resource = normalize_resource("abilities")
-    models_resource = normalize_resource("models")
 
-    for channel_id, new_name in [
-        (1, "MiniMax - OpenAI-Compatible"),
-        (2, "DeepSeek - OpenAI-Compatible"),
-        (3, "MiniMax - Anthropic-Compatible"),
-        (6, "MiniMax - Embeddings"),
-    ]:
-        actions.append(
-            (
-                channel_resource,
-                f"update channels set name = {sql_literal(new_name)} where id = {sql_literal(str(channel_id))} returning *",
-                f"rename channel {channel_id} -> {new_name}",
-            )
-        )
+    rename_codex_sql = textwrap.dedent(
+        """
+        update channels
+        set name = 'OpenAI - Codex'
+        where id = 5
+        returning *
+        """
+    ).strip()
+    actions.append((channel_resource, rename_codex_sql, "rename Codex channel -> OpenAI - Codex"))
 
-    deepseek_channel_update_sql = textwrap.dedent(
+    minimax_channel_sql = textwrap.dedent(
         """
         update channels
         set
-          key = (select c.key from channels c where c.id = 2 limit 1),
-          open_ai_organization = (select c.open_ai_organization from channels c where c.id = 2 limit 1),
-          test_model = (select c.test_model from channels c where c.id = 2 limit 1),
           status = 1,
-          name = 'DeepSeek - Anthropic-Compatible',
+          name = 'MiniMax',
           weight = 0,
-          base_url = 'https://api.deepseek.com/anthropic',
-          models = 'deepseek-v4-flash,deepseek-v4-pro',
+          base_url = 'https://api.minimax.io',
+          models = 'MiniMax-M3,MiniMax-M2.7,MiniMax-M2.5-highspeed,MiniMax-M2.5,embo-01',
           "group" = 'default',
-          used_quota = (select c.used_quota from channels c where c.id = 2 limit 1),
-          model_mapping = (select c.model_mapping from channels c where c.id = 2 limit 1),
-          status_code_mapping = (select c.status_code_mapping from channels c where c.id = 2 limit 1),
           priority = 0,
-          auto_ban = (select c.auto_ban from channels c where c.id = 2 limit 1),
-          other_info = (select c.other_info from channels c where c.id = 2 limit 1),
-          tag = (select c.tag from channels c where c.id = 2 limit 1),
-          setting = (select c.setting from channels c where c.id = 2 limit 1),
-          param_override = (select c.param_override from channels c where c.id = 2 limit 1),
-          header_override = (select c.header_override from channels c where c.id = 2 limit 1),
-          remark = (select c.remark from channels c where c.id = 2 limit 1),
-          channel_info = (select c.channel_info from channels c where c.id = 2 limit 1),
-          settings = (select c.settings from channels c where c.id = 2 limit 1),
-          type = 14
-        where name = 'DeepSeek - Anthropic-Compatible'
+          param_override = '',
+          remark = '2026-06-18: unified MiniMax OpenAI/Anthropic/Embeddings routing in Go; replaces channels 3 and 6 as active routes.',
+          type = 35
+        where id = 1
         returning *
         """
     ).strip()
-    actions.append((channel_resource, deepseek_channel_update_sql, "update existing DeepSeek Anthropic-compatible channel"))
+    actions.append((channel_resource, minimax_channel_sql, "consolidate MiniMax channel"))
 
-    deepseek_channel_insert_sql = textwrap.dedent(
+    deepseek_channel_sql = textwrap.dedent(
         """
-        insert into channels (
-          key, open_ai_organization, test_model, status, name, weight,
-          created_time, test_time, response_time, base_url, other, balance,
-          balance_updated_time, models, "group", used_quota, model_mapping,
-          status_code_mapping, priority, auto_ban, other_info, tag, setting,
-          param_override, header_override, remark, channel_info, settings, type
-        )
-        select
-          c.key,
-          c.open_ai_organization,
-          c.test_model,
-          c.status,
-          'DeepSeek - Anthropic-Compatible',
-          c.weight,
-          c.created_time,
-          c.test_time,
-          c.response_time,
-          'https://api.deepseek.com/anthropic',
-          c.other,
-          c.balance,
-          c.balance_updated_time,
-          'deepseek-v4-flash,deepseek-v4-pro',
-          c."group",
-          c.used_quota,
-          c.model_mapping,
-          c.status_code_mapping,
-          c.priority,
-          c.auto_ban,
-          c.other_info,
-          c.tag,
-          c.setting,
-          c.param_override,
-          c.header_override,
-          c.remark,
-          c.channel_info,
-          c.settings,
-          14
-        from channels c
-        where c.id = 2
-          and not exists (select 1 from channels where name = 'DeepSeek - Anthropic-Compatible')
+        update channels
+        set
+          status = 1,
+          name = 'DeepSeek',
+          weight = 0,
+          base_url = 'https://api.deepseek.com',
+          models = 'deepseek-v4-pro,deepseek-v4-flash',
+          "group" = 'default',
+          priority = 0,
+          remark = '2026-06-18: unified DeepSeek OpenAI/Anthropic routing in Go; replaces channel 7 as active route.',
+          type = 43
+        where id = 2
         returning *
         """
     ).strip()
-    actions.append((channel_resource, deepseek_channel_insert_sql, "create DeepSeek Anthropic-compatible channel"))
+    actions.append((channel_resource, deepseek_channel_sql, "consolidate DeepSeek channel"))
 
-    deepseek_abilities_sql = textwrap.dedent(
+    minimax_abilities_sql = textwrap.dedent(
         f"""
         insert into abilities ("group", model, channel_id, enabled, priority, weight, tag)
         select
           'default',
           model_name,
-          channel_id,
+          1,
           true,
           0,
           0,
           null
-        from (
-          select id as channel_id
-          from channels
-          where name = 'DeepSeek - Anthropic-Compatible'
-          order by id desc
-          limit 1
-        ) c
-        cross join (values {", ".join(f"('{model}')" for model in sorted(PHASE19_DEEPSEEK_ANTHROPIC_MODELS))}) as m(model_name)
+        from (values {", ".join(f"('{model}')" for model in PROVIDER_CONSOLIDATION_MINIMAX_MODELS)}) as m(model_name)
         on conflict ("group", model, channel_id) do update
         set enabled = excluded.enabled,
             priority = excluded.priority,
@@ -613,114 +582,51 @@ def build_phase19_provider_actions(openai_api_key: str | None = None) -> list[tu
         returning *
         """
     ).strip()
-    actions.append((abilities_resource, deepseek_abilities_sql, "add DeepSeek Anthropic abilities"))
+    actions.append((abilities_resource, minimax_abilities_sql, "add consolidated MiniMax abilities"))
 
-    if openai_api_key:
-        openai_embeddings_update_sql = textwrap.dedent(
-            f"""
-            update channels
-            set
-              key = {sql_literal(openai_api_key)},
-              status = 1,
-              name = 'OpenAI - Embeddings',
-              weight = 0,
-              base_url = 'https://api.openai.com/v1',
-              models = 'text-embedding-3-small,text-embedding-3-large',
-              "group" = 'default',
-              priority = 0,
-              remark = NULL,
-              type = 1
-            where name = 'OpenAI - Embeddings'
-            returning *
-            """
-        ).strip()
-        openai_embeddings_insert_sql = textwrap.dedent(
-            f"""
-            insert into channels (
-              key, status, name, weight, base_url, models, "group",
-              priority, remark, type
-            )
-            select
-              {sql_literal(openai_api_key)},
-              1,
-              'OpenAI - Embeddings',
-              0,
-              'https://api.openai.com/v1',
-              'text-embedding-3-small,text-embedding-3-large',
-              'default',
-              0,
-              NULL,
-              1
-            where not exists (
-              select 1 from channels where name = 'OpenAI - Embeddings'
-            )
-            returning *
-            """
-        ).strip()
-        openai_models_update_sql = textwrap.dedent(
-            """
-            update models
-            set
-              description = case
-                when model_name = 'text-embedding-3-small' then 'OpenAI text-embedding-3-small'
-                else 'OpenAI text-embedding-3-large'
-              end,
-              endpoints = '["embeddings"]',
-              status = 1,
-              sync_official = 0,
-              tags = 'Embeddings,OpenAI',
-              vendor_id = null
-            where model_name in ('text-embedding-3-small', 'text-embedding-3-large')
-              and deleted_at is null
-            returning *
-            """
-        ).strip()
-        openai_models_insert_small_sql = textwrap.dedent(
-            """
-            insert into models (model_name, description, endpoints, status, sync_official, tags, vendor_id)
-            select 'text-embedding-3-small', 'OpenAI text-embedding-3-small', '["embeddings"]', 1, 0, 'Embeddings,OpenAI', null
-            where not exists (
-              select 1 from models where model_name = 'text-embedding-3-small' and deleted_at is null
-            )
-            returning *
-            """
-        ).strip()
-        openai_models_insert_large_sql = textwrap.dedent(
-            """
-            insert into models (model_name, description, endpoints, status, sync_official, tags, vendor_id)
-            select 'text-embedding-3-large', 'OpenAI text-embedding-3-large', '["embeddings"]', 1, 0, 'Embeddings,OpenAI', null
-            where not exists (
-              select 1 from models where model_name = 'text-embedding-3-large' and deleted_at is null
-            )
-            returning *
-            """
-        ).strip()
-        openai_abilities_sql = textwrap.dedent(
-            """
-            insert into abilities ("group", model, channel_id, enabled, priority, weight, tag)
-            select 'default', model_name, channel_id, true, 0, 0, null
-            from (
-              select id as channel_id from channels where name = 'OpenAI - Embeddings' order by id desc limit 1
-            ) c
-            cross join (values ('text-embedding-3-small'), ('text-embedding-3-large')) as m(model_name)
-            on conflict ("group", model, channel_id) do update
-            set enabled = excluded.enabled,
-                priority = excluded.priority,
-                weight = excluded.weight,
-                tag = excluded.tag
-            returning *
-            """
-        ).strip()
-        actions.extend(
-            [
-                (channel_resource, openai_embeddings_update_sql, "update existing OpenAI embeddings channel"),
-                (channel_resource, openai_embeddings_insert_sql, "create OpenAI embeddings channel"),
-                (models_resource, openai_models_update_sql, "update existing OpenAI embedding models"),
-                (models_resource, openai_models_insert_small_sql, "create OpenAI embedding model text-embedding-3-small"),
-                (models_resource, openai_models_insert_large_sql, "create OpenAI embedding model text-embedding-3-large"),
-                (abilities_resource, openai_abilities_sql, "add OpenAI embeddings abilities"),
-            ]
-        )
+    deepseek_abilities_sql = textwrap.dedent(
+        f"""
+        insert into abilities ("group", model, channel_id, enabled, priority, weight, tag)
+        select
+          'default',
+          model_name,
+          2,
+          true,
+          0,
+          0,
+          null
+        from (values {", ".join(f"('{model}')" for model in PROVIDER_CONSOLIDATION_DEEPSEEK_MODELS)}) as m(model_name)
+        on conflict ("group", model, channel_id) do update
+        set enabled = excluded.enabled,
+            priority = excluded.priority,
+            weight = excluded.weight,
+            tag = excluded.tag
+        returning *
+        """
+    ).strip()
+    actions.append((abilities_resource, deepseek_abilities_sql, "add consolidated DeepSeek abilities"))
+
+    disable_channels_sql = textwrap.dedent(
+        """
+        update channels
+        set
+          status = 2,
+          remark = '2026-06-18: disabled after Go-native provider consolidation; route through MiniMax, DeepSeek, or OpenAI - Codex.'
+        where id in (3, 6, 7, 8)
+        returning *
+        """
+    ).strip()
+    actions.append((channel_resource, disable_channels_sql, "disable merged provider channels"))
+
+    disable_abilities_sql = textwrap.dedent(
+        """
+        update abilities
+        set enabled = false
+        where channel_id in (3, 6, 7, 8)
+        returning *
+        """
+    ).strip()
+    actions.append((abilities_resource, disable_abilities_sql, "disable merged provider abilities"))
 
     return actions
 
@@ -916,7 +822,6 @@ def cmd_status(args: argparse.Namespace) -> None:
     )
     for label, url in [
         ("backend", f"{DEFAULT_BASE_URL}/api/status"),
-        ("model-detailed", "http://127.0.0.1:3001/health"),
         ("v1-models", f"{DEFAULT_BASE_URL}/v1/models"),
     ]:
         code, payload = http_json(url)
@@ -925,10 +830,6 @@ def cmd_status(args: argparse.Namespace) -> None:
             status = "ok"
         elif code == 200:
             status = "ok"
-        if label == "model-detailed" and isinstance(payload, dict):
-            health_status = payload.get("status")
-            if health_status and health_status != "healthy":
-                status = "degraded"
         rows.append({"check": "http", "target": label, "status": status, "detail": f"{code} {format_scalar(payload)}"})
     count_sql = """
         select 'channels' as item, count(*) as count from channels
@@ -1000,13 +901,15 @@ def build_embeddings_overview_sql() -> str:
           where model in (
             'embo-01',
             'text-embedding-3-small',
-            'text-embedding-3-large'
+            'text-embedding-3-large',
+            'embedding-gte-v1'
           )
           group by channel_id
         ) a on a.channel_id = c.id
         where c.name like '%Embeddings%'
            or c.models ilike '%embo-01%'
            or c.models ilike '%text-embedding-3%'
+           or c.models ilike '%embedding-gte-v1%'
         order by c.status desc, c.id asc
     """
 
@@ -1259,6 +1162,11 @@ def cmd_channel(args: argparse.Namespace) -> None:
         invoke_manifest_endpoint(args, "GET", "/api/channel/search", query=[f"keyword={args.keyword}"])
         return
     if action == "clone-keyed":
+        if is_legacy_split_channel(args.name, args.base_url) and not args.allow_legacy_split:
+            raise CliError(
+                "clone-keyed bloqueou um canal legado separado. Use canais unificados MiniMax/DeepSeek/OpenAI - Codex "
+                "ou informe --allow-legacy-split para uma acao manual excepcional."
+            )
         sql = write_channel_from_source_key(
             source_id=args.source_id,
             name=args.name,
@@ -1282,11 +1190,7 @@ def cmd_channel(args: argparse.Namespace) -> None:
         print("Applied: clone-keyed")
         return
     if action == "phase19-apply":
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if openai_api_key is None:
-            print("OpenAI - Embeddings: CONDITIONAL/BLOCK (OPENAI_API_KEY ausente; mutacao ignorada)")
-        preview_key = "<redacted>" if (openai_api_key and not args.execute) else openai_api_key
-        actions = build_phase19_provider_actions(preview_key)
+        actions = build_phase19_provider_actions()
         run_sql_actions(args, actions)
         return
     raise CliError(f"Acao de channel desconhecida: {action}")
@@ -1775,8 +1679,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--group", default="default")
     p.add_argument("--priority", type=int, default=0)
     p.add_argument("--weight", type=int, default=0)
-    p.add_argument("--status", type=int, default=1)
+    p.add_argument("--status", type=int, default=2, help="Status inicial; default 2 deixa o clone desabilitado.")
     p.add_argument("--remark")
+    p.add_argument("--allow-legacy-split", action="store_true", help="Permite criar canal legado separado em caso excepcional.")
     p.add_argument("--execute", action="store_true", help="Aplica a escrita e faz backup antes.")
     add_common_format(p)
     p.set_defaults(func=cmd_channel)
@@ -1800,7 +1705,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("keyword")
     add_api_transport_args(p, execute=False)
     p.set_defaults(func=cmd_channel)
-    p = channel_sub.add_parser("phase19-apply", help="Aplica o estado da Phase 19 para providers/embeddings.")
+    p = channel_sub.add_parser(
+        "phase19-apply",
+        help="Aplica o estado consolidado Go-native de providers/embeddings (compat legado Phase 19).",
+    )
     p.add_argument("--execute", action="store_true", help="Aplica a escrita e faz backup antes.")
     add_common_format(p)
     p.set_defaults(func=cmd_channel)

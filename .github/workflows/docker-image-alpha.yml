@@ -46,10 +46,41 @@ jobs:
       - name: Normalize GHCR repository
         run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
+      - name: Resolve image targets
+        id: image_targets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          ghcr_image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          dockerhub_image="calciumion/new-api"
+
+          echo "ghcr_image=${ghcr_image}" >> "$GITHUB_OUTPUT"
+          echo "dockerhub_image=${dockerhub_image}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "tags<<EOF"
+            echo "${ghcr_image}:alpha-${{ matrix.arch }}"
+            echo "${ghcr_image}:${VERSION}-${{ matrix.arch }}"
+            if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+              echo "${dockerhub_image}:alpha-${{ matrix.arch }}"
+              echo "${dockerhub_image}:${VERSION}-${{ matrix.arch }}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DockerHub secrets are not configured; publishing GHCR only."
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to Docker Hub
+        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -67,8 +98,8 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: |
-            calciumion/new-api
-            ghcr.io/${{ env.GHCR_REPOSITORY }}
+            ${{ steps.image_targets.outputs.dockerhub_image }}
+            ${{ steps.image_targets.outputs.ghcr_image }}
 
       - name: Build & push single-arch (to both registries)
         id: build
@@ -77,11 +108,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            calciumion/new-api:alpha-${{ matrix.arch }}
-            calciumion/new-api:${{ steps.version.outputs.value }}-${{ matrix.arch }}
-            ghcr.io/${{ env.GHCR_REPOSITORY }}:alpha-${{ matrix.arch }}
-            ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+          tags: ${{ steps.image_targets.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -93,15 +120,19 @@ jobs:
 
       - name: Sign image with cosign
         run: |
-          cosign sign --yes calciumion/new-api@${{ steps.build.outputs.digest }}
-          cosign sign --yes ghcr.io/${{ env.GHCR_REPOSITORY }}@${{ steps.build.outputs.digest }}
+          cosign sign --yes "${{ steps.image_targets.outputs.ghcr_image }}@${{ steps.build.outputs.digest }}"
+          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
+            cosign sign --yes "${{ steps.image_targets.outputs.dockerhub_image }}@${{ steps.build.outputs.digest }}"
+          fi
 
       - name: Output digest
         run: |
           echo "### Docker Image Digest (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "calciumion/new-api:alpha-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          echo "ghcr.io/${{ env.GHCR_REPOSITORY }}:alpha-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.image_targets.outputs.ghcr_image }}:alpha-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
+            echo "${{ steps.image_targets.outputs.dockerhub_image }}:alpha-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
@@ -121,6 +152,21 @@ jobs:
       - name: Normalize GHCR repository
         run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
+      - name: Resolve image targets
+        id: image_targets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "ghcr_image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "dockerhub_image=calciumion/new-api" >> "$GITHUB_OUTPUT"
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DockerHub secrets are not configured; publishing GHCR manifest only."
+          fi
+
       - name: Determine alpha version
         id: version
         run: |
@@ -129,12 +175,14 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Log in to Docker Hub
+        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create & push manifest (Docker Hub - alpha)
+        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
         run: |
           docker buildx imagetools create \
             -t calciumion/new-api:alpha \
@@ -142,6 +190,7 @@ jobs:
             calciumion/new-api:alpha-arm64
 
       - name: Create & push manifest (Docker Hub - versioned alpha)
+        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
         run: |
           docker buildx imagetools create \
             -t calciumion/new-api:${VERSION} \
@@ -173,7 +222,9 @@ jobs:
         run: |
           echo "### Multi-arch Manifest Digests" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          docker buildx imagetools inspect calciumion/new-api:alpha >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
+            docker buildx imagetools inspect calciumion/new-api:alpha >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+          fi
           docker buildx imagetools inspect ghcr.io/${GHCR_REPOSITORY}:alpha >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

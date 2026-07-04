@@ -39,6 +39,7 @@
 
 - A recuperacao da Fase 24 trabalha com o objetivo de voltar para a identidade canonica `DBRouterAiAtius` no host, sempre via PgBouncer.
 - O banco `newapi` atual deve ser preservado intacto ate a validacao final do cutover.
+- `newapi permanece intacto para rollback` durante toda a Fase 24, inclusive enquanto o candidato `DBRouterAiAtius` e montado e validado.
 - O contrato desta fase e copiar ou restaurar para um destino candidato, nunca mutar cegamente o banco live sem backup fresco validado.
 
 ## Backups obrigatorios
@@ -70,6 +71,7 @@ Sem esses artefatos, nenhuma restauracao, rename ou repoint de runtime pode come
 ## Rollback
 
 - Se qualquer gate falhar, o rollback deve usar o backup fresco da Fase 24 como fonte primaria de restauracao.
+- `não fazer DROP nem rename destrutivo de newapi nesta fase`.
 - O passo de rollback minimo e:
   - manter o banco `newapi` original intocado;
   - recolocar o runtime no target anterior via PgBouncer;

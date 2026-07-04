@@ -1,14 +1,14 @@
 ---
-status: diagnosed
+status: complete
 phase: 24-router-db-catalog-recovery-and-canonical-host-db
 source: 24-01-SUMMARY.md, 24-02-SUMMARY.md, 24-03-SUMMARY.md, 24-04-SUMMARY.md
 started: 2026-07-04T16:59:28-03:00
-updated: 2026-07-04T18:35:17-03:00
+updated: 2026-07-04T19:34:30-03:00
 ---
 
 ## Current Test
 
-[testing complete - 1 diagnosed runtime issue]
+[testing complete - production deploy verified]
 
 ## Tests
 
@@ -122,15 +122,15 @@ evidence:
 
 ### 14. Authenticated live `/v1/models` payload
 expected: authenticated live `GET /v1/models` returns HTTP 200 and the public payload has no removed fields.
-result: issue
-severity: major
+result: pass
 evidence:
   - HashiCorp Vault path `kv/atius/srv1/shell-exports/home-ubuntu-merged` provided `ATIUS_ROUTER_API_KEY`; the value was mapped to `ATIUS_ROUTER_TOKEN` only in the ephemeral validation shell and was not printed.
-  - `curl -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models` returned HTTP 200 with `count=7`, but `removed_fields_present=true`.
-  - `curl -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" https://router.atius.com.br/v1/models` returned HTTP 200 with `count=7`, but `removed_fields_present=true`.
-  - Removed fields still present in both local and public runtime responses: `enable_groups`, `input_price`, `output_price`, `pricing.unit`, `quota_type`, `supported_endpoint_type_labels`.
-  - Active runtime container: `image=ghcr.io/giovannimnz/router-ai-atius:latest`, `image_id=079481f584d19335c9cb5fc7071ba14bbcce541a2424d39ecfac26c8283eae57`, `started=2026-07-04 15:29:25 -0300`.
-diagnosis: source/tests and the newly built image contain the expected contract, but the active runtime is still serving an older `ghcr.io/giovannimnz/router-ai-atius:latest` image. A deploy/promote/restart of the validated image is still required before live `/v1/models` can pass.
+  - `PYTHONPATH=/home/ubuntu/GitHub/omni-srv-admin/cli:/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/cli FORK_SYNC_SCRIPT_TIMEOUT=3600 python3 -m omni deploy run atius-router --repo-path /home/ubuntu/GitHub/containers/router-ai-atius` returned `status=success`.
+  - Runtime image after deploy: `ghcr.io/giovannimnz/router-ai-atius:latest`, image id `ffee01516ddf7c76549430bf9cc53eeed74420525f0986e226b5babaa006d5f3`, version header `0.12.15.1`.
+  - Authenticated public `GET https://router.atius.com.br/v1/models` returned HTTP 200 with `root_keys=data` and `model_count=7`.
+  - `forbidden_field_violations=[]` for `input_price`, `output_price`, `quota_type`, `enable_groups`, and `supported_endpoint_type_labels`.
+  - `pricing_unit_violations=[]`.
+  - Sample GPT pricing after deploy: `gpt-5.5` input `5` output `30`; `gpt-5.4` input `5` output `22.5`; `gpt-5.4-mini` input `0.75` output `4.5`; `gpt-5.3-codex-spark` input `1.75` output `14`.
 
 ### 15. Authenticated live embeddings smoke
 expected: authenticated public `POST /v1/embeddings` with `embedding-gte-v1` returns OpenAI-shaped embeddings with dimension `768`.
@@ -143,19 +143,12 @@ evidence:
 ## Summary
 
 total: 15
-passed: 14
-issues: 1
+passed: 15
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-- truth: authenticated live `GET /v1/models` returns HTTP 200 and the public payload has no removed fields
-  status: failed
-  severity: major
-  root_cause: the active user systemd unit still runs `ghcr.io/giovannimnz/router-ai-atius:latest` image id `079481f584d19335c9cb5fc7071ba14bbcce541a2424d39ecfac26c8283eae57`, while the validated local image is `localhost/router-ai-atius:validation-20260704-vault` id `eca8b8eedef82f6c78cd9483416a3c0e7acd74ddac30499283194ed1d413c3b2`.
-  missing:
-    - promote or deploy the validated image to the production unit image reference
-    - restart `container-router-ai-atius.service`
-    - rerun the authenticated `/v1/models` field probe using `ATIUS_ROUTER_API_KEY` from HashiCorp Vault
+None.

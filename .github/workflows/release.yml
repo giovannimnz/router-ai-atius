@@ -1,23 +1,25 @@
-name: Release
+name: Release (Linux, macOS, Windows)
+permissions:
+  contents: write
 
 on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'reason'
+        required: false
   push:
     tags:
-      - 'v*'
-
-permissions:
-  contents: read
-  packages: write
-  attestations: write
+      - '*'
+      - '!*-alpha*'
 
 jobs:
-  release:
+  linux:
+    name: Linux Release
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'giovannimnz/router-ai-atius' }}
-    environment: release
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
       - name: Determine Version
@@ -27,22 +29,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
-      - name: Build Frontend (default)
+      - name: Build Frontends
         env:
           CI: ""
         run: |
-          cd web/default
-          bun install
-          DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
-      - name: Build Frontend (classic)
-        env:
-          CI: ""
-        run: |
-          cd web/classic
-          bun install
-          VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
+          ./scripts/ci-build-frontends.sh "$VERSION"
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -59,95 +50,37 @@ jobs:
       - name: Generate checksums
         run: sha256sum new-api-* > checksums-linux.txt
 
-      - name: Read VERSION
-        id: version
-        run: |
-          VERSION_CONTENT=$(cat VERSION 2>/dev/null || echo "${GITHUB_REF_NAME#v}")
-          echo "VERSION=$VERSION_CONTENT" >> $GITHUB_OUTPUT
-          echo "TAG_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Log version info
-        run: |
-          echo "Tag: ${{ github.ref_name }}"
-          echo "VERSION file: ${{ steps.version.outputs.VERSION }}"
-          echo "Tag version: ${{ steps.version.outputs.TAG_VERSION }}"
-
-      - name: Validate version match
-        run: |
-          FILE_VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_VERSION="${{ steps.version.outputs.TAG_VERSION }}"
-          if [[ "$FILE_VERSION" != "$TAG_VERSION" ]]; then
-            echo "⚠️ Version mismatch: VERSION file is '$FILE_VERSION' but tag is '$TAG_VERSION'"
-            echo "Updating VERSION file to match tag..."
-            echo "$TAG_VERSION" > VERSION
-          fi
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          version: ${{ steps.version.outputs.TAG_VERSION }}
-          generate_release_notes: true
-          files: VERSION
+          files: |
+            new-api-*
+            checksums-linux.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Release summary
+  macos:
+    name: macOS Release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Determine Version
         run: |
           VERSION=$(git describe --tags)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
-      - name: Build Frontend (default)
+      - name: Build Frontends
         env:
           CI: ""
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
-          cd web/default
-          bun install
-          DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
-      - name: Build Frontend (classic)
-        env:
-          CI: ""
-        run: |
-          cd web/classic
-          bun install
-          VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
+          ./scripts/ci-build-frontends.sh "$VERSION"
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -187,22 +120,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
-      - name: Build Frontend (default)
+      - name: Build Frontends
         env:
           CI: ""
         run: |
-          cd web/default
-          bun install
-          DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
-      - name: Build Frontend (classic)
-        env:
-          CI: ""
-        run: |
-          cd web/classic
-          bun install
-          VITE_REACT_APP_VERSION=$VERSION bun run build
-          cd ../..
+          ./scripts/ci-build-frontends.sh "$VERSION"
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:

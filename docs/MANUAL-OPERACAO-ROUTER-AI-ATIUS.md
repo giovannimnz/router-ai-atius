@@ -179,7 +179,7 @@ Estado atualizado em 2026-07-05:
 - Implementacao principal: `service/embeddinggovernor/` e integracao em `relay/embedding_handler.go`.
 - Escopo default: somente `embedding-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
 - `embedding-gte-v1` e o unico alias publico governado; `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` nao muda durante a recuperacao/catalog restore.
-- Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
+- Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/capacidade/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
 - Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
   2. thresholds locais derivados do request (`InputCount >= 2` ou `InputChars >= 12000`).
@@ -192,8 +192,10 @@ Estado atualizado em 2026-07-05:
 - Uma unica amostra ruim de `/health` nao reduz concorrencia e nao arma cooldown. O governor apenas incrementa `health_bad_windows`.
 - Apos `3` janelas ruins consecutivas (default minimo), o governor bloqueia scale-up. Cada janela ruim adicional pode reduzir a concorrencia em `1` ate `min=1`. Uma amostra saudavel reseta o contador de janelas ruins.
 - Isso existe porque `/health` curto pode atrasar durante inferencia CPU-bound sem erro real de embeddings. O sinal de health e deliberadamente mais conservador que o sinal do trafego real.
+- Guardrail de capacidade dos pods TEI tambem existe, read-only e disabled-by-default. Ele so liga quando `EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=true` e `EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL` apontam para um endpoint interno sem auth extra que exponha uso e pods. Se `capacity_used_percent`, `cpu_usage_percent` ou `memory_usage_percent` estiverem acima de `EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80`, o governor bloqueia scale-up imediatamente; depois de `EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD=3` janelas ruins, reduz concorrencia gradualmente em `1` ate `min=1`. Pods degradados (`pods_ready < pods_total`) tambem bloqueiam scale-up.
+- O capacity probe aceita JSON ou texto estilo Prometheus. Campos reconhecidos incluem `capacity_used_percent`, `capacity_free_percent`, `cpu_usage_percent`, `memory_usage_percent`, `pods_ready` e `pods_total`.
 - Quando a fila esta cheia ou expira antes de despachar para o upstream, o router retorna `429` com codigo `embedding_governor_queue_full`, `embedding_governor_batch_queue_full` ou `embedding_governor_queue_timeout`.
-- Snapshot/telemetria agregada relevante do governor: `interactive_average_latency_ms`, `batch_average_latency_ms`, `interactive_completed`, `batch_completed`, `interactive_slow`, `batch_slow`, `health_probe_enabled`, `health_bad_windows`, `last_health_status`, `last_health_latency_ms`, `last_health_at`. Nenhum desses campos deve carregar input bruto, token ou URL secreta.
+- Snapshot/telemetria agregada relevante do governor: `interactive_average_latency_ms`, `batch_average_latency_ms`, `interactive_completed`, `batch_completed`, `interactive_slow`, `batch_slow`, `health_probe_enabled`, `health_bad_windows`, `last_health_status`, `last_health_latency_ms`, `last_health_at`, `capacity_probe_enabled`, `capacity_bad_windows`, `last_capacity_status`, `last_capacity_used_percent`, `last_capacity_free_percent`, `last_capacity_ready_pods`, `last_capacity_total_pods`, `last_capacity_latency_ms`, `last_capacity_at`. Nenhum desses campos deve carregar input bruto, token ou URL secreta.
 
 Variaveis de ambiente suportadas:
 
@@ -224,6 +226,12 @@ EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT=30s
 EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL=30s
 EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3
 EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=false
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_TIMEOUT=30s
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_INTERVAL=30s
+EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80
+EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD=3
 ```
 
 Significado operacional dos envs novos:
@@ -238,6 +246,12 @@ Significado operacional dos envs novos:
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL=30s`: cadencia default entre probes. Tambem e normalizada para pelo menos `30s`.
 - `EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3`: minima quantidade de janelas ruins consecutivas antes de bloquear scale-up e comecar a descer gradualmente.
 - `EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s`: resposta `200` acima disso conta como janela ruim, mas ainda sem cooldown imediato.
+- `EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=false`: default seguro. Sem isso, o governor nao consulta endpoint de capacidade.
+- `EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=`: endpoint read-only interno de capacidade dos pods TEI. Se vazio, invalido ou exigir auth por URL, o probe fica desabilitado.
+- `EMBEDDING_GOVERNOR_CAPACITY_PROBE_TIMEOUT=30s`: timeout minimo seguro para consulta de capacidade.
+- `EMBEDDING_GOVERNOR_CAPACITY_PROBE_INTERVAL=30s`: cadencia default entre consultas de capacidade.
+- `EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80`: acima ou igual a esse uso agregado, o governor nao aumenta concorrencia.
+- `EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD=3`: quantidade de janelas ruins consecutivas antes de reduzir concorrencia; o bloqueio de scale-up ocorre ja na primeira janela ruim.
 
 Base empirica dos threads `019f010f-421b-7243-ac95-46c2b287e868` e `019f017f-51fb-7ea1-972a-d4b91434be7d`, que justificam o guardrail conservador:
 
@@ -248,13 +262,13 @@ Base empirica dos threads `019f010f-421b-7243-ac95-46c2b287e868` e `019f017f-51f
 - O ajuste que mudou o envelope operacional foi: `max_client_batch_size=4`, probes mais tolerantes, health monitorado com timeout de `30s`, pod novo `1/1`, `restarts=0`, limite `3 CPU / 12Gi`.
 - Depois do ajuste de probes, `concurrency=1`, `2`, `3` e `4` rodaram com `errors=0` e `restarts=0`; `concurrency=4` progrediu por centenas de paginas, com checkpoints de `Embedded` subindo de `598` ate pelo menos `1590`.
 - No trecho estavel pos-probes, TEI ficou tipicamente em `~1.3` a `1.7` CPU e `~1.4GiB` a `2.3GiB` RSS, com warmup perto de `7.9GiB`, abaixo do limite de `12Gi`. Picos de load/memoria do host vieram em parte de processos externos, nao do TEI.
-- Decisao posterior de operacao diaria: com o governor em producao, o teto estatico `max=3` e a janela manual `4` foram removidos. Para permitir aumento horizontal de pods TEI, o default do router passa a ser `min=1`, `initial=2`, `max=0`, `batch_concurrency=0`; a autorregulacao fica em cooldown, slow-request, EWMA de latencia, health guardrail e limites de fila. Um timeout isolado de `/health` nao deve sozinho rebaixar o sistema.
+- Decisao posterior de operacao diaria: com o governor em producao, o teto estatico `max=3` e a janela manual `4` foram removidos. Para permitir aumento horizontal de pods TEI, o default do router passa a ser `min=1`, `initial=2`, `max=0`, `batch_concurrency=0`; a autorregulacao fica em cooldown, slow-request, EWMA de latencia, health guardrail, capacity guardrail e limites de fila. Um timeout isolado de `/health` nao deve sozinho rebaixar o sistema.
 
 Validacao local e gate operacional apos mudanca no governor:
 
 ```bash
-# Testes focados do guardrail de health/hysteresis
-/usr/local/go/bin/go test ./service/embeddinggovernor -run '^(TestHealthProbeDisabledByDefault|TestHealthHysteresisIgnoresSingleBadSample|TestHealthHysteresisReducesAfterConsecutiveBadWindows|TestHealthHysteresisHealthySampleResetsBadWindows)$' -count=1
+# Testes focados dos guardrails de health/capacidade/hysteresis
+/usr/local/go/bin/go test ./service/embeddinggovernor -run '^(TestHealthProbeDisabledByDefault|TestHealthHysteresisIgnoresSingleBadSample|TestHealthHysteresisReducesAfterConsecutiveBadWindows|TestHealthHysteresisHealthySampleResetsBadWindows|TestCapacityProbeBlocksScaleUpImmediatelyAndReducesAfterThreshold|TestCapacityProbeHealthySampleResetsGuardrail|TestCapacityProbeBlocksWhenPodsAreDegraded|TestDefaultCapacityProbeParsesJSONUsageAndPods|TestCapacityProbeParsesPrometheusTextUsageAndPods)$' -count=1
 
 # Regressao do pacote do governor
 /usr/local/go/bin/go test ./service/embeddinggovernor -count=1

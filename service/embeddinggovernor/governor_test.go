@@ -3,6 +3,7 @@ package embeddinggovernor
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -271,6 +272,12 @@ func TestHealthProbeDisabledByDefault(t *testing.T) {
 	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL", "")
 	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD", "")
 	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_PROBE_TIMEOUT", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_PROBE_INTERVAL", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT", "")
+	t.Setenv("EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD", "")
 
 	cfg := LoadConfigFromEnv()
 
@@ -280,6 +287,12 @@ func TestHealthProbeDisabledByDefault(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
 	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
 	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
+	assert.False(t, cfg.CapacityProbeEnabled)
+	assert.Empty(t, cfg.CapacityProbeURL)
+	assert.Equal(t, 30*time.Second, cfg.CapacityProbeTimeout)
+	assert.Equal(t, 30*time.Second, cfg.CapacityProbeInterval)
+	assert.Equal(t, float64(80), cfg.CapacityMaxUsedPercent)
+	assert.Equal(t, 3, cfg.CapacityBadWindowThreshold)
 
 	g := newGovernor(cfg, true)
 	snapshot := g.Snapshot()
@@ -288,7 +301,14 @@ func TestHealthProbeDisabledByDefault(t *testing.T) {
 	assert.Empty(t, snapshot.LastHealthStatus)
 	assert.Equal(t, int64(0), snapshot.LastHealthLatencyMs)
 	assert.True(t, snapshot.LastHealthAt.IsZero())
+	assert.False(t, snapshot.CapacityProbeEnabled)
+	assert.Equal(t, 0, snapshot.CapacityBadWindows)
+	assert.Empty(t, snapshot.LastCapacityStatus)
+	assert.Equal(t, float64(0), snapshot.LastCapacityUsedPercent)
+	assert.Equal(t, int64(0), snapshot.LastCapacityLatencyMs)
+	assert.True(t, snapshot.LastCapacityAt.IsZero())
 	assert.Nil(t, g.healthProbeStop)
+	assert.Nil(t, g.capacityProbeStop)
 }
 
 func TestHealthHysteresisIgnoresSingleBadSample(t *testing.T) {
@@ -422,6 +442,164 @@ func TestLoadConfigNormalizesHealthProbeSettings(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
 	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
 	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
+}
+
+func TestCapacityProbeBlocksScaleUpImmediatelyAndReducesAfterThreshold(t *testing.T) {
+	now := time.Unix(500, 0)
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 3
+		cfg.MaxConcurrency = 0
+		cfg.MinConcurrency = 1
+		cfg.CapacityProbeEnabled = true
+		cfg.CapacityProbeURL = "http://tei.local/capacity"
+		cfg.CapacityMaxUsedPercent = 80
+		cfg.CapacityBadWindowThreshold = 2
+	}), false)
+	g.clock = func() time.Time {
+		return now
+	}
+
+	g.observeCapacitySample(capacityProbeResult{
+		StatusCode:  http.StatusOK,
+		Latency:     120 * time.Millisecond,
+		UsedPercent: 82,
+		FreePercent: 18,
+		ReadyPods:   3,
+		TotalPods:   3,
+		HasCapacity: true,
+		HasPods:     true,
+	})
+
+	first := g.Snapshot()
+	assert.Equal(t, 3, first.CurrentConcurrency)
+	assert.Equal(t, 1, first.CapacityBadWindows)
+	assert.Equal(t, "capacity_high", first.LastCapacityStatus)
+	assert.Equal(t, float64(82), first.LastCapacityUsedPercent)
+	assert.Equal(t, float64(18), first.LastCapacityFreePercent)
+	assert.Equal(t, 3, first.LastCapacityReadyPods)
+	assert.Equal(t, 3, first.LastCapacityTotalPods)
+	assert.False(t, healthCanIncrease(g, false))
+
+	now = now.Add(time.Minute)
+	g.observeCapacitySample(capacityProbeResult{
+		StatusCode:  http.StatusOK,
+		Latency:     140 * time.Millisecond,
+		UsedPercent: 85,
+		FreePercent: 15,
+		ReadyPods:   3,
+		TotalPods:   3,
+		HasCapacity: true,
+		HasPods:     true,
+	})
+
+	second := g.Snapshot()
+	assert.Equal(t, 2, second.CurrentConcurrency)
+	assert.Equal(t, 2, second.CapacityBadWindows)
+	assert.False(t, healthCanIncrease(g, false))
+}
+
+func TestCapacityProbeHealthySampleResetsGuardrail(t *testing.T) {
+	now := time.Unix(600, 0)
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 0
+		cfg.CapacityProbeEnabled = true
+		cfg.CapacityProbeURL = "http://tei.local/capacity"
+		cfg.CapacityMaxUsedPercent = 80
+		cfg.CapacityBadWindowThreshold = 2
+	}), false)
+	g.clock = func() time.Time {
+		return now
+	}
+
+	g.observeCapacitySample(capacityProbeResult{
+		StatusCode:  http.StatusOK,
+		UsedPercent: 90,
+		FreePercent: 10,
+		ReadyPods:   2,
+		TotalPods:   2,
+		HasCapacity: true,
+		HasPods:     true,
+	})
+	require.False(t, healthCanIncrease(g, false))
+
+	now = now.Add(time.Minute)
+	g.observeCapacitySample(capacityProbeResult{
+		StatusCode:  http.StatusOK,
+		UsedPercent: 61,
+		FreePercent: 39,
+		ReadyPods:   2,
+		TotalPods:   2,
+		HasCapacity: true,
+		HasPods:     true,
+	})
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, 0, snapshot.CapacityBadWindows)
+	assert.Equal(t, "ok", snapshot.LastCapacityStatus)
+	assert.True(t, healthCanIncrease(g, false))
+}
+
+func TestCapacityProbeBlocksWhenPodsAreDegraded(t *testing.T) {
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 0
+		cfg.CapacityProbeEnabled = true
+		cfg.CapacityProbeURL = "http://tei.local/capacity"
+		cfg.CapacityMaxUsedPercent = 80
+	}), false)
+
+	g.observeCapacitySample(capacityProbeResult{
+		StatusCode:  http.StatusOK,
+		UsedPercent: 50,
+		FreePercent: 50,
+		ReadyPods:   1,
+		TotalPods:   2,
+		HasCapacity: true,
+		HasPods:     true,
+	})
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, "pods_degraded", snapshot.LastCapacityStatus)
+	assert.Equal(t, 1, snapshot.CapacityBadWindows)
+	assert.False(t, healthCanIncrease(g, false))
+}
+
+func TestDefaultCapacityProbeParsesJSONUsageAndPods(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"capacity_used_percent":79,"capacity_free_percent":21,"pods_ready":3,"pods_total":3}`))
+	}))
+	defer server.Close()
+
+	result := defaultCapacityProbe(context.Background(), server.URL)
+
+	require.NoError(t, result.Err)
+	assert.Equal(t, http.StatusOK, result.StatusCode)
+	assert.True(t, result.HasCapacity)
+	assert.True(t, result.HasPods)
+	assert.Equal(t, float64(79), result.UsedPercent)
+	assert.Equal(t, float64(21), result.FreePercent)
+	assert.Equal(t, 3, result.ReadyPods)
+	assert.Equal(t, 3, result.TotalPods)
+}
+
+func TestCapacityProbeParsesPrometheusTextUsageAndPods(t *testing.T) {
+	body := []byte(`
+# HELP tei_capacity_used_percent Percent of constrained TEI capacity in use.
+tei_capacity_used_percent 81
+tei_pods_ready 2
+tei_pods_total 2
+`)
+
+	reading, ok := parseCapacityProbePayload(body)
+
+	require.True(t, ok)
+	assert.Equal(t, float64(81), reading.UsedPercent)
+	assert.Equal(t, float64(19), reading.FreePercent)
+	assert.Equal(t, 2, reading.ReadyPods)
+	assert.Equal(t, 2, reading.TotalPods)
+	assert.True(t, reading.HasPods)
 }
 
 func TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately(t *testing.T) {

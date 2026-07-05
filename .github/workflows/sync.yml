@@ -135,20 +135,45 @@ jobs:
             done
           }
 
+          resolve_conflicts_with_side() {
+            local side="$1"
+            local stage
+            local path
+            if [[ "$side" == "theirs" ]]; then
+              stage=3
+            else
+              stage=2
+            fi
+
+            while IFS= read -r -d '' path; do
+              if git ls-files -u -- "$path" | awk -v stage="$stage" '$3 == stage { found = 1 } END { exit(found ? 0 : 1) }'; then
+                git checkout --"$side" -- "$path"
+                git add -- "$path"
+              else
+                git rm -f --ignore-unmatch -- "$path"
+                rm -rf -- "$path"
+              fi
+            done < <(git diff --name-only --diff-filter=U -z)
+
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "::error::Unresolved merge conflicts remain after applying $side strategy"
+              git diff --name-only --diff-filter=U
+              exit 1
+            fi
+          }
+
           # Check if upstream has new commits
           if [[ "$COMMON" != "$UPSTREAM_SHA" ]]; then
             echo "🔄 Upstream has new commits, syncing..."
 
             # Merge upstream
-            git merge upstream/main -m "Merge upstream/main into fork" || {
+            git merge -X "$SYNC_STRATEGY" upstream/main -m "Merge upstream/main into fork" || {
               echo "Merge conflict detected, using strategy: $SYNC_STRATEGY"
               if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
-                git checkout --theirs .
-                git add -A
+                resolve_conflicts_with_side theirs
                 git commit -m "Resolve conflicts: prefer upstream"
               else
-                git checkout --ours .
-                git add -A
+                resolve_conflicts_with_side ours
                 git commit -m "Resolve conflicts: prefer fork (ours)"
               fi
             }

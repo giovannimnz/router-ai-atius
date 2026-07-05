@@ -22,8 +22,9 @@ into local `refs/tags/*`.
 - Fetch upstream branches with `--no-tags`.
 - Detect the latest upstream version with `git ls-remote --tags --refs`.
 - Keep fork-owned release tags untouched.
-- On merge conflict, `strategy=theirs` means upstream wins and uses
-  `git checkout --theirs .`; `strategy=ours` keeps the fork side.
+- On merge conflict, `strategy=theirs` means upstream wins. The workflow resolves
+  each unmerged path individually, because modify/delete conflicts may not have a
+  file on the selected side.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 

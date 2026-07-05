@@ -23,8 +23,13 @@ grep -Eq 'git ls-remote --tags --refs upstream' "$workflow" || {
   exit 1
 }
 
-grep -Eq 'git checkout --theirs \.' "$workflow" || {
-  echo "sync workflow must use --theirs when strategy=theirs" >&2
+grep -Eq 'resolve_conflicts_with_side theirs' "$workflow" || {
+  echo "sync workflow must use the per-path theirs resolver when strategy=theirs" >&2
+  exit 1
+}
+
+grep -Eq 'git rm -f --ignore-unmatch' "$workflow" || {
+  echo "sync workflow must remove files deleted by the selected merge side" >&2
   exit 1
 }
 

@@ -318,6 +318,28 @@ Plans:
 - [x] 24-03-PLAN.md - provider/channel consolidation, OpenAI Codex/GPT recovery, and embedding governor preservation
 - [ ] 24-04-PLAN.md - runtime cutover, docs reconciliation, and end-to-end validation
 
+### Phase 25: embedding-governor-auto-workload-inference
+
+**Goal:** Tornar `embedding-gte-v1` sempre governado no router e inferir automaticamente `batch` versus `interactive` quando o cliente nao enviar `X-Embedding-Workload`, preservando o header como override operacional, sem criar alias publico `*-batch` e mantendo o limite seguro do TEI.
+**Status:** Pending
+**Requirements:** PHASE-25-GOVERNED-MODEL-SCOPE, PHASE-25-AUTO-WORKLOAD-INFERENCE, PHASE-25-HEADER-OVERRIDE-COMPATIBILITY, PHASE-25-TEI-BATCH-SAFETY, PHASE-25-CLIENT-SMOKE-VALIDATION
+**Depends on:** Phase 20 Go-native embedding governor and Phase 24 final runtime/catalog state. Uses Codex session `019f2dc6-858a-79e1-a78d-495ee5631235` as design input.
+**Plans:** 3 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 25-01-PLAN.md - governor classifier, model scope, defaults, and service tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 25-02-PLAN.md - relay no-header metadata capture and fail-closed TEI input cap
+
+**Wave 3** *(blocked on Waves 1-2 completion)*
+
+- [ ] 25-03-PLAN.md - smoke defaults, operator docs, and conditional live validation
+
 ---
 
 ## v1.6 — Future

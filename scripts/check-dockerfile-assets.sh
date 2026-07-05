@@ -13,6 +13,12 @@ if ! grep -Eq 'COPY[[:space:]].*web/package\.json[[:space:]]+web/bun\.lock' "$do
   exit 1
 fi
 
+if ! grep -Eq '^FROM oven/bun:1\.3\.14 AS builder' "$dockerfile" ||
+   ! grep -Eq '^FROM oven/bun:1\.3\.14 AS builder-classic' "$dockerfile"; then
+  echo "Dockerfile must use the same Bun version as CI release builds: oven/bun:1.3.14" >&2
+  exit 1
+fi
+
 required_paths=(
   web/package.json
   web/bun.lock

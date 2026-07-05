@@ -21,6 +21,8 @@ import (
 
 var acquireEmbeddingGovernor = embeddinggovernor.Acquire
 
+const maxGovernedTEIInputCount = 4
+
 func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
 
@@ -30,6 +32,14 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	}
 	publicModelName := embeddingReq.Model
 	inputStats := embeddingReq.GetInputStats()
+	if embeddinggovernor.IsGovernedModel(publicModelName) && inputStats.InputCount > maxGovernedTEIInputCount {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("%s supports at most %d input items per request", publicModelName, maxGovernedTEIInputCount),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 
 	request, err := common.DeepCopy(embeddingReq)
 	if err != nil {

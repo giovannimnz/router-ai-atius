@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { getDocsBasePath, isDocsSameOriginPath } from '@/lib/docs-link'
 
 interface FooterLink {
   text: string
@@ -50,14 +51,17 @@ const NEW_API_FOOTER_ATTRIBUTION_KEY = [
 function FooterLinkItem(props: { link: FooterLink }) {
   const { t } = useTranslation()
   const isExternal = props.link.href.startsWith('http')
+  const isDocsPath = isDocsSameOriginPath(props.link.href)
   const label = t(props.link.text)
 
-  if (isExternal) {
+  if (isExternal || isDocsPath) {
     return (
       <a
         href={props.link.href}
-        target='_blank'
-        rel='noopener noreferrer'
+        {...(isExternal && {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        })}
         className='text-muted-foreground hover:text-foreground text-sm transition-colors duration-200'
       >
         {label}
@@ -149,7 +153,7 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
 }
 
 export function Footer(props: FooterProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const {
     systemName,
     logo: systemLogo,
@@ -161,6 +165,7 @@ export function Footer(props: FooterProps) {
   const displayName = systemName || props.name || 'New API'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
+  const docsBasePath = getDocsBasePath(i18n.resolvedLanguage || i18n.language)
 
   const fallbackColumns = useMemo<FooterColumnProps[]>(
     () => [
@@ -169,15 +174,15 @@ export function Footer(props: FooterProps) {
         links: [
           {
             text: t('footer.columns.about.links.aboutProject'),
-            href: 'https://docs.newapi.pro/wiki/project-introduction/',
+            href: docsBasePath,
           },
           {
             text: t('footer.columns.about.links.contact'),
-            href: 'https://docs.newapi.pro/support/community-interaction/',
+            href: `${docsBasePath}/support`,
           },
           {
             text: t('footer.columns.about.links.features'),
-            href: 'https://docs.newapi.pro/wiki/features-introduction/',
+            href: docsBasePath,
           },
         ],
       },
@@ -186,15 +191,15 @@ export function Footer(props: FooterProps) {
         links: [
           {
             text: t('footer.columns.docs.links.quickStart'),
-            href: 'https://docs.newapi.pro/getting-started/',
+            href: docsBasePath,
           },
           {
             text: t('footer.columns.docs.links.installation'),
-            href: 'https://docs.newapi.pro/installation/',
+            href: `${docsBasePath}/installation`,
           },
           {
             text: t('footer.columns.docs.links.apiDocs'),
-            href: 'https://docs.newapi.pro/api/',
+            href: `${docsBasePath}/api`,
           },
         ],
       },
@@ -216,7 +221,7 @@ export function Footer(props: FooterProps) {
         ],
       },
     ],
-    [t]
+    [docsBasePath, t]
   )
 
   const displayColumns = props.columns ?? fallbackColumns

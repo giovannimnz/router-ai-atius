@@ -39,13 +39,15 @@ const Navigation = ({
     return mainNavLinks.map((link) => {
       const linkContent = <span>{link.text}</span>;
 
-      if (link.isExternal) {
+      if (link.isExternal || link.nativeLink) {
         return (
           <a
             key={link.itemKey}
-            href={link.externalLink}
-            target='_blank'
-            rel='noopener noreferrer'
+            href={link.isExternal ? link.externalLink : link.to}
+            {...(link.isExternal && {
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            })}
             className={commonLinkClasses}
           >
             {linkContent}

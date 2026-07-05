@@ -39,6 +39,14 @@ func TestStatus(c *gin.Context) {
 	return
 }
 
+func publicDocsLink(link string) string {
+	trimmed := strings.TrimSpace(link)
+	if trimmed == "" || trimmed == "/docs" || trimmed == "/docs/" || strings.Contains(trimmed, "docs.newapi.pro") {
+		return "/en/docs"
+	}
+	return trimmed
+}
+
 func GetStatus(c *gin.Context) {
 
 	cs := console_setting.GetConsoleSetting()
@@ -70,7 +78,7 @@ func GetStatus(c *gin.Context) {
 		"server_address":              system_setting.ServerAddress,
 		"turnstile_check":             common.TurnstileCheckEnabled,
 		"turnstile_site_key":          common.TurnstileSiteKey,
-		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
+		"docs_link":                   publicDocsLink(operation_setting.GetGeneralSetting().DocsLink),
 		"quota_per_unit":              common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),

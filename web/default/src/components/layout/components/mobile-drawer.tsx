@@ -259,21 +259,42 @@ export function MobileDrawer({
                   </div>
                 ) : (
                   <AnimatePresence>
-                    {mobileLinksList.map((link, index) => (
-                      <motion.div
-                        key={`${link.href}-${index}`}
-                        className='border-border border-b p-2.5 last:border-b-0'
-                        variants={MOBILE_DRAWER_ANIMATION.menuItem as Variants}
-                      >
+                    {mobileLinksList.map((link, index) => {
+                      const linkClassName =
+                        'text-primary/60 hover:text-primary/80 transition-colors'
+                      const content = link.external || link.reloadDocument ? (
+                        <a
+                          href={link.href}
+                          {...(link.external && {
+                            target: '_blank',
+                            rel: 'noopener noreferrer',
+                          })}
+                          className={linkClassName}
+                          onClick={onClose}
+                        >
+                          {link.title}
+                        </a>
+                      ) : (
                         <Link
                           to={link.href}
-                          className='text-primary/60 hover:text-primary/80 transition-colors'
+                          className={linkClassName}
                           onClick={onClose}
                         >
                           {link.title}
                         </Link>
-                      </motion.div>
-                    ))}
+                      )
+                      return (
+                        <motion.div
+                          key={`${link.href}-${index}`}
+                          className='border-border border-b p-2.5 last:border-b-0'
+                          variants={
+                            MOBILE_DRAWER_ANIMATION.menuItem as Variants
+                          }
+                        >
+                          {content}
+                        </motion.div>
+                      )
+                    })}
                   </AnimatePresence>
                 )}
               </motion.div>

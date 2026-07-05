@@ -50,14 +50,16 @@ export function PublicNavigation({
   return (
     <nav className={cn('hidden items-center gap-1 md:flex', className)}>
       {links.map((link, index) => {
-        // Handle external links
-        if (link.external) {
+        // Same-origin docs links must leave the SPA router and load the docs app.
+        if (link.external || link.reloadDocument) {
           return (
             <a
               key={index}
               href={link.href}
-              target='_blank'
-              rel='noopener noreferrer'
+              {...(link.external && {
+                target: '_blank',
+                rel: 'noopener noreferrer',
+              })}
               className={cn(
                 'text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground inline-flex h-9 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium transition-colors focus:outline-none',
                 link.disabled && 'pointer-events-none opacity-50'

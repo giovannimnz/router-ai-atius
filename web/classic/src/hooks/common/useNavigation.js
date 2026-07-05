@@ -18,9 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
+import { getDocsBasePath } from '../../helpers/docs';
 
-export const useNavigation = (t, docsLink, headerNavModules) => {
+export const useNavigation = (t, _docsLink, headerNavModules, language) => {
   const mainNavLinks = useMemo(() => {
+    const docsPath = getDocsBasePath(language);
     // 默认配置，如果没有传入配置则显示所有模块
     const defaultModules = {
       home: true,
@@ -49,16 +51,12 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         itemKey: 'pricing',
         to: '/pricing',
       },
-      ...(docsLink
-        ? [
-            {
-              text: t('文档'),
-              itemKey: 'docs',
-              isExternal: true,
-              externalLink: docsLink,
-            },
-          ]
-        : []),
+      {
+        text: t('文档'),
+        itemKey: 'docs',
+        nativeLink: true,
+        to: docsPath,
+      },
       {
         text: t('关于'),
         itemKey: 'about',
@@ -69,7 +67,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
     // 根据配置过滤导航链接
     return allLinks.filter((link) => {
       if (link.itemKey === 'docs') {
-        return docsLink && modules.docs;
+        return modules.docs;
       }
       if (link.itemKey === 'pricing') {
         // 支持新的pricing配置格式
@@ -79,7 +77,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       }
       return modules[link.itemKey] === true;
     });
-  }, [t, docsLink, headerNavModules]);
+  }, [t, headerNavModules, language]);
 
   return {
     mainNavLinks,

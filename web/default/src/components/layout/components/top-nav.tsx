@@ -45,6 +45,7 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
         isActive: false,
         disabled: false,
         external: false,
+        reloadDocument: false,
         ...link,
       })),
     [links]
@@ -62,15 +63,17 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent side='bottom' align='start'>
             {normalizedLinks.map(
-              ({ title, href, isActive, disabled, external }) => (
+              ({ title, href, isActive, disabled, external, reloadDocument }) => (
                 <DropdownMenuItem
                   key={`${title}-${href}`}
                   render={
-                    external ? (
+                    external || reloadDocument ? (
                       <a
                         href={href}
-                        target='_blank'
-                        rel='noopener noreferrer'
+                        {...(external && {
+                          target: '_blank',
+                          rel: 'noopener noreferrer',
+                        })}
                         className={!isActive ? 'text-muted-foreground' : ''}
                       >
                         {title}
@@ -100,13 +103,16 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
         )}
         {...props}
       >
-        {normalizedLinks.map(({ title, href, isActive, disabled, external }) =>
-          external ? (
+        {normalizedLinks.map(
+          ({ title, href, isActive, disabled, external, reloadDocument }) =>
+          external || reloadDocument ? (
             <a
               key={`${title}-${href}`}
               href={href}
-              target='_blank'
-              rel='noopener noreferrer'
+              {...(external && {
+                target: '_blank',
+                rel: 'noopener noreferrer',
+              })}
               className={`hover:text-primary text-sm font-medium transition-colors ${isActive ? '' : 'text-muted-foreground'}`}
             >
               {title}

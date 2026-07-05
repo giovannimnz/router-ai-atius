@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { useStatus } from '@/hooks/use-status'
+import { getDocsBasePath } from '@/lib/docs-link'
 
 export type TopNavLink = {
   title: string
@@ -28,6 +29,7 @@ export type TopNavLink = {
   disabled?: boolean
   requiresAuth?: boolean
   external?: boolean
+  reloadDocument?: boolean
 }
 
 /**
@@ -43,7 +45,7 @@ export type TopNavLink = {
  * }
  */
 export function useTopNavLinks(): TopNavLink[] {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
   const { auth } = useAuthStore()
 
@@ -54,8 +56,7 @@ export function useTopNavLinks(): TopNavLink[] {
     )
   }, [status])
 
-  // Documentation link (may be external)
-  const docsLink: string | undefined = status?.docs_link as string | undefined
+  const docsLink = getDocsBasePath(i18n.resolvedLanguage || i18n.language)
 
   const isAuthed = !!auth?.user
 
@@ -85,13 +86,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
-  // Docs (supports external links)
+  // Docs lives on the same origin under the Next.js docs app, not upstream.
   if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
-    } else {
-      links.push({ title: t('Docs'), href: '/docs' })
-    }
+    links.push({ title: t('Docs'), href: docsLink, reloadDocument: true })
   }
 
   // About

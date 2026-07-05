@@ -164,8 +164,6 @@ export function DeploymentsTable() {
     }
   }
 
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-
   const columns = useDeploymentsColumns({
     onViewLogs: (id) => {
       setLogsDeploymentId(id)
@@ -194,29 +192,21 @@ export function DeploymentsTable() {
     },
   })
 
-  const table = useReactTable({
+  const { table } = useDataTable({
     data: deployments,
     columns,
-    pageCount: Math.ceil(totalCount / pagination.pageSize),
-    state: {
-      columnFilters,
-      columnVisibility,
-      pagination,
-      globalFilter,
-    },
+    totalCount,
+    columnFilters,
+    pagination,
+    globalFilter,
     onColumnFiltersChange,
-    onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange,
     onGlobalFilterChange,
-    getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualFiltering: true,
+    withSortedRowModel: false,
+    ensurePageInRange,
   })
-
-  const pageCount = table.getPageCount()
-  useEffect(() => {
-    ensurePageInRange(pageCount)
-  }, [ensurePageInRange, pageCount])
 
   const statusFilterOptions = useMemo(() => {
     return [...getDeploymentStatusOptions(t)].map((opt) => ({

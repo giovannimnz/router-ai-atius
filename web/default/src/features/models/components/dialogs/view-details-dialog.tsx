@@ -29,13 +29,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 
 import { getDeployment, listDeploymentContainers } from '../../api'

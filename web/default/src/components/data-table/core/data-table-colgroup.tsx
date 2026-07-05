@@ -16,10 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { z } from 'zod'
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useAuthStore } from '@/stores/auth-store'
-import { SignIn } from '@/features/auth/sign-in'
+import type { Table as TanstackTable } from '@tanstack/react-table'
 
 import { isContentSizedColumn } from './content-sized-columns'
 

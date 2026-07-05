@@ -42,14 +42,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
   Form,
   FormControl,
   FormDescription,
@@ -67,14 +59,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import dayjs from '@/lib/dayjs'
 
@@ -109,6 +93,8 @@ const announcementSchema = z.object({
 })
 
 type AnnouncementFormValues = z.infer<typeof announcementSchema>
+
+const ANNOUNCEMENT_FORM_ID = 'announcement-form'
 
 const typeOptions = [
   {
@@ -360,32 +346,51 @@ export function AnnouncementsSection({
           />
         </div>
 
-        <div className='rounded-md border'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className='w-12'>
-                  <Checkbox
-                    checked={
-                      selectedIds.length === announcements.length &&
-                      announcements.length > 0
-                    }
-                    onCheckedChange={toggleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>{t('Content')}</TableHead>
-                <TableHead>{t('Publish Date')}</TableHead>
-                <TableHead>{t('Type')}</TableHead>
-                <TableHead>{t('Extra')}</TableHead>
-                <TableHead className='w-32'>{t('Actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedAnnouncements.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className='h-24 text-center'>
-                    {t(
-                      'No announcements yet. Click "Add Announcement" to create one.'
+        <StaticDataTable
+          data={sortedAnnouncements}
+          getRowKey={(announcement) => announcement.id}
+          emptyContent={t(
+            'No announcements yet. Click "Add Announcement" to create one.'
+          )}
+          columns={[
+            {
+              id: 'select',
+              header: (
+                <Checkbox
+                  checked={
+                    selectedIds.length === announcements.length &&
+                    announcements.length > 0
+                  }
+                  onCheckedChange={toggleSelectAll}
+                />
+              ),
+              className: 'w-12',
+              cell: (announcement) => (
+                <Checkbox
+                  checked={selectedIds.includes(announcement.id)}
+                  onCheckedChange={(checked) =>
+                    toggleSelectOne(announcement.id, checked as boolean)
+                  }
+                />
+              ),
+            },
+            {
+              id: 'content',
+              header: t('Content'),
+              cellClassName: 'max-w-xs truncate',
+              cell: (announcement) => announcement.content,
+            },
+            {
+              id: 'publish-date',
+              header: t('Publish Date'),
+              cell: (announcement) => (
+                <div className='flex flex-col gap-1'>
+                  <span className='text-sm font-medium'>
+                    {getRelativeTime(announcement.publishDate)}
+                  </span>
+                  <span className='text-muted-foreground text-xs'>
+                    {dayjs(announcement.publishDate).format(
+                      'YYYY-MM-DD HH:mm:ss'
                     )}
                   </span>
                 </div>
@@ -431,22 +436,24 @@ export function AnnouncementsSection({
         />
       </div>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className='max-w-2xl'>
-          <DialogHeader>
-            <DialogTitle>
-              {editingAnnouncement
-                ? t('Edit Announcement')
-                : t('Add Announcement')}
-            </DialogTitle>
-            <DialogDescription>
-              {t('Create or update system announcements for the dashboard')}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleSubmitForm)}
-              className='space-y-4'
+      <Dialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        title={
+          editingAnnouncement ? t('Edit Announcement') : t('Add Announcement')
+        }
+        description={t(
+          'Create or update system announcements for the dashboard'
+        )}
+        contentClassName='max-w-2xl'
+        contentHeight='auto'
+        bodyClassName='space-y-4'
+        footer={
+          <>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setShowDialog(false)}
             >
               {t('Cancel')}
             </Button>
@@ -530,130 +537,54 @@ export function AnnouncementsSection({
                     value={field.value}
                   >
                     <FormControl>
-                      <Textarea
-                        placeholder={t(
-                          'Enter announcement content (supports Markdown/HTML)'
-                        )}
-                        rows={4}
-                        {...field}
-                      />
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={t('Select announcement type')}
+                        />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormDescription>
-                      {t('Maximum 500 characters. Supports Markdown and HTML.')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='publishDate'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Publish Date')}</FormLabel>
-                    <FormControl>
-                      <DateTimePicker
-                        value={field.value ? new Date(field.value) : undefined}
-                        onChange={(date) =>
-                          field.onChange(date ? date.toISOString() : '')
-                        }
-                        placeholder={t('Select publish date')}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Date and time when this announcement should be displayed'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='type'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Type')}</FormLabel>
-                    <Select
-                      items={[
-                        ...typeOptions.map((option) => ({
-                          value: option.value,
-                          label: (
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        {typeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
                             <div className='flex items-center gap-2'>
                               <div
                                 className={`h-3 w-3 rounded-full ${option.color}`}
                               />
                               {option.label}
                             </div>
-                          ),
-                        })),
-                      ]}
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={t('Select announcement type')}
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          {typeOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              <div className='flex items-center gap-2'>
-                                <div
-                                  className={`h-3 w-3 rounded-full ${option.color}`}
-                                />
-                                {option.label}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='extra'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Extra Notes (Optional)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('Additional information')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Optional supplementary information (max 100 characters)'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => setShowDialog(false)}
-                >
-                  {t('Cancel')}
-                </Button>
-                <Button type='submit'>
-                  {editingAnnouncement ? t('Update') : t('Add')}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='extra'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Extra Notes (Optional)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('Additional information')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Optional supplementary information (max 100 characters)'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
       </Dialog>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

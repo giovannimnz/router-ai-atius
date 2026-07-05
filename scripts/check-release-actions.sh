@@ -6,7 +6,7 @@ repo=""
 tag=""
 max_attempts="${GH_WATCHDOG_MAX_ATTEMPTS:-3}"
 poll_seconds="${GH_WATCHDOG_POLL_SECONDS:-30}"
-deterministic_pattern="${GH_WATCHDOG_DETERMINISTIC_PATTERN:-Script not found|Username and password required|No such file or directory|Tag .* does not exist|permission denied|authentication required}"
+deterministic_pattern="${GH_WATCHDOG_DETERMINISTIC_PATTERN:-Script not found|Username and password required|No such file or directory|Tag .* does not exist|permission denied|authentication required|frozen lockfile|Module not found|Cannot find module|Build errors|failed to load config|script \"build\" exited}"
 
 usage() {
   cat <<'EOF'

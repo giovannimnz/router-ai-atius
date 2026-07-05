@@ -24,7 +24,6 @@ import {
   Plus,
   RefreshCcw,
   Trash2,
-  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -45,14 +44,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   Empty,
   EmptyDescription,
@@ -391,22 +382,46 @@ export function PrefillGroupManagementDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          showCloseButton={false}
-          className='prefill-dialog-content !top-4 !flex !-translate-y-0 !flex-col !gap-0 !border-none !bg-transparent !p-0 !shadow-none sm:!top-1/2 sm:!-translate-y-1/2'
-          style={{ maxWidth: 'min(100vw, 64rem)' }}
-        >
-          <div
-            className={cn(
-              'prefill-dialog-panel border-border/70 bg-background flex max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden border shadow-2xl',
-              isMobile ? 'rounded-none' : 'rounded-2xl'
-            )}
-          >
-            <div
-              className={cn(
-                'relative flex flex-col gap-3 border-b px-4 py-4 sm:px-6 sm:py-5',
-                isMobile && 'pt-[calc(env(safe-area-inset-top,0px)+1rem)]'
+      <Dialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title={
+          <>
+            <Layers3 className='text-foreground/80 h-5 w-5' />
+            {t('Prefill Group Management')}
+          </>
+        }
+        description={t(
+          'Create reusable bundles of models, tags, endpoints, and user groups to speed up configuration elsewhere in the console.'
+        )}
+        contentClassName={cn(
+          'w-[calc(100vw-2rem)] sm:max-w-[52rem]',
+          isMobile && 'max-w-none rounded-none'
+        )}
+        titleClassName='flex flex-wrap items-center gap-2 text-lg'
+        descriptionClassName='text-sm leading-relaxed'
+        contentHeight='auto'
+        bodyClassName={cn(
+          'space-y-3',
+          isMobile && 'pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]'
+        )}
+      >
+        <div className='bg-muted/30 flex flex-wrap items-center justify-between gap-3 rounded-md border p-2 text-sm'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Button size='sm' onClick={onCreateGroup}>
+              <Plus className='mr-2 h-4 w-4' />
+              {t('New Group')}
+            </Button>
+            <Button
+              size='sm'
+              variant='ghost'
+              onClick={() => refetchGroups()}
+              disabled={isFetching}
+            >
+              {isFetching ? (
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              ) : (
+                <RefreshCcw className='mr-2 h-4 w-4' />
               )}
               {t('Refresh')}
             </Button>

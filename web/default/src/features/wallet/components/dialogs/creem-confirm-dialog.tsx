@@ -46,33 +46,17 @@ export function CreemConfirmDialog({
   if (!product) return null
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-[425px]'>
-        <DialogHeader>
-          <DialogTitle>{t('Confirm Creem Purchase')}</DialogTitle>
-          <DialogDescription>
-            {t('Review your purchase details before proceeding.')}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className='space-y-3 py-3 sm:space-y-4 sm:py-4'>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground'>{t('Product')}</span>
-            <span className='font-medium'>{product.name}</span>
-          </div>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground'>{t('Price')}</span>
-            <span className='font-medium text-indigo-600'>
-              {formatCreemPrice(product.price, product.currency)}
-            </span>
-          </div>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground'>{t('Quota')}</span>
-            <span className='font-medium'>{formatNumber(product.quota)}</span>
-          </div>
-        </div>
-
-        <DialogFooter className='grid grid-cols-2 gap-2 sm:flex'>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('Confirm Creem Purchase')}
+      description={t('Review your purchase details before proceeding.')}
+      contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-[425px]'
+      footerClassName='grid grid-cols-2 gap-2 sm:flex'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+      footer={
+        <>
           <Button
             variant='outline'
             onClick={() => onOpenChange(false)}

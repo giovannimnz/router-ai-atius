@@ -43,15 +43,6 @@ export function ModelsTable() {
   const { selectedVendor } = useModels()
   const isMobile = useMediaQuery('(max-width: 640px)')
 
-  // Table state
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    description: false,
-    bound_channels: false,
-    quota_types: false,
-  })
-  const [rowSelection, setRowSelection] = useState({})
-
   // URL state management
   const {
     globalFilter,
@@ -172,36 +163,27 @@ export function ModelsTable() {
   const columns = useModelsColumns(vendors)
 
   // React Table instance
-  const table = useReactTable({
+  const { table } = useDataTable({
     data: models,
     columns,
-    pageCount: Math.ceil(totalCount / pagination.pageSize),
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-      pagination,
-      globalFilter,
+    totalCount,
+    initialColumnVisibility: {
+      description: false,
+      bound_channels: false,
+      quota_types: false,
     },
+    columnFilters,
+    pagination,
+    globalFilter,
     enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
     onColumnFiltersChange,
-    onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange,
     onGlobalFilterChange,
-    getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualSorting: true,
     manualFiltering: true,
+    ensurePageInRange,
   })
-
-  // Ensure page is in range when total count changes
-  const pageCount = table.getPageCount()
-  useEffect(() => {
-    ensurePageInRange(pageCount)
-  }, [pageCount, ensurePageInRange])
 
   // Prepare filter options
   const vendorFilterOptions = [

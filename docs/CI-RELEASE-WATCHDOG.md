@@ -34,7 +34,8 @@ or `GH_WATCHDOG_POLL_SECONDS`.
 
 The release checker scans all runs for the tag, calls the watchdog for retryable
 failures, and stops with the failed log when it sees deterministic failures such
-as missing scripts or missing registry credentials.
+as missing scripts, missing registry credentials, frozen lockfiles, missing
+modules, or frontend build/config errors.
 
 Docker image workflows run `scripts/check-dockerfile-assets.sh` before buildx.
 That guard catches stale Dockerfile references and verifies that the Dockerfile
@@ -51,3 +52,7 @@ When `sync.yml` creates a tag with `GITHUB_TOKEN`, do not rely on `push` tag
 events to start release builds. GitHub suppresses most workflow runs caused by
 `GITHUB_TOKEN` pushes. The sync workflow should dispatch release, Docker, and
 Electron workflows directly after the tag is pushed.
+
+The sync workflow also runs `scripts/ci-build-frontends.sh "v$NEW_TAG"` before
+pushing the sync commit and version tag. If `web/default` or `web/classic` is
+broken by an upstream merge, the sync run fails before a release tag exists.

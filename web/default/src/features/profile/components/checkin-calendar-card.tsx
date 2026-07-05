@@ -251,27 +251,26 @@ export function CheckinCalendarCard({
             setTurnstileWidgetKey((v) => v + 1)
           }
         }}
+        title={t('Security Check')}
+        contentClassName='sm:max-w-md'
+        contentHeight='auto'
+        bodyClassName='space-y-4'
       >
-        <DialogContent className='sm:max-w-md'>
-          <DialogHeader>
-            <DialogTitle>{t('Security Check')}</DialogTitle>
-          </DialogHeader>
-          <div className='text-muted-foreground text-sm'>
-            {t('Please complete the security check to continue.')}
-          </div>
-          <div className='flex justify-center py-4'>
-            <Turnstile
-              key={turnstileWidgetKey}
-              siteKey={turnstileSiteKey}
-              onVerify={(token) => {
-                doCheckin(token)
-              }}
-              onExpire={() => {
-                setTurnstileWidgetKey((v) => v + 1)
-              }}
-            />
-          </div>
-        </DialogContent>
+        <div className='text-muted-foreground text-sm'>
+          {t('Please complete the security check to continue.')}
+        </div>
+        <div className='flex justify-center py-4'>
+          <Turnstile
+            key={turnstileWidgetKey}
+            siteKey={turnstileSiteKey}
+            onVerify={(token) => {
+              doCheckin(token)
+            }}
+            onExpire={() => {
+              setTurnstileWidgetKey((v) => v + 1)
+            }}
+          />
+        </div>
       </Dialog>
 
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>

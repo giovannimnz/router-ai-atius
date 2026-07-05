@@ -138,9 +138,11 @@ export function RateLimitVisualEditor({
         </Button>
       </div>
 
-      {filteredRateLimits.length === 0 ? (
-        <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
-          {searchText
+      <StaticDataTable
+        data={filteredRateLimits}
+        getRowKey={(limit) => limit.groupName}
+        emptyContent={
+          searchText
             ? t('No groups match your search')
             : t(
                 'No group-based rate limits configured. Click "Add group" to get started.'

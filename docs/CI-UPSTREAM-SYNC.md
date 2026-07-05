@@ -32,6 +32,10 @@ into local `refs/tags/*`.
 - Protected paths are removed from the index/worktree and restored from the
   fork baseline before the merge commit is completed. This avoids pushing an
   intermediate commit or newly-added upstream workflow file that GitHub rejects.
+- With `strategy=theirs`, `web/default` is treated as upstream-owned and is
+  restored wholesale from `upstream/main` after a merge. This prevents hidden
+  non-conflicting fork leftovers from compiling against newer upstream
+  frontend contracts.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 - `.github/workflows/` is protected as fork-owned. The scheduled workflow runs
@@ -44,6 +48,10 @@ into local `refs/tags/*`.
 - The legacy GHCR workflow uses `workflow_run` against the actual workflow name
   `Sync Upstream + Release` and falls back to `github.token` when `GHCR_TOKEN`
   is not configured.
+- Before pushing the sync commit or version tag, the workflow runs
+  `scripts/ci-build-frontends.sh "v$NEW_TAG"`. A broken frontend sync now stops
+  inside the sync workflow instead of publishing a tag that immediately fails
+  Release, Docker, and Electron.
 
 ## Local guard
 
@@ -55,4 +63,5 @@ scripts/check-upstream-sync-workflow.sh
 
 The guard fails if the workflow regresses to fetching upstream tags, loses the
 post-tag dispatch calls, points the GHCR workflow at the wrong sync workflow
-name, or inverts the merge-strategy mapping again.
+name, omits the pre-tag frontend build, omits upstream-owned `web/default`
+restoration, or inverts the merge-strategy mapping again.

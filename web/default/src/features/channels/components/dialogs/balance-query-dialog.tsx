@@ -156,53 +156,55 @@ export function BalanceQueryDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('Query Balance')}</DialogTitle>
-          <DialogDescription>
-            {t('Update balance for:')} <strong>{currentRow.name}</strong>
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className='space-y-4 py-4'>
-          {/* Current Balance Display */}
-          <div className='bg-muted/50 rounded-lg border p-4'>
-            <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
-              <DollarSign className='h-4 w-4' />
-              <span>{t('Current Balance')}</span>
-            </div>
-            <div className='text-2xl font-bold'>
-              {balance !== null
-                ? formatBalance(balance)
-                : formatBalance(currentRow.balance)}
-            </div>
-            <div className='text-muted-foreground mt-2 text-xs'>
-              {t('Last updated:')}{' '}
-              {formatDate(
-                balanceUpdatedTime ?? currentRow.balance_updated_time
-              )}
-            </div>
-          </div>
-
-          {/* Balance Update Button */}
-          <Button
-            className='w-full'
-            onClick={handleQueryBalance}
-            disabled={isQuerying}
-          >
-            {isQuerying && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-            {!isQuerying && <RefreshCw className='mr-2 h-4 w-4' />}
-            {isQuerying ? t('Querying...') : t('Update Balance')}
-          </Button>
-        </div>
-
-        <DialogFooter>
+    <Dialog
+      open={open}
+      onOpenChange={handleClose}
+      title={t('Query Balance')}
+      description={
+        <>
+          {t('Update balance for:')}
+          <strong>{currentRow.name}</strong>
+        </>
+      }
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+      footer={
+        <>
           <Button variant='outline' onClick={handleClose} disabled={isQuerying}>
             {t('Close')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      }
+    >
+      <div className='space-y-4 py-4'>
+        {/* Current Balance Display */}
+        <div className='bg-muted/50 rounded-lg border p-4'>
+          <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
+            <DollarSign className='h-4 w-4' />
+            <span>{t('Current Balance')}</span>
+          </div>
+          <div className='text-2xl font-bold'>
+            {balance !== null
+              ? formatBalance(balance)
+              : formatBalance(currentRow.balance)}
+          </div>
+          <div className='text-muted-foreground mt-2 text-xs'>
+            {t('Last updated:')}{' '}
+            {formatDate(balanceUpdatedTime ?? currentRow.balance_updated_time)}
+          </div>
+        </div>
+
+        {/* Balance Update Button */}
+        <Button
+          className='w-full'
+          onClick={handleQueryBalance}
+          disabled={isQuerying}
+        >
+          {isQuerying && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+          {!isQuerying && <RefreshCw className='mr-2 h-4 w-4' />}
+          {isQuerying ? t('Querying...') : t('Update Balance')}
+        </Button>
+      </div>
     </Dialog>
   )
 }

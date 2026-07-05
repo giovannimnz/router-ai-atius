@@ -35,7 +35,6 @@ import {
   Eraser,
   Plus,
   Eye,
-  Link2,
   RefreshCw,
   Code,
   Route,
@@ -159,6 +158,7 @@ import {
   hasModelConfigChanged,
   findMissingModelsInMapping,
   validateModelMappingJson,
+  hasAdvancedSettingsErrors,
 } from '../../lib'
 import {
   collectInvalidStatusCodeEntries,
@@ -597,7 +597,6 @@ export function ChannelMutateDrawer({
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
-  const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
     useState(false)
   const initialModelsRef = useRef<string[]>([])
@@ -703,6 +702,7 @@ export function ChannelMutateDrawer({
   const currentName = form.watch('name')
   const currentModelMapping = form.watch('model_mapping')
   const awsKeyType = form.watch('aws_key_type')
+  const vertexKeyType = form.watch('vertex_key_type')
   const upstreamModelUpdateCheckEnabled = form.watch(
     'upstream_model_update_check_enabled'
   )
@@ -761,6 +761,15 @@ export function ChannelMutateDrawer({
   const isBatchMode =
     multiKeyMode === 'batch' || multiKeyMode === 'multi_to_single'
   const isChannelDetailLoading = isEditing && isChannelLoading
+  const supportsMultiKeyAddMode =
+    currentType !== 57 && !(currentType === 41 && vertexKeyType === 'api_key')
+  const addModeOptions = useMemo(
+    () =>
+      supportsMultiKeyAddMode
+        ? ADD_MODE_OPTIONS
+        : ADD_MODE_OPTIONS.filter((option) => option.value === 'single'),
+    [supportsMultiKeyAddMode]
+  )
 
   const advancedCustomStats = useMemo(
     () => getAdvancedCustomStats(currentAdvancedCustom),
@@ -1183,6 +1192,25 @@ export function ChannelMutateDrawer({
       }
     }
   }, [currentType, isEditing, form])
+
+  useEffect(() => {
+    if (currentType !== 45 || currentBaseUrl !== 'doubao-coding-plan') return
+
+    form.setValue('base_url', 'https://ark.cn-beijing.volces.com', {
+      shouldDirty: false,
+      shouldValidate: true,
+    })
+  }, [currentBaseUrl, currentType, form])
+
+  useEffect(() => {
+    if (isEditing || supportsMultiKeyAddMode) return
+    if (multiKeyMode && multiKeyMode !== 'single') {
+      form.setValue('multi_key_mode', 'single', {
+        shouldDirty: true,
+        shouldValidate: true,
+      })
+    }
+  }, [form, isEditing, multiKeyMode, supportsMultiKeyAddMode])
 
   // Validate base_url - warn if it ends with /v1
   useEffect(() => {
@@ -1717,16 +1745,6 @@ export function ChannelMutateDrawer({
     },
     [onOpenChange, form]
   )
-
-  const handleAdvancedSettingsOpenChange = useCallback((nextOpen: boolean) => {
-    setAdvancedSettingsOpen(nextOpen)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        ADVANCED_SETTINGS_EXPANDED_KEY,
-        String(nextOpen)
-      )
-    }
-  }, [])
 
   return (
     <>

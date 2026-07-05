@@ -113,6 +113,8 @@ export interface StatusBadgeProps extends Omit<
   copyable?: boolean
   copyText?: string
   autoColor?: string
+  /** Visual style. Defaults to 'badge'. Can be overridden via StatusBadgeTypeContext. */
+  type?: StatusBadgeType
 }
 
 export function StatusBadge({
@@ -122,15 +124,18 @@ export function StatusBadge({
   variant,
   size = 'sm',
   pulse = false,
-  showDot = true,
+  showDot = false,
   copyable = true,
   copyText,
   autoColor,
+  type: typeProp,
   className,
   onClick,
   ...props
 }: StatusBadgeProps) {
   const { copyToClipboard } = useCopyToClipboard()
+  const contextType = React.useContext(StatusBadgeTypeContext)
+  const type = typeProp ?? contextType
 
   const computedVariant: StatusVariant = autoColor
     ? (stringToColor(autoColor) as StatusVariant)
@@ -157,6 +162,7 @@ export function StatusBadge({
 
   return (
     <span
+      data-slot='status-badge'
       className={cn(
         'inline-flex w-fit max-w-full min-w-0 shrink items-center font-medium tracking-normal whitespace-nowrap transition-colors',
         isBadge

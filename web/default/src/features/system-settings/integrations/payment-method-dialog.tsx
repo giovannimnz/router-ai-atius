@@ -27,14 +27,6 @@ import { ReactIconByName } from '@/components/react-icon-by-name'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
   Form,
   FormControl,
   FormDescription,
@@ -56,6 +48,8 @@ const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
 type PaymentMethodDialogFormValues = z.infer<
   ReturnType<typeof createPaymentMethodDialogSchema>
 >
+
+const PAYMENT_METHOD_FORM_ID = 'payment-method-form'
 
 export type PaymentMethodData = {
   name: string
@@ -166,38 +160,51 @@ export function PaymentMethodDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
-        <DialogHeader>
-          <DialogTitle>
-            {isEditMode ? t('Edit payment method') : t('Add payment method')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('Configure a payment method for user recharge options.')}
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className='space-y-4'
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEditMode ? t('Edit payment method') : t('Add payment method')}
+      description={t('Configure a payment method for user recharge options.')}
+      contentClassName='sm:max-w-[500px]'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+      footer={
+        <>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => onOpenChange(false)}
           >
-            <FormField
-              control={form.control}
-              name='name'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Name')}</FormLabel>
-                  <FormControl>
-                    <Input placeholder={t('e.g., Alipay, WeChat')} {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Display name for this payment method.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {t('Cancel')}
+          </Button>
+          <Button type='submit' form={PAYMENT_METHOD_FORM_ID}>
+            {isEditMode ? t('Update') : t('Add')}
+          </Button>
+        </>
+      }
+    >
+      <Form {...form}>
+        <form
+          id={PAYMENT_METHOD_FORM_ID}
+          onSubmit={form.handleSubmit(handleSubmit)}
+          className='space-y-4'
+        >
+          <FormField
+            control={form.control}
+            name='name'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Name')}</FormLabel>
+                <FormControl>
+                  <Input placeholder={t('e.g., Alipay, WeChat')} {...field} />
+                </FormControl>
+                <FormDescription>
+                  {t('Display name for this payment method.')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
@@ -282,77 +289,29 @@ export function PaymentMethodDialog({
             )}
           />
 
-            <FormField
-              control={form.control}
-              name='color'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Color')}</FormLabel>
-                  <FormControl>
-                    <div className='flex items-center gap-2'>
-                      <Combobox
-                        options={COLOR_PRESETS}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder={t('Select or enter color value')}
-                        searchPlaceholder={t('Search colors...')}
-                        allowCustomValue
-                        className='flex-1'
-                      />
-                      {colorPreview && (
-                        <div
-                          className='size-9 shrink-0 rounded border'
-                          style={{ backgroundColor: colorPreview }}
-                          title={colorPreview}
-                        />
-                      )}
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    {t('Select preset or enter custom CSS color value.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='min_topup'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Minimum top-up (optional)')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='number'
-                      step='0.01'
-                      placeholder={t('e.g., 50')}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Optional minimum recharge amount for this method.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
-              <Button
-                type='button'
-                variant='outline'
-                onClick={() => onOpenChange(false)}
-              >
-                {t('Cancel')}
-              </Button>
-              <Button type='submit'>
-                {isEditMode ? t('Update') : t('Add')}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
+          <FormField
+            control={form.control}
+            name='min_topup'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Minimum top-up (optional)')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    step='0.01'
+                    placeholder={t('e.g., 50')}
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t('Optional minimum recharge amount for this method.')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
     </Dialog>
   )
 }

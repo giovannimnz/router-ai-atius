@@ -147,6 +147,25 @@ jobs:
             fi
           }
 
+          restore_upstream_paths() {
+            local path
+            local upstream_paths=(
+              web/default
+            )
+
+            if [[ "$SYNC_STRATEGY" != "theirs" ]]; then
+              return
+            fi
+
+            echo "Restoring upstream-owned paths from upstream/main..."
+            for path in "${upstream_paths[@]}"; do
+              git rm -r -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
+              rm -rf -- "$path"
+              git checkout upstream/main -- "$path"
+              git add -A -- "$path"
+            done
+          }
+
           resolve_conflicts_with_side() {
             local side="$1"
             local stage
@@ -199,6 +218,7 @@ jobs:
             }
 
             restore_protected_paths "$BASE_HEAD"
+            restore_upstream_paths
 
             CHANGED=true
 
@@ -233,6 +253,13 @@ jobs:
             echo "new_tag=" >> $GITHUB_OUTPUT
             echo "upstream_version=$UPSTREAM_VER" >> $GITHUB_OUTPUT
           fi
+
+      - name: Verify frontend release build
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
+          CI_FRONTEND_RETRIES: 1
+        run: ./scripts/ci-build-frontends.sh "v$NEW_TAG"
 
       - name: Push commit
         if: steps.sync.outputs.changed == 'true'

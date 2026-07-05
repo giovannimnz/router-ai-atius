@@ -145,9 +145,11 @@ export function ChatSettingsVisualEditor({
         </Button>
       </div>
 
-      {filteredChats.length === 0 ? (
-        <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
-          {searchText
+      <StaticDataTable
+        data={filteredChats}
+        getRowKey={(chat) => chat.name}
+        emptyContent={
+          searchText
             ? t('No chat presets match your search')
             : t(
                 'No chat presets configured. Click "Add chat preset" to get started.'

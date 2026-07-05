@@ -422,28 +422,26 @@ export function PublicHeader(props: PublicHeaderProps) {
             closeAuthPrompt()
           }
         }}
-      >
-        <DialogContent className='sm:max-w-md'>
-          <DialogHeader>
-            <DialogTitle>{t('Sign in required')}</DialogTitle>
-            <DialogDescription>
-              {t('Please sign in to view {{module}}.', {
-                module: authPromptTarget?.title || '',
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className='bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-sm'>
-            {t('Redirecting to sign in in {{seconds}} seconds.', {
-              seconds: authPromptSecondsLeft,
-            })}
-          </div>
-          <DialogFooter>
+        title={t('Sign in required')}
+        description={t('Please sign in to view {{module}}.', {
+          module: authPromptTarget?.title || '',
+        })}
+        contentClassName='sm:max-w-md'
+        contentHeight='auto'
+        footer={
+          <>
             <Button variant='outline' onClick={closeAuthPrompt}>
               {t('Cancel')}
             </Button>
             <Button onClick={navigateToSignIn}>{t('Sign in now')}</Button>
-          </DialogFooter>
-        </DialogContent>
+          </>
+        }
+      >
+        <div className='bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-sm'>
+          {t('Redirecting to sign in in {{seconds}} seconds.', {
+            seconds: authPromptSecondsLeft,
+          })}
+        </div>
       </Dialog>
     </>
   )

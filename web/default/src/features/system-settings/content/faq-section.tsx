@@ -40,14 +40,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
   Form,
   FormControl,
   FormDescription,
@@ -57,14 +49,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 
 import { SettingsSwitchField } from '../components/settings-form-layout'
@@ -94,6 +78,8 @@ const faqSchema = z.object({
 })
 
 type FAQFormValues = z.infer<typeof faqSchema>
+
+const FAQ_FORM_ID = 'faq-form'
 
 export function FAQSection({ enabled, data }: FAQSectionProps) {
   const { t } = useTranslation()
@@ -333,79 +319,78 @@ export function FAQSection({ enabled, data }: FAQSectionProps) {
         />
       </div>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className='max-w-2xl'>
-          <DialogHeader>
-            <DialogTitle>
-              {editingFaq ? t('Edit FAQ') : t('Add FAQ')}
-            </DialogTitle>
-            <DialogDescription>
-              {t('Create or update frequently asked questions for users')}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleSubmitForm)}
-              className='space-y-4'
+      <Dialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        title={editingFaq ? t('Edit FAQ') : t('Add FAQ')}
+        description={t('Create or update frequently asked questions for users')}
+        contentClassName='max-w-2xl'
+        contentHeight='auto'
+        bodyClassName='space-y-4'
+        footer={
+          <>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setShowDialog(false)}
             >
-              <FormField
-                control={form.control}
-                name='question'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Question')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('How to reset my quota?')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Maximum 200 characters')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='answer'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Answer')}</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder={t(
-                          'Visit Settings → General and adjust quota options...'
-                        )}
-                        rows={8}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Maximum 1000 characters. Supports Markdown and HTML.'
+              {t('Cancel')}
+            </Button>
+            <Button type='submit' form={FAQ_FORM_ID}>
+              {editingFaq ? t('Update') : t('Add')}
+            </Button>
+          </>
+        }
+      >
+        <Form {...form}>
+          <form
+            id={FAQ_FORM_ID}
+            onSubmit={form.handleSubmit(handleSubmitForm)}
+            className='space-y-4'
+          >
+            <FormField
+              control={form.control}
+              name='question'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Question')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('How to reset my quota?')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Maximum 200 characters')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='answer'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Answer')}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder={t(
+                        'Visit Settings → General and adjust quota options...'
                       )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => setShowDialog(false)}
-                >
-                  {t('Cancel')}
-                </Button>
-                <Button type='submit'>
-                  {editingFaq ? t('Update') : t('Add')}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
+                      rows={8}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Maximum 1000 characters. Supports Markdown and HTML.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
       </Dialog>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

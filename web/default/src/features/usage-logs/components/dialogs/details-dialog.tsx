@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   UserCog,
   Info,
+  LogIn,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -53,6 +54,7 @@ import {
   isViolationFeeLog,
   getFirstResponseTimeColor,
   getResponseTimeColor,
+  renderAuditContent,
 } from '../../lib/format'
 import {
   getLogTypeConfig,
@@ -60,6 +62,17 @@ import {
   isTimingLogType,
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
+
+// Maps a channel-update changed-field token (as recorded by the backend audit)
+// to its i18n label key for display in the audit details.
+const CHANNEL_FIELD_LABELS: Record<string, string> = {
+  status: 'Status',
+  models: 'Models',
+  group: 'Group',
+  type: 'Type',
+  base_url: 'Base URL',
+  key: 'Key',
+}
 
 function timingTextColorClass(
   variant: 'success' | 'warning' | 'danger'

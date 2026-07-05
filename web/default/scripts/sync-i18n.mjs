@@ -41,6 +41,7 @@ const BRAND_AND_LITERAL_KEYS = new Set([
   'Baidu V2',
   'CC Switch',
   'ChatGPT',
+  'ChatGPT Subscription (Codex)',
   'Claude',
   'Client ID',
   'Client Secret',

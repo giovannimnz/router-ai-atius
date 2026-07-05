@@ -98,7 +98,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       <div className='flex items-start justify-between gap-2.5 sm:gap-3'>
         <div className='flex min-w-0 items-start gap-2.5 sm:gap-3'>
           <div className='bg-muted/40 flex size-9 shrink-0 items-center justify-center rounded-lg sm:size-10 sm:rounded-xl'>
-            {vendorIcon || (
+            {modelIcon || (
               <span className='text-muted-foreground text-sm font-bold'>
                 {initial}
               </span>

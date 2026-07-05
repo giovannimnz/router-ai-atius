@@ -358,56 +358,29 @@ export function DynamicPricingBreakdown({
                     normalizeTierLabel(tier.label) ===
                       normalizedMatchedTierLabel
                   return (
-                    <TableRow
-                      key={`tier-${i}`}
-                      className={cn(
-                        isMatched &&
-                          'bg-emerald-50/70 hover:bg-emerald-50/70 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/10'
-                      )}
-                    >
-                      <TableCell className='py-2.5 align-top'>
-                        <div className='flex flex-wrap items-center gap-1.5'>
+                    <>
+                      <div className='flex flex-wrap items-center gap-1.5'>
+                        <Badge
+                          variant='secondary'
+                          className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                        >
+                          {tier.label || t('Default')}
+                        </Badge>
+                        {isMatched && (
                           <Badge
                             variant='secondary'
-                            className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                            className='bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
                           >
-                            {tier.label || t('Default')}
+                            {t('Matched')}
                           </Badge>
-                          {isMatched && (
-                            <Badge
-                              variant='secondary'
-                              className='bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                            >
-                              {t('Matched')}
-                            </Badge>
-                          )}
-                        </div>
-                        {condSummary && (
-                          <div className='text-muted-foreground mt-1 text-xs'>
-                            {condSummary}
-                          </div>
                         )}
-                      </TableCell>
-                      {visiblePriceFields.map((v) => {
-                        const value = Number(
-                          tier[v.field as string as keyof ParsedTier] || 0
-                        )
-                        return (
-                          <TableCell
-                            key={v.field}
-                            className='py-2.5 text-right align-top font-mono'
-                          >
-                            {value > 0 ? (
-                              <span className='font-semibold'>
-                                {`${symbol}${(value * rate).toFixed(4)}`}
-                              </span>
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
+                      </div>
+                      {condSummary && (
+                        <div className='text-muted-foreground mt-1 text-xs'>
+                          {condSummary}
+                        </div>
+                      )}
+                    </>
                   )
                 },
               },

@@ -24,13 +24,6 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { ComboboxInput } from '@/components/ui/combobox-input'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { getUserModels } from '@/lib/api'
@@ -168,8 +161,65 @@ export function CCSwitchDialog(props: Props) {
             {t('Cancel')}
           </Button>
           <Button onClick={handleSubmit}>{t('Open CC Switch')}</Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      }
+    >
+      <div className='space-y-4'>
+        <div className='space-y-2'>
+          <Label>{t('Application')}</Label>
+          <RadioGroup
+            value={app}
+            onValueChange={handleAppChange}
+            className='flex gap-4'
+          >
+            {(
+              Object.entries(APP_CONFIGS) as [
+                AppType,
+                (typeof APP_CONFIGS)[AppType],
+              ][]
+            ).map(([key, cfg]) => (
+              <div key={key} className='flex items-center gap-2'>
+                <RadioGroupItem value={key} id={`app-${key}`} />
+                <Label htmlFor={`app-${key}`} className='cursor-pointer'>
+                  {cfg.label}
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        <div className='space-y-2'>
+          <Label>{t('Name')}</Label>
+          <ComboboxInput
+            options={[]}
+            value={name}
+            onValueChange={setName}
+            placeholder={currentConfig.defaultName}
+            emptyText=''
+            allowCustomValue={true}
+          />
+        </div>
+
+        {currentConfig.modelFields.map((field) => (
+          <div key={field.key} className='space-y-2'>
+            <Label>
+              {t(field.labelKey)}
+              {field.required && (
+                <span className='text-destructive ml-0.5'>*</span>
+              )}
+            </Label>
+            <ComboboxInput
+              options={modelOptions}
+              value={models[field.key] || ''}
+              onValueChange={(v) =>
+                setModels((prev) => ({ ...prev, [field.key]: v }))
+              }
+              placeholder={t('Select or enter model name')}
+              emptyText={t('No models found')}
+            />
+          </div>
+        ))}
+      </div>
     </Dialog>
   )
 }

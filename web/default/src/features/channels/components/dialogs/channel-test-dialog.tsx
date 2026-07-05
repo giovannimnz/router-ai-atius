@@ -60,14 +60,6 @@ import {
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -87,14 +79,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Tooltip,
   TooltipContent,
@@ -371,6 +355,14 @@ function ChannelTestDialogContent({
     pageIndex: 0,
     pageSize: 30,
   })
+  const endpointSelectItems = useMemo(
+    () =>
+      endpointTypeOptions.map((option) => ({
+        value: option.value,
+        label: t(option.label),
+      })),
+    [t]
+  )
 
   const dismissBatchProgressToast = useCallback(() => {
     if (batchProgressToastIdRef.current === null) return
@@ -966,17 +958,18 @@ function ChannelTestDialogContent({
     ]
   )
 
-  const table = useReactTable({
+  const { table } = useDataTable({
     data: tableData,
     columns,
-    state: {
-      rowSelection,
-      pagination,
-    },
+    rowSelection,
+    pagination,
     enableRowSelection: true,
     getRowId: (row) => row.model,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
+    withFilteredRowModel: false,
+    withSortedRowModel: false,
+    withFacetedRowModel: false,
   })
 
   return (

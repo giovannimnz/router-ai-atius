@@ -30,8 +30,6 @@ export function SubscriptionsTable() {
   const { t } = useTranslation()
   const columns = useSubscriptionsColumns()
   const { refreshTrigger } = useSubscriptions()
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-subscription-plans', refreshTrigger],
@@ -44,15 +42,11 @@ export function SubscriptionsTable() {
 
   const plans = useMemo(() => data || [], [data])
 
-  const table = useReactTable({
+  const { table } = useDataTable({
     data: plans,
     columns,
-    state: { sorting, columnVisibility },
-    onSortingChange: setSorting,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    withFilteredRowModel: false,
+    withFacetedRowModel: false,
   })
 
   return (
@@ -65,6 +59,7 @@ export function SubscriptionsTable() {
         'Click "Create Plan" to create your first subscription plan'
       )}
       skeletonKeyPrefix='subscriptions-skeleton'
+      applyHeaderSize
     />
   )
 }

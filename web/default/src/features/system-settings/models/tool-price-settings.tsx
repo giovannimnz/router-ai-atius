@@ -25,14 +25,6 @@ import { StaticDataTable } from '@/components/data-table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -112,7 +104,6 @@ export const ToolPriceSettings = memo(function ToolPriceSettings({
   useEffect(() => {
     const prices = parseInitialPrices(defaultValue)
     const initialRows = objectToRows(prices)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRows(initialRows)
     setJsonText(JSON.stringify(prices, null, 2))
     setJsonError('')

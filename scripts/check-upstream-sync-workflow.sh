@@ -38,4 +38,9 @@ grep -Eq 'clear_stale_index_lock' "$workflow" || {
   exit 1
 }
 
+grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
+  echo "sync workflow must collect conflict paths before mutating the index" >&2
+  exit 1
+}
+
 echo "upstream sync workflow guard passed"

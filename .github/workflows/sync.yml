@@ -146,6 +146,7 @@ jobs:
             local side="$1"
             local stage
             local path
+            local conflict_paths=()
             if [[ "$side" == "theirs" ]]; then
               stage=3
             else
@@ -153,16 +154,21 @@ jobs:
             fi
 
             clear_stale_index_lock
+            mapfile -d '' -t conflict_paths < <(git diff --name-only --diff-filter=U -z)
 
-            while IFS= read -r -d '' path; do
+            for path in "${conflict_paths[@]}"; do
+              clear_stale_index_lock
               if git ls-files -u -- "$path" | awk -v stage="$stage" '$3 == stage { found = 1 } END { exit(found ? 0 : 1) }'; then
+                clear_stale_index_lock
                 git checkout --"$side" -- "$path"
+                clear_stale_index_lock
                 git add -- "$path"
               else
+                clear_stale_index_lock
                 git rm -f --ignore-unmatch -- "$path"
                 rm -rf -- "$path"
               fi
-            done < <(git diff --name-only --diff-filter=U -z)
+            done
 
             if git diff --name-only --diff-filter=U | grep -q .; then
               echo "::error::Unresolved merge conflicts remain after applying $side strategy"

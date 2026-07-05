@@ -27,6 +27,8 @@ into local `refs/tags/*`.
   file on the selected side.
 - If a failed merge leaves `.git/index.lock` behind in the ephemeral Actions
   checkout, the workflow removes that stale lock before resolving paths.
+- The resolver collects the unmerged path list before checkout/add/rm operations,
+  so a diagnostic `git diff` process cannot race with index writes.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 

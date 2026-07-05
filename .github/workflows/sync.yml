@@ -261,6 +261,12 @@ jobs:
           CI_FRONTEND_RETRIES: 1
         run: ./scripts/ci-build-frontends.sh "v$NEW_TAG"
 
+      - name: Verify backend release build
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
+        run: ./scripts/ci-build-backend.sh "v$NEW_TAG"
+
       - name: Push commit
         if: steps.sync.outputs.changed == 'true'
         run: |

@@ -52,6 +52,10 @@ into local `refs/tags/*`.
   `scripts/ci-build-frontends.sh "v$NEW_TAG"`. A broken frontend sync now stops
   inside the sync workflow instead of publishing a tag that immediately fails
   Release, Docker, and Electron.
+- Before pushing the sync commit or version tag, the workflow also runs
+  `scripts/ci-build-backend.sh "v$NEW_TAG"`. Backend compile errors introduced
+  by conflict resolution now fail in the sync workflow before any release tag is
+  published.
 
 ## Local guard
 
@@ -63,5 +67,5 @@ scripts/check-upstream-sync-workflow.sh
 
 The guard fails if the workflow regresses to fetching upstream tags, loses the
 post-tag dispatch calls, points the GHCR workflow at the wrong sync workflow
-name, omits the pre-tag frontend build, omits upstream-owned `web/default`
-restoration, or inverts the merge-strategy mapping again.
+name, omits the pre-tag frontend/backend builds, omits upstream-owned
+`web/default` restoration, or inverts the merge-strategy mapping again.

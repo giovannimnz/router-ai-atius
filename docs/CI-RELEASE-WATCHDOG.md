@@ -35,7 +35,7 @@ or `GH_WATCHDOG_POLL_SECONDS`.
 The release checker scans all runs for the tag, calls the watchdog for retryable
 failures, and stops with the failed log when it sees deterministic failures such
 as missing scripts, missing registry credentials, frozen lockfiles, missing
-modules, or frontend build/config errors.
+modules, undefined Go symbols, or frontend build/config errors.
 
 Docker image workflows run `scripts/check-dockerfile-assets.sh` before buildx.
 That guard catches stale Dockerfile references and verifies that the Dockerfile
@@ -56,3 +56,7 @@ Electron workflows directly after the tag is pushed.
 The sync workflow also runs `scripts/ci-build-frontends.sh "v$NEW_TAG"` before
 pushing the sync commit and version tag. If `web/default` or `web/classic` is
 broken by an upstream merge, the sync run fails before a release tag exists.
+
+It also runs `scripts/ci-build-backend.sh "v$NEW_TAG"` before push/tag, so
+backend compile errors from conflict resolution are caught before Release,
+Docker, and Electron consume the tag.

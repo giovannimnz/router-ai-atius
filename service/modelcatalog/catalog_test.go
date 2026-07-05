@@ -21,9 +21,7 @@ func setupModelCatalogTestDB(t *testing.T) *gorm.DB {
 	gormName := strings.ReplaceAll(t.Name(), "/", "_")
 	ginelessDSN := fmt.Sprintf("file:%s?mode=memory&cache=shared", gormName)
 
-	common.UsingSQLite = true
-	common.UsingMySQL = false
-	common.UsingPostgreSQL = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
 	ratio_setting.InitRatioSettings()
 

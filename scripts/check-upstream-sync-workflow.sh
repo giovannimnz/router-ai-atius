@@ -77,6 +77,16 @@ grep -Eq 'scripts/ci-build-frontends.sh "v\$NEW_TAG"' "$workflow" || {
   exit 1
 }
 
+grep -Eq 'Verify backend release build' "$workflow" || {
+  echo "sync workflow must verify backend release build before pushing sync tags" >&2
+  exit 1
+}
+
+grep -Eq 'scripts/ci-build-backend.sh "v\$NEW_TAG"' "$workflow" || {
+  echo "sync workflow must run scripts/ci-build-backend.sh for the new tag before push" >&2
+  exit 1
+}
+
 grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
   echo "sync workflow must collect conflict paths before mutating the index" >&2
   exit 1

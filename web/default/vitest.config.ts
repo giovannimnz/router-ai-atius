@@ -16,20 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { defineConfig } from 'vitest/config'
-import path from 'node:path'
+import type { Table as TanstackTable } from '@tanstack/react-table'
+import type * as React from 'react'
 
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    css: false,
-  },
-})
+import { isContentSizedColumn } from './content-sized-columns'
+
+export function getTableSizeStyle<TData>(
+  table: TanstackTable<TData>
+): React.CSSProperties {
+  const width = table
+    .getVisibleLeafColumns()
+    .filter((column) => !isContentSizedColumn(column.id))
+    .reduce((total, column) => total + column.getSize(), 0)
+
+  return {
+    minWidth: `max(100%, ${width}px)`,
+    tableLayout: 'auto',
+    width: 'max-content',
+  }
+}

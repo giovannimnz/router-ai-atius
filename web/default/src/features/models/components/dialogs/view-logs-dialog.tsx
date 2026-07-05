@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+import { Download, Loader2, RefreshCcw, Terminal } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,10 +18,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, RefreshCcw, Terminal } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -36,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+
 import { getDeploymentLogs, listDeploymentContainers } from '../../api'
 
 interface ViewLogsDialogProps {
@@ -119,9 +122,17 @@ export function ViewLogsDialog({
   }, [logsData?.data])
 
   const logLines = useMemo(() => {
-    const normalized = logsText.replace(/\r\n?/g, '\n')
+    const normalized = logsText.replaceAll(/\r\n?/g, '\n')
     return normalized ? normalized.split('\n') : []
   }, [logsText])
+  const keyedLogLines = useMemo(() => {
+    const seen = new Map<string, number>()
+    return logLines.map((line) => {
+      const count = seen.get(line) ?? 0
+      seen.set(line, count + 1)
+      return { key: `${line}-${count}`, line }
+    })
+  }, [logLines])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -139,6 +150,44 @@ export function ViewLogsDialog({
     a.download = `deployment-${deploymentId}-${containerId || 'logs'}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+  let containerPlaceholder = t('Select')
+  if (isLoadingContainers) {
+    containerPlaceholder = t('Loading...')
+  } else if (containers.length === 0) {
+    containerPlaceholder = t('No containers')
+  }
+  let logsContent: ReactNode
+  if (isLoadingContainers || isLoadingLogs) {
+    logsContent = (
+      <div className='flex items-center justify-center py-8'>
+        <Loader2 className='h-6 w-6 animate-spin text-gray-400' />
+      </div>
+    )
+  } else if (containers.length === 0) {
+    logsContent = (
+      <div className='py-8 text-center text-gray-400'>{t('No containers')}</div>
+    )
+  } else if (!containerId) {
+    logsContent = (
+      <div className='py-8 text-center text-gray-400'>
+        {t('Please select a container')}
+      </div>
+    )
+  } else if (!logsText.trim()) {
+    logsContent = (
+      <div className='py-8 text-center text-gray-400'>{t('No logs')}</div>
+    )
+  } else {
+    logsContent = (
+      <div className='font-mono text-sm'>
+        {keyedLogLines.map(({ key, line }) => (
+          <div key={key} className='whitespace-pre-wrap text-gray-200'>
+            {line}
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -187,17 +236,44 @@ export function ViewLogsDialog({
             </div>
           </div>
         </div>
-
-        <div className='mb-3 grid gap-2 sm:grid-cols-2 sm:gap-3'>
-          <div className='space-y-1'>
-            <div className='text-muted-foreground text-xs'>
-              {t('Container')}
-            </div>
-            <Select
-              items={[
-                ...containers.flatMap((c) => {
+      </div>
+      <div className='mb-3 grid gap-2 sm:grid-cols-2 sm:gap-3'>
+        <div className='space-y-1'>
+          <div className='text-muted-foreground text-xs'>{t('Container')}</div>
+          <Select
+            items={containers.flatMap((c) => {
+              const id = c?.container_id
+              if (typeof id !== 'string' || !id) return []
+              const status =
+                typeof c?.status === 'string' && c.status
+                  ? ` (${c.status})`
+                  : ''
+              return [
+                {
+                  value: id,
+                  label: (
+                    <>
+                      {id}
+                      {status}
+                    </>
+                  ),
+                },
+              ]
+            })}
+            value={containerId}
+            onValueChange={(v) => v !== null && setContainerId(v)}
+            disabled={isLoadingContainers || containers.length === 0}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={containerPlaceholder} />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                {containers.map((c) => {
                   const id = c?.container_id
-                  if (typeof id !== 'string' || !id) return []
+                  if (typeof id !== 'string' || !id) {
+                    return null
+                  }
                   const status =
                     typeof c?.status === 'string' && c.status
                       ? ` (${c.status})`
@@ -315,7 +391,19 @@ export function ViewLogsDialog({
             </div>
           )}
         </div>
-      </DialogContent>
+      </div>
+      <div
+        ref={scrollRef}
+        className='bg-muted flex-1 overflow-auto rounded-md border p-3 sm:p-4'
+        onScroll={(e) => {
+          const target = e.target as HTMLDivElement
+          const isAtBottom =
+            target.scrollHeight - target.scrollTop - target.clientHeight < 50
+          setAutoScroll(isAtBottom)
+        }}
+      >
+        {logsContent}
+      </div>
     </Dialog>
   )
 }

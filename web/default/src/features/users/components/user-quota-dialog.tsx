@@ -19,9 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
-import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
-import { cn } from '@/lib/utils'
+
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,6 +32,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
 import { adjustUserQuota } from '../api'
 import type { QuotaAdjustMode } from '../types'
 

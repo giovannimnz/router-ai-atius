@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Mail,
   Globe,
@@ -28,10 +27,14 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub, SiDiscord } from 'react-icons/si'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Dialog } from '@/components/dialog'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -48,8 +51,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { StatusBadge } from '@/components/status-badge'
+import { api } from '@/lib/api'
+
 import {
   getUser,
   getUserOAuthBindings,

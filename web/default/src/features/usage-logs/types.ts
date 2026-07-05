@@ -109,6 +109,8 @@ export interface LogOtherData {
     // Manage audit fields (type=3, admin only)
     admin_username?: string
     admin_id?: number | string
+    admin_role?: number
+    auth_method?: 'session' | 'access_token' | string
   }
   request_path?: string
   request_conversion?: string[]
@@ -201,7 +203,7 @@ export interface LogStatistics {
 }
 
 // ============================================================================
-// Drawing Logs (Midjourney) Types
+// Drawing Logs (MjProxy) Types
 // ============================================================================
 
 export interface MidjourneyLog {

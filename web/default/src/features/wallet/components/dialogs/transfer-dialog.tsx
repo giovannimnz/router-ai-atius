@@ -16,10 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { formatQuota } from '@/lib/format'
+
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,6 +32,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { formatQuota } from '@/lib/format'
+
 import { QUOTA_PER_DOLLAR } from '../../constants'
 
 interface TransferDialogProps {

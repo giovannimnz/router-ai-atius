@@ -18,8 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { formatTimestampToDate } from '@/lib/format'
-import { getLobeIcon } from '@/lib/lobe-icon'
+
+import { BadgeCell, BadgeListCell } from '@/components/data-table'
+import { GroupBadge } from '@/components/group-badge'
+import { ProviderBadge } from '@/components/provider-badge'
+import { StatusBadge } from '@/components/status-badge'
+import { TableId } from '@/components/table-id'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -27,10 +31,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { DataTableColumnHeader } from '@/components/data-table/column-header'
-import { GroupBadge } from '@/components/group-badge'
-import { StatusBadge, StatusBadgeList } from '@/components/status-badge'
-import { TableId } from '@/components/table-id'
+import { formatTimestampToDate } from '@/lib/format'
+import { getLobeIcon } from '@/lib/lobe-icon'
+
 import {
   getModelStatusConfig,
   getNameRuleConfig,
@@ -198,7 +201,9 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           return (
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger render={<div />}>{badge}</TooltipTrigger>
+                <TooltipTrigger render={<div className='-ml-1.5' />}>
+                  {badge}
+                </TooltipTrigger>
                 <TooltipContent
                   side='top'
                   className='border-border bg-popover max-h-48 max-w-[320px] overflow-y-auto p-2'
@@ -259,17 +264,10 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 
-        const icon = vendor.icon ? getLobeIcon(vendor.icon, 14) : null
-
         return (
-          <div className='flex items-center gap-1.5'>
-            {icon}
-            <StatusBadge
-              label={vendor.name}
-              autoColor={vendor.name}
-              size='sm'
-            />
-          </div>
+          <BadgeCell>
+            <ProviderBadge iconKey={vendor.icon} label={vendor.name} />
+          </BadgeCell>
         )
       },
       filterFn: (row, id, value) => {
@@ -585,7 +583,6 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       cell: ({ row }) => {
         return <DataTableRowActions row={row} />
       },
-      size: 100,
       enableSorting: false,
       enableHiding: false,
     },

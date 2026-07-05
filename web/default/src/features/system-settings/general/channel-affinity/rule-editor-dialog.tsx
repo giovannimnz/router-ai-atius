@@ -16,11 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -46,9 +48,14 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+
 import { SettingsSwitchField } from '../../components/settings-form-layout'
 import { RULE_TEMPLATES } from './constants'
 import type { AffinityRule, KeySource } from './types'
+
+type KeySourceRow = KeySource & {
+  rowId: string
+}
 
 const KEY_SOURCE_TYPES = [
   'context_int',
@@ -107,8 +114,13 @@ interface Props {
 export function RuleEditorDialog(props: Props) {
   const { t } = useTranslation()
   const isEdit = !!props.rule?.name
-  const [keySources, setKeySources] = useState<KeySource[]>([
-    { type: 'gjson', path: '' },
+  const nextKeySourceRowId = useRef(0)
+  const createKeySourceRow = (source?: Partial<KeySource>): KeySourceRow => ({
+    ...normalizeKeySource(source ?? { type: 'gjson', path: '' }),
+    rowId: String(nextKeySourceRowId.current++),
+  })
+  const [keySources, setKeySources] = useState<KeySourceRow[]>(() => [
+    createKeySourceRow(),
   ])
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -145,7 +157,11 @@ export function RuleEditorDialog(props: Props) {
         : '',
     })
     const sources = (r.key_sources || []).map(normalizeKeySource)
-    setKeySources(sources.length > 0 ? sources : [{ type: 'gjson', path: '' }])
+    setKeySources(
+      sources.length > 0
+        ? sources.map(createKeySourceRow)
+        : [createKeySourceRow()]
+    )
     if (r.param_override_template) setAdvancedOpen(true)
   }
 
@@ -170,7 +186,7 @@ export function RuleEditorDialog(props: Props) {
         include_rule_name: true,
         param_override_template_json: '',
       })
-      setKeySources([{ type: 'gjson', path: '' }])
+      setKeySources([createKeySourceRow()])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, props.rule, props.templateKey])
@@ -272,65 +288,82 @@ export function RuleEditorDialog(props: Props) {
 
           <Separator />
 
-          {/* Key Sources */}
-          <div>
-            <div className='mb-2 flex items-center justify-between'>
-              <Label>{t('Key Sources')}</Label>
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
-                onClick={() =>
-                  setKeySources((prev) => [
-                    ...prev,
-                    { type: 'gjson', path: '' },
-                  ])
-                }
+        <SettingsSwitchField
+          checked={form.watch('skip_retry_on_failure')}
+          onCheckedChange={(v) => form.setValue('skip_retry_on_failure', v)}
+          label={t('Skip retry on failure')}
+        />
+
+        <Separator />
+
+        {/* Key Sources */}
+        <div>
+          <div className='mb-2 flex items-center justify-between'>
+            <Label>{t('Key Sources')}</Label>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              onClick={() =>
+                setKeySources((prev) => [...prev, createKeySourceRow()])
+              }
+            >
+              <Plus className='mr-1 h-3 w-3' />
+              {t('Add')}
+            </Button>
+          </div>
+          <p className='text-muted-foreground mb-2 text-xs'>
+            {t('Common Keys')}: {CONTEXT_KEY_PRESETS.join(', ')}
+          </p>
+          <div className='space-y-2'>
+            {keySources.map((src, idx) => (
+              <div
+                key={src.rowId}
+                className='flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center'
               >
-                <Plus className='mr-1 h-3 w-3' />
-                {t('Add')}
-              </Button>
-            </div>
-            <p className='text-muted-foreground mb-2 text-xs'>
-              {t('Common Keys')}: {CONTEXT_KEY_PRESETS.join(', ')}
-            </p>
-            <div className='space-y-2'>
-              {keySources.map((src, idx) => (
-                <div key={idx} className='flex items-center gap-2'>
-                  <Select
-                    items={[
-                      ...KEY_SOURCE_TYPES.map((t) => ({ value: t, label: t })),
-                    ]}
-                    value={src.type}
-                    onValueChange={(v) => {
-                      if (v === null) return
-                      const next = [...keySources]
-                      next[idx] = normalizeKeySource({
+                <Select
+                  items={KEY_SOURCE_TYPES.map((t) => ({ value: t, label: t }))}
+                  value={src.type}
+                  onValueChange={(v) => {
+                    if (v === null) return
+                    const next = [...keySources]
+                    next[idx] = {
+                      ...normalizeKeySource({
                         ...src,
                         type: v as KeySource['type'],
-                      })
-                      setKeySources(next)
-                    }}
-                  >
-                    <SelectTrigger className='w-[160px]'>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      <SelectGroup>
-                        {KEY_SOURCE_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    className='flex-1'
-                    placeholder={
-                      src.type === 'gjson'
-                        ? 'metadata.conversation_id'
-                        : 'user_id'
+                      }),
+                      rowId: src.rowId,
+                    }
+                    setKeySources(next)
+                  }}
+                >
+                  <SelectTrigger className='w-full sm:w-[160px]'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {KEY_SOURCE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <Input
+                  className='min-w-0 flex-1'
+                  placeholder={
+                    src.type === 'gjson'
+                      ? 'metadata.conversation_id'
+                      : 'user_id'
+                  }
+                  value={src.type === 'gjson' ? src.path || '' : src.key || ''}
+                  onChange={(e) => {
+                    const next = [...keySources]
+                    if (src.type === 'gjson') {
+                      next[idx] = { ...src, path: e.target.value }
+                    } else {
+                      next[idx] = { ...src, key: e.target.value }
                     }
                     value={
                       src.type === 'gjson' ? src.path || '' : src.key || ''
@@ -440,18 +473,39 @@ export function RuleEditorDialog(props: Props) {
             </CollapsibleContent>
           </Collapsible>
 
-          <DialogFooter>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => props.onOpenChange(false)}
-            >
-              {t('Cancel')}
-            </Button>
-            <Button type='submit'>{t('Save')}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+            <div className='grid gap-1.5'>
+              <Label>{t('Parameter Override Template (JSON)')}</Label>
+              <Textarea
+                rows={5}
+                placeholder='{"operations": [...]}'
+                {...form.register('param_override_template_json')}
+                className='font-mono text-xs'
+              />
+            </div>
+
+            <div className='grid gap-3 sm:grid-cols-3'>
+              <SettingsSwitchField
+                checked={form.watch('include_using_group')}
+                onCheckedChange={(v) => form.setValue('include_using_group', v)}
+                label={t('Include Group')}
+                className='py-0'
+              />
+              <SettingsSwitchField
+                checked={form.watch('include_model_name')}
+                onCheckedChange={(v) => form.setValue('include_model_name', v)}
+                label={t('Include Model')}
+                className='py-0'
+              />
+              <SettingsSwitchField
+                checked={form.watch('include_rule_name')}
+                onCheckedChange={(v) => form.setValue('include_rule_name', v)}
+                label={t('Include Rule Name')}
+                className='py-0'
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </form>
     </Dialog>
   )
 }

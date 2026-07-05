@@ -38,8 +38,9 @@ services:
       - TZ=America/Sao_Paulo
       - LANG=pt_BR.UTF-8
       - BATCH_UPDATE_ENABLED=true
-      - NODE_NAME=router-ai-atius-dev
-      - TRUST_PROXY=true
+      # Enable only when accessing the dev backend through HTTPS. SESSION_COOKIE_TRUSTED_URL is required when true.
+      # - SESSION_COOKIE_SECURE=true
+      # - SESSION_COOKIE_TRUSTED_URL=https://example.com,https://admin.example.com
     depends_on:
       router-ai-atius-dev-redis:
         condition: service_started

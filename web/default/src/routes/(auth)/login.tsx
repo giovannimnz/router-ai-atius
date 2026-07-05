@@ -21,20 +21,36 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useAuthStore } from '@/stores/auth-store'
 import { SignIn } from '@/features/auth/sign-in'
 
-const searchSchema = z.object({
-  redirect: z.string().optional(),
-})
+import { isContentSizedColumn } from './content-sized-columns'
 
-// /login is a canonical alias for /sign-in (owner preference for clean URLs).
-// Renders the same SignIn component. Any redirect param is preserved.
-export const Route = createFileRoute('/(auth)/login')({
-  component: SignIn,
-  validateSearch: searchSchema,
-  beforeLoad: async ({ search }) => {
-    const { auth } = useAuthStore.getState()
+export function DataTableColgroup<TData>({
+  table,
+}: {
+  table: TanstackTable<TData>
+}) {
+  const columns = table.getVisibleLeafColumns()
+  const sizedColumns = columns.filter(
+    (column) => !isContentSizedColumn(column.id)
+  )
+  const totalSize = sizedColumns.reduce((sum, col) => sum + col.getSize(), 0)
 
-    if (auth.user) {
-      throw redirect({ to: search?.redirect || '/dashboard' })
-    }
-  },
-})
+  return (
+    <colgroup>
+      {columns.map((column) => {
+        const width = isContentSizedColumn(column.id)
+          ? undefined
+          : getColumnWidth(column.getSize(), totalSize)
+
+        return <col key={column.id} style={{ width }} />
+      })}
+    </colgroup>
+  )
+}
+
+function getColumnWidth(columnSize: number, totalSize: number) {
+  if (totalSize <= 0) {
+    return undefined
+  }
+
+  return `${(columnSize / totalSize) * 100}%`
+}

@@ -18,47 +18,37 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useMemo, memo, useCallback, useEffect } from 'react'
 import {
-  type ColumnDef,
   type ColumnFiltersState,
   type OnChangeFn,
   type PaginationState,
   type RowSelectionState,
   type VisibilityState,
   type SortingState,
-  flexRender,
-  getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  useReactTable,
 } from '@tanstack/react-table'
-import { useMediaQuery } from '@/hooks'
-import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Copy, Plus } from 'lucide-react'
+import {
+  useState,
+  useMemo,
+  memo,
+  useCallback,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+
 import {
   DataTableBulkActions,
   DataTableColumnHeader,
   DataTableToolbar,
   DataTablePagination,
 } from '@/components/data-table'
-import { StatusBadge } from '@/components/status-badge'
-import {
-  combineBillingExpr,
-  splitBillingExprAndRequestRules,
-} from '@/features/pricing/lib/billing-expr'
+import { Button } from '@/components/ui/button'
+import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
+import { useMediaQuery } from '@/hooks'
+
 import { safeJsonParse } from '../utils/json-parser'
 import {
   ModelPricingEditorPanel,
@@ -376,9 +366,182 @@ export const ModelRatioVisualEditor = memo(
               audioCompletion !== ''),
         }
       })
+      .filter((row) => !row.isDraftDeleted)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [
+    savedModelPrice,
+    savedModelRatio,
+    savedCacheRatio,
+    savedCreateCacheRatio,
+    savedCompletionRatio,
+    savedImageRatio,
+    savedAudioRatio,
+    savedAudioCompletionRatio,
+    savedBillingMode,
+    savedBillingExpr,
+    modelPrice,
+    modelRatio,
+    cacheRatio,
+    createCacheRatio,
+    completionRatio,
+    imageRatio,
+    audioRatio,
+    audioCompletionRatio,
+    billingMode,
+    billingExpr,
+  ])
 
-      return modelData.sort((a, b) => a.name.localeCompare(b.name))
-    }, [
+  const modeCounts = useMemo(
+    () =>
+      models.reduce(
+        (acc, model) => {
+          const mode =
+            model.billingMode === 'per-request' ||
+            model.billingMode === 'tiered_expr'
+              ? model.billingMode
+              : 'per-token'
+          acc[mode] += 1
+          return acc
+        },
+        {
+          'per-token': 0,
+          'per-request': 0,
+          tiered_expr: 0,
+        } as Record<'per-token' | 'per-request' | 'tiered_expr', number>
+      ),
+    [models]
+  )
+
+  const handleEdit = useCallback(
+    (model: ModelRow) => {
+      const editableModel = model.draft ?? model.saved ?? model
+      setEditData({
+        name: editableModel.name,
+        price: editableModel.price,
+        ratio: editableModel.ratio,
+        cacheRatio: editableModel.cacheRatio,
+        createCacheRatio: editableModel.createCacheRatio,
+        completionRatio: editableModel.completionRatio,
+        imageRatio: editableModel.imageRatio,
+        audioRatio: editableModel.audioRatio,
+        audioCompletionRatio: editableModel.audioCompletionRatio,
+        billingMode:
+          editableModel.billingMode === 'tiered_expr'
+            ? 'tiered_expr'
+            : editableModel.price && editableModel.price !== ''
+              ? 'per-request'
+              : 'per-token',
+        billingExpr: editableModel.billingExpr,
+        requestRuleExpr: editableModel.requestRuleExpr,
+      })
+      setEditorOpen(true)
+      if (isMobile) setSheetOpen(true)
+    },
+    [isMobile]
+  )
+
+  const handleAdd = useCallback(() => {
+    setEditData(null)
+    setEditorOpen(true)
+    if (isMobile) setSheetOpen(true)
+  }, [isMobile])
+
+  const handleGlobalFilterChange = useCallback<OnChangeFn<string>>(
+    (updater) => {
+      setGlobalFilter((previous) => {
+        const next = typeof updater === 'function' ? updater(previous) : updater
+        if (next !== previous) {
+          setEditData(null)
+          setEditorOpen(false)
+          setSheetOpen(false)
+        }
+        return next
+      })
+    },
+    []
+  )
+
+  const handleDelete = useCallback(
+    (name: string) => {
+      const priceMap = safeJsonParse<Record<string, number>>(modelPrice, {
+        fallback: {},
+        silent: true,
+      })
+      const ratioMap = safeJsonParse<Record<string, number>>(modelRatio, {
+        fallback: {},
+        silent: true,
+      })
+      const cacheMap = safeJsonParse<Record<string, number>>(cacheRatio, {
+        fallback: {},
+        silent: true,
+      })
+      const createCacheMap = safeJsonParse<Record<string, number>>(
+        createCacheRatio,
+        { fallback: {}, silent: true }
+      )
+      const completionMap = safeJsonParse<Record<string, number>>(
+        completionRatio,
+        { fallback: {}, silent: true }
+      )
+      const imageMap = safeJsonParse<Record<string, number>>(imageRatio, {
+        fallback: {},
+        silent: true,
+      })
+      const audioMap = safeJsonParse<Record<string, number>>(audioRatio, {
+        fallback: {},
+        silent: true,
+      })
+      const audioCompletionMap = safeJsonParse<Record<string, number>>(
+        audioCompletionRatio,
+        { fallback: {}, silent: true }
+      )
+      const billingModeMap = safeJsonParse<Record<string, string>>(
+        billingMode,
+        { fallback: {}, silent: true }
+      )
+      const billingExprMap = safeJsonParse<Record<string, string>>(
+        billingExpr,
+        { fallback: {}, silent: true }
+      )
+
+      delete priceMap[name]
+      delete ratioMap[name]
+      delete cacheMap[name]
+      delete createCacheMap[name]
+      delete completionMap[name]
+      delete imageMap[name]
+      delete audioMap[name]
+      delete audioCompletionMap[name]
+      delete billingModeMap[name]
+      delete billingExprMap[name]
+
+      onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
+      onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
+      onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
+      onChange('CreateCacheRatio', JSON.stringify(createCacheMap, null, 2))
+      onChange('CompletionRatio', JSON.stringify(completionMap, null, 2))
+      onChange('ImageRatio', JSON.stringify(imageMap, null, 2))
+      onChange('AudioRatio', JSON.stringify(audioMap, null, 2))
+      onChange(
+        'AudioCompletionRatio',
+        JSON.stringify(audioCompletionMap, null, 2)
+      )
+      onChange(
+        'billing_setting.billing_mode',
+        JSON.stringify(billingModeMap, null, 2)
+      )
+      onChange(
+        'billing_setting.billing_expr',
+        JSON.stringify(billingExprMap, null, 2)
+      )
+
+      if (editData?.name === name) {
+        setEditData(null)
+        setEditorOpen(false)
+        setSheetOpen(false)
+      }
+    },
+    [
       modelPrice,
       modelRatio,
       cacheRatio,
@@ -389,7 +552,10 @@ export const ModelRatioVisualEditor = memo(
       audioCompletionRatio,
       billingMode,
       billingExpr,
-    ])
+      onChange,
+      editData,
+    ]
+  )
 
     const modeCounts = useMemo(
       () =>
@@ -556,16 +722,76 @@ export const ModelRatioVisualEditor = memo(
       ]
     )
 
-    const columns = useMemo<ColumnDef<ModelRow>[]>(() => {
-      return [
-        {
-          id: 'select',
-          header: ({ table }) => (
-            <Checkbox
-              checked={table.getIsAllPageRowsSelected()}
-              indeterminate={table.getIsSomePageRowsSelected()}
-              onCheckedChange={(value) =>
-                table.toggleAllPageRowsSelected(!!value)
+  const hasRows = table.getRowModel().rows.length > 0
+
+  return (
+    <div className='flex flex-col gap-4'>
+      <div className='grid h-[clamp(720px,calc(100vh-12rem),900px)] min-h-0 gap-4 md:grid-cols-[minmax(300px,0.72fr)_minmax(520px,1.28fr)] xl:grid-cols-[minmax(320px,0.68fr)_minmax(640px,1.32fr)]'>
+        <div className='flex min-h-0 min-w-0 flex-col gap-3'>
+          <DataTableToolbar
+            table={table}
+            searchPlaceholder={t('Search models...')}
+            filters={[
+              {
+                columnId: 'billingMode',
+                title: t('Mode'),
+                options: [
+                  {
+                    label: 'Per-token',
+                    value: 'per-token',
+                    count: modeCounts['per-token'],
+                  },
+                  {
+                    label: 'Per-request',
+                    value: 'per-request',
+                    count: modeCounts['per-request'],
+                  },
+                  {
+                    label: 'Expression',
+                    value: 'tiered_expr',
+                    count: modeCounts.tiered_expr,
+                  },
+                ],
+              },
+            ]}
+            preActions={
+              <Button onClick={handleAdd}>
+                <Plus data-icon='inline-start' />
+                {t('Add model')}
+              </Button>
+            }
+          />
+
+          {!hasRows ? (
+            <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
+              {table.getState().globalFilter
+                ? t('No models match your search')
+                : t('No models configured. Use Add model to get started.')}
+            </div>
+          ) : (
+            <DataTableView
+              table={table}
+              containerClassName='min-h-0 flex-1 rounded-md'
+              tableContainerClassName='h-full'
+              tableClassName='min-w-[852px] table-fixed'
+              tableHeaderClassName='[&_tr]:border-b-0'
+              splitHeaderScrollClassName='h-full'
+              bodyContainerClassName='[scrollbar-gutter:stable]'
+              splitHeader
+              pinnedColumns={[
+                {
+                  columnId: 'actions',
+                  side: 'right',
+                },
+              ]}
+              colgroup={
+                <colgroup>
+                  <col className='w-9' />
+                  <col className='w-[300px]' />
+                  <col className='w-[120px]' />
+                  <col className='w-[300px]' />
+                  <col className='w-auto' />
+                </colgroup>
               }
               aria-label={t('Select all')}
               className='translate-y-[2px]'

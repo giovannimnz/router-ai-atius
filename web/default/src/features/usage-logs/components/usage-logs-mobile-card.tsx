@@ -23,8 +23,12 @@ import {
 } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatTimestampToDate } from '@/lib/format'
-import { cn } from '@/lib/utils'
+
+import {
+  dotColorMap,
+  textColorMap,
+  type StatusVariant,
+} from '@/components/status-badge'
 import {
   Empty,
   EmptyDescription,
@@ -33,8 +37,9 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { dotColorMap, textColorMap, type StatusVariant } from '@/components/status-badge'
-import type { LogCategory } from '../types'
+import { formatTimestampToDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
 import { LOG_TYPE_ENUM } from '../constants'
 import { getLogTypeConfig } from '../lib/utils'
 
@@ -207,7 +212,7 @@ function CommonLogsCard<TData>({
         <SummaryField
           label={t('Channel')}
           cell={cells.get('channel')}
-          primaryOnly
+          valueClassName='[&_.flex-col]:max-w-none'
         />
         <SummaryField label={t('User')} cell={cells.get('user')} primaryOnly />
         <SummaryField

@@ -18,16 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatNumber } from '@/lib/format'
+
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { formatNumber } from '@/lib/format'
+
 import { formatCreemPrice } from '../../lib/format'
 import type { CreemProduct } from '../../types'
 
@@ -89,8 +84,25 @@ export function CreemConfirmDialog({
             {processing && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {t('Confirm Payment')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      }
+    >
+      <div className='space-y-3 py-3 sm:space-y-4 sm:py-4'>
+        <div className='flex items-center justify-between'>
+          <span className='text-muted-foreground'>{t('Product')}</span>
+          <span className='font-medium'>{product.name}</span>
+        </div>
+        <div className='flex items-center justify-between'>
+          <span className='text-muted-foreground'>{t('Price')}</span>
+          <span className='text-primary font-medium'>
+            {formatCreemPrice(product.price, product.currency)}
+          </span>
+        </div>
+        <div className='flex items-center justify-between'>
+          <span className='text-muted-foreground'>{t('Quota')}</span>
+          <span className='font-medium'>{formatNumber(product.quota)}</span>
+        </div>
+      </div>
     </Dialog>
   )
 }

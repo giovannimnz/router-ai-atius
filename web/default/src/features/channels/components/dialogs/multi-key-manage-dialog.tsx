@@ -16,11 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Trash2, Power, PowerOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { StaticDataTable } from '@/components/data-table'
+import { Dialog } from '@/components/dialog'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -39,15 +44,12 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { StatusBadge } from '@/components/status-badge'
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  hasPermission,
+} from '@/lib/admin-permissions'
+import { useAuthStore } from '@/stores/auth-store'
+
 import {
   getMultiKeyStatus,
   enableMultiKey,
@@ -82,6 +84,12 @@ export function MultiKeyManageDialog({
   const { t } = useTranslation()
   const { currentRow } = useChannels()
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((s) => s.auth.user)
+  const canEditSensitive = hasPermission(
+    currentUser,
+    ADMIN_PERMISSION_RESOURCES.CHANNEL,
+    ADMIN_PERMISSION_ACTIONS.SENSITIVE_WRITE
+  )
 
   // Data state
   const [isLoading, setIsLoading] = useState(false)
@@ -161,6 +169,14 @@ export function MultiKeyManageDialog({
 
   const performAction = async () => {
     if (!confirmAction || !currentRow) return
+    if (
+      !canEditSensitive &&
+      (confirmAction.type === 'delete' ||
+        confirmAction.type === 'delete-disabled')
+    ) {
+      setConfirmAction(null)
+      return
+    }
 
     setIsPerformingAction(true)
     try {
@@ -255,13 +271,102 @@ export function MultiKeyManageDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className='flex min-h-0 flex-1 flex-col space-y-4 overflow-hidden'>
-            {/* Statistics */}
-            <div className='grid shrink-0 grid-cols-3 gap-3'>
-              <StatisticsCard
-                label={t('Enabled')}
-                count={enabledCount}
-                total={total}
+              {enabledCount > 0 && (
+                <Button
+                  variant='destructive'
+                  size='sm'
+                  onClick={() => setConfirmAction({ type: 'disable-all' })}
+                >
+                  <PowerOff className='mr-2 h-4 w-4' />
+                  {t('Disable All')}
+                </Button>
+              )}
+
+              {autoDisabledCount > 0 && (
+                <Button
+                  variant='destructive'
+                  size='sm'
+                  onClick={() => {
+                    if (!canEditSensitive) return
+                    setConfirmAction({ type: 'delete-disabled' })
+                  }}
+                  disabled={!canEditSensitive}
+                  title={
+                    canEditSensitive
+                      ? undefined
+                      : t('No permission to perform this action')
+                  }
+                >
+                  <Trash2 className='mr-2 h-4 w-4' />
+                  {t('Delete Auto-Disabled')}
+                </Button>
+              )}
+            </div>
+          </div>
+          {!canEditSensitive && (
+            <p className='text-muted-foreground text-xs'>
+              {t('No permission to perform this action')}
+            </p>
+          )}
+
+          {/* Table */}
+          <div className='min-h-0 flex-1 overflow-auto rounded-md border'>
+            {isLoading ? (
+              <div className='flex items-center justify-center py-12'>
+                <Loader2 className='text-muted-foreground h-8 w-8 animate-spin' />
+              </div>
+            ) : keys.length === 0 ? (
+              <div className='text-muted-foreground py-12 text-center'>
+                {t('No keys found')}
+              </div>
+            ) : (
+              <StaticDataTable
+                className='rounded-none border-0'
+                tableClassName='min-w-[800px]'
+                data={keys}
+                getRowKey={(key) => key.index}
+                columns={[
+                  {
+                    id: 'index',
+                    header: t('Index'),
+                    className: 'w-20',
+                    cellClassName: 'font-mono text-sm',
+                    cell: (key) => `#${key.index + 1}`,
+                  },
+                  {
+                    id: 'status',
+                    header: t('Status'),
+                    className: 'w-32',
+                    cell: (key) => renderStatusBadge(key.status),
+                  },
+                  {
+                    id: 'reason',
+                    header: t('Disabled Reason'),
+                    className: 'min-w-[200px]',
+                    cellClassName: 'max-w-xs truncate text-sm',
+                    cell: (key) => key.reason || '-',
+                  },
+                  {
+                    id: 'disabled-time',
+                    header: t('Disabled Time'),
+                    className: 'w-44',
+                    cellClassName: 'text-muted-foreground text-sm',
+                    cell: (key) => formatKeyTimestamp(key.disabled_time),
+                  },
+                  {
+                    id: 'actions',
+                    header: t('Actions'),
+                    className: 'text-right',
+                    cell: (key) => (
+                      <MultiKeyTableRowActions
+                        keyIndex={key.index}
+                        status={key.status}
+                        canDelete={canEditSensitive}
+                        onAction={setConfirmAction}
+                      />
+                    ),
+                  },
+                ]}
               />
               <StatisticsCard
                 label={t('Manual Disabled')}

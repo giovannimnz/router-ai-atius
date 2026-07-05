@@ -16,12 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
 import { Search, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { formatCurrencyFromUSD } from '@/lib/currency'
-import { formatNumber } from '@/lib/format'
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+
+import { Dialog } from '@/components/dialog'
+import { StatusBadge } from '@/components/status-badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -52,7 +51,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StatusBadge } from '@/components/status-badge'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+import { formatCurrencyFromUSD } from '@/lib/currency'
+import { formatNumber } from '@/lib/format'
+
 import { useBillingHistory } from '../../hooks/use-billing-history'
 import {
   getStatusConfig,
@@ -148,56 +150,69 @@ export function BillingHistoryDialog({
               </Select>
             </div>
 
-            {/* Records List */}
-            <ScrollArea className='h-[calc(100dvh-15rem)] pr-3 sm:h-[500px] sm:pr-4'>
-              {loading ? (
-                <div className='space-y-3'>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className='rounded-lg border p-3 sm:p-4'>
-                      <div className='flex items-start justify-between'>
-                        <div className='flex-1 space-y-2'>
-                          <Skeleton className='h-4 w-48' />
-                          <Skeleton className='h-3 w-32' />
-                        </div>
-                        <Skeleton className='h-5 w-16' />
-                      </div>
-                      <div className='mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4'>
-                        <Skeleton className='h-3 w-full' />
-                        <Skeleton className='h-3 w-full' />
-                        <Skeleton className='h-3 w-full' />
+          {/* Records List */}
+          <div className='max-h-[min(54vh,520px)] overflow-y-auto pr-1'>
+            {loading ? (
+              <div className='space-y-3'>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className='rounded-lg border p-3 sm:p-4'>
+                    <div className='flex items-start justify-between'>
+                      <div className='flex-1 space-y-2'>
+                        <Skeleton className='h-4 w-48' />
+                        <Skeleton className='h-3 w-32' />
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : records.length === 0 ? (
-                <div className='text-muted-foreground flex h-[320px] flex-col items-center justify-center text-center sm:h-[400px]'>
-                  <p className='text-sm font-medium'>
-                    {t('No billing records found')}
-                  </p>
-                  <p className='mt-1 text-xs'>
-                    {keyword
-                      ? t('Try adjusting your search')
-                      : t('Your transaction history will appear here')}
-                  </p>
-                </div>
-              ) : (
-                <div className='space-y-3'>
-                  {records.map((record) => {
-                    const statusConfig = getStatusConfig(record.status)
-                    return (
-                      <div
-                        key={record.id}
-                        className='hover:bg-muted/50 rounded-lg border p-3 transition-colors sm:p-4'
-                      >
-                        {/* Header Row */}
-                        <div className='flex items-start justify-between gap-2'>
-                          <div className='flex-1 space-y-1'>
-                            <div className='flex min-w-0 items-center gap-2'>
-                              <code className='text-foreground truncate font-mono text-sm'>
-                                {record.trade_no}
-                              </code>
-                              <Button
-                                variant='ghost'
+                    <div className='mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4'>
+                      <Skeleton className='h-3 w-full' />
+                      <Skeleton className='h-3 w-full' />
+                      <Skeleton className='h-3 w-full' />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : records.length === 0 ? (
+              <div className='text-muted-foreground flex min-h-40 flex-col items-center justify-center py-10 text-center'>
+                <p className='text-sm font-medium'>
+                  {t('No billing records found')}
+                </p>
+                <p className='mt-1 text-xs'>
+                  {keyword
+                    ? t('Try adjusting your search')
+                    : t('Your transaction history will appear here')}
+                </p>
+              </div>
+            ) : (
+              <div className='space-y-3'>
+                {records.map((record) => {
+                  const statusConfig = getStatusConfig(record.status)
+                  return (
+                    <div
+                      key={record.id}
+                      className='rounded-lg border p-3 sm:p-4'
+                    >
+                      {/* Header Row */}
+                      <div className='flex items-start justify-between gap-2'>
+                        <div className='flex-1 space-y-1'>
+                          <div className='flex min-w-0 items-center gap-2'>
+                            <code className='text-foreground truncate font-mono text-sm'>
+                              {record.trade_no}
+                            </code>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-5 w-5 p-0'
+                              onClick={() => copyToClipboard(record.trade_no)}
+                            >
+                              {copiedText === record.trade_no ? (
+                                <Check className='h-3 w-3' />
+                              ) : (
+                                <Copy className='h-3 w-3' />
+                              )}
+                            </Button>
+                            {isAdmin && record.user_id != null && (
+                              <StatusBadge
+                                label={`${t('User ID')}: ${record.user_id}`}
+                                variant='neutral'
                                 size='sm'
                                 className='h-5 w-5 p-0'
                                 onClick={() => copyToClipboard(record.trade_no)}
@@ -316,7 +331,42 @@ export function BillingHistoryDialog({
               </div>
             )}
           </div>
-        </DialogContent>
+
+          {/* Pagination */}
+          {!loading && records.length > 0 && (
+            <div className='flex flex-col items-center gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between'>
+              <div className='text-muted-foreground text-xs sm:text-sm'>
+                {t('Showing')} {(page - 1) * pageSize + 1}-
+                {Math.min(page * pageSize, total)} {t('of')} {total}
+              </div>
+              <div className='flex items-center gap-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => handlePageChange(page - 1)}
+                  disabled={page <= 1}
+                  className='h-8 w-8 p-0'
+                >
+                  <ChevronLeft className='h-4 w-4' />
+                </Button>
+                <div className='text-muted-foreground flex items-center gap-1 text-sm'>
+                  <span className='font-medium'>{page}</span>
+                  <span>/</span>
+                  <span>{totalPages}</span>
+                </div>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => handlePageChange(page + 1)}
+                  disabled={page >= totalPages}
+                  className='h-8 w-8 p-0'
+                >
+                  <ChevronRight className='h-4 w-4' />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </Dialog>
 
       {/* Confirm Complete Order Dialog */}

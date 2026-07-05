@@ -16,10 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { formatQuota, formatTimestamp } from '@/lib/format'
-import { cn } from '@/lib/utils'
+
+import { BadgeCell } from '@/components/data-table'
+import { GroupBadge } from '@/components/group-badge'
+import { LongText } from '@/components/long-text'
+import { StatusBadge } from '@/components/status-badge'
+import { TableId } from '@/components/table-id'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -27,13 +31,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { DataTableColumnHeader } from '@/components/data-table'
-import { GroupBadge } from '@/components/group-badge'
-import { LongText } from '@/components/long-text'
-import { StatusBadge } from '@/components/status-badge'
-import { TableId } from '@/components/table-id'
-import { USER_STATUSES, USER_ROLES, isUserDeleted } from '../constants'
-import { type User } from '../types'
+import { formatQuota, formatTimestamp } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+import {
+  USER_STATUS,
+  USER_STATUSES,
+  USER_ROLES,
+  isUserDeleted,
+} from '../constants'
+import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
 function getQuotaProgressColor(percentage: number): string {
@@ -75,10 +82,14 @@ export function useUsersColumns(): ColumnDef<User>[] {
       ),
       cell: ({ row }) => {
         return (
-          <TableId value={row.getValue('id') as number} className='w-[60px]' />
+          <TableId
+            value={row.getValue('id') as number}
+            className='w-[60px] text-sm'
+          />
         )
       },
-      meta: { label: t('ID'), mobileHidden: true },
+      size: 80,
+      meta: { mobileOrder: 10 },
     },
     {
       accessorKey: 'username',
@@ -220,7 +231,8 @@ export function useUsersColumns(): ColumnDef<User>[] {
           </Tooltip>
         )
       },
-      meta: { label: t('Quota') },
+      size: 170,
+      meta: { mobileOrder: 40 },
     },
     {
       accessorKey: 'group',
@@ -229,14 +241,19 @@ export function useUsersColumns(): ColumnDef<User>[] {
       ),
       cell: ({ row }) => {
         const group = row.getValue('group') as string
-        return <GroupBadge group={group} />
+        return (
+          <BadgeCell>
+            <GroupBadge group={group} />
+          </BadgeCell>
+        )
       },
       filterFn: (row, id, value) => {
         const group = String(row.getValue(id) || t('User Group')).toLowerCase()
         const searchValue = String(value).toLowerCase()
         return group.includes(searchValue)
       },
-      meta: { label: t('Group') },
+      size: 140,
+      meta: { mobileOrder: 30 },
     },
     {
       accessorKey: 'role',
@@ -264,7 +281,8 @@ export function useUsersColumns(): ColumnDef<User>[] {
         return value.includes(String(row.getValue(id)))
       },
       enableSorting: false,
-      meta: { label: t('Role') },
+      size: 120,
+      meta: { mobileOrder: 20 },
     },
     {
       id: 'invite_info',
@@ -278,7 +296,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
         const inviterId = user.inviter_id || 0
 
         return (
-          <div className='flex items-center gap-1'>
+          <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
             <Tooltip>
               <TooltipTrigger
                 render={

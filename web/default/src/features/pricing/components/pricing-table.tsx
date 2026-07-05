@@ -16,25 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { type Row, type PaginationState } from '@tanstack/react-table'
 import { useState, useCallback } from 'react'
-import {
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-  type PaginationState,
-} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { TableSkeleton, TableEmpty } from '@/components/data-table'
-import { DataTablePagination } from '@/components/data-table/pagination'
+  DataTablePagination,
+  DataTableRow,
+  DataTableView,
+  useDataTable,
+} from '@/components/data-table'
+
 import { DEFAULT_PRICING_PAGE_SIZE, DEFAULT_TOKEN_UNIT } from '../constants'
 import type { PricingModel, TokenUnit } from '../types'
 import { usePricingColumns } from './pricing-columns'

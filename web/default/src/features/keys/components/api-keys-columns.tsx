@@ -19,9 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { getUserGroups } from '@/lib/api'
-import { formatQuota, formatTimestampToDate } from '@/lib/format'
-import { cn } from '@/lib/utils'
+
+import { BadgeCell, TruncatedCell } from '@/components/data-table'
+import { GroupBadge } from '@/components/group-badge'
+import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -29,9 +30,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { DataTableColumnHeader } from '@/components/data-table'
-import { GroupBadge } from '@/components/group-badge'
-import { StatusBadge } from '@/components/status-badge'
+import { getUserGroups } from '@/lib/api'
+import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
 import { API_KEY_STATUSES } from '../constants'
 import { type ApiKey } from '../types'
 import {
@@ -49,9 +51,9 @@ function getQuotaProgressColor(percentage: number): string {
 
 function useGroupRatios(): Record<string, number> {
   const { data } = useQuery({
-    queryKey: ['user-self-groups'],
+    queryKey: ['user-groups'],
     queryFn: getUserGroups,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     select: (res) => {
       if (!res.success || !res.data) return {}
       const ratios: Record<string, number> = {}
@@ -100,9 +102,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         <DataTableColumnHeader column={column} title={t('Name')} />
       ),
       cell: ({ row }) => (
-        <div className='max-w-[200px] truncate font-medium'>
-          {row.getValue('name')}
-        </div>
+        <span className='font-medium'>{row.getValue('name')}</span>
       ),
       meta: { label: t('Name'), mobileTitle: true },
     },
@@ -205,9 +205,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
           return (
             <Tooltip>
               <TooltipTrigger
-                render={
-                  <span className='inline-flex items-center gap-1.5 text-xs' />
-                }
+                render={<BadgeCell className='gap-1.5 text-xs' />}
               >
                 <GroupBadge group='auto' />
                 {apiKey.cross_group_retry && (
@@ -228,7 +226,15 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
             </Tooltip>
           )
         }
-        return <GroupBadge group={group} ratio={ratio} />
+        return (
+          <TruncatedCell
+            className='-ml-1.5'
+            tooltipContent={group || '-'}
+            tooltipClassName='break-all'
+          >
+            <GroupBadge group={group} ratio={ratio} />
+          </TruncatedCell>
+        )
       },
       meta: { label: t('Group'), mobileHidden: true },
     },
@@ -315,8 +321,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
     {
       id: 'actions',
       cell: ({ row }) => <DataTableRowActions row={row} />,
-      meta: { label: t('Actions') },
-      size: 88,
+      meta: { pinned: 'right' as const },
     },
   ]
 }

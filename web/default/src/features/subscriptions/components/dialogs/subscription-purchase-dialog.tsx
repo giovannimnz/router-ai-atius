@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react'
 import { Crown, CalendarClock, Package } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
-import { formatQuota } from '@/lib/format'
-import { useSystemConfig } from '@/hooks/use-system-config'
+
+import { Dialog } from '@/components/dialog'
+import { GroupBadge } from '@/components/group-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,7 +40,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { GroupBadge } from '@/components/group-badge'
+import { useSystemConfig } from '@/hooks/use-system-config'
+import { formatQuota } from '@/lib/format'
+import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
+
 import {
   paySubscriptionStripe,
   paySubscriptionCreem,
@@ -278,6 +281,17 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 {plan.title}
               </span>
             </div>
+          )}
+          <div className='flex items-center justify-between'>
+            <span className='text-muted-foreground text-sm'>
+              {t('Plan Quota')}
+            </span>
+            <span className='flex items-center gap-1 text-sm'>
+              <Package className='h-3.5 w-3.5' />
+              {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+            </span>
+          </div>
+          {plan.upgrade_group && (
             <div className='flex items-center justify-between'>
               <span className='text-muted-foreground text-sm'>
                 {t('Validity Period')}

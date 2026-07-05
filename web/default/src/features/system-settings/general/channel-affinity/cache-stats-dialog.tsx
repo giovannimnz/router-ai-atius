@@ -19,13 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+import { Dialog } from '@/components/dialog'
 import { formatTimestampToDate } from '@/lib/format'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+
 import { getAffinityUsageCache } from './api'
 
 function formatRate(hit: number, total: number): string {

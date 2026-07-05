@@ -16,9 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect } from 'react'
 import { RefreshCw, Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { CopyButton } from '@/components/copy-button'
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,7 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CopyButton } from '@/components/copy-button'
+
 import { useAccessToken } from '../../hooks'
 
 // ============================================================================

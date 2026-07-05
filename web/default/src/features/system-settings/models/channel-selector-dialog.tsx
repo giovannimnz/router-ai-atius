@@ -16,18 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  useReactTable,
-  type ColumnDef,
-  type RowSelectionState,
-} from '@tanstack/react-table'
+import { type ColumnDef, type RowSelectionState } from '@tanstack/react-table'
 import { Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import {
+  DataTablePagination,
+  DataTableView,
+  useDataTable,
+} from '@/components/data-table'
+import { Dialog } from '@/components/dialog'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -47,16 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { DataTablePagination } from '@/components/data-table/pagination'
-import { StatusBadge } from '@/components/status-badge'
+
 import type { UpstreamChannel } from '../types'
 import {
   CHANNEL_STATUS_CONFIG,

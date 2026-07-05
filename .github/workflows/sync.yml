@@ -130,9 +130,12 @@ jobs:
 
             echo "Restoring protected fork paths from $base_ref..."
             for path in "${protected_paths[@]}"; do
+              git rm -r -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
+              rm -rf -- "$path"
               if git cat-file -e "${base_ref}:${path}" 2>/dev/null; then
                 git checkout "$base_ref" -- "$path"
               fi
+              git add -A -- "$path" 2>/dev/null || true
             done
           }
 

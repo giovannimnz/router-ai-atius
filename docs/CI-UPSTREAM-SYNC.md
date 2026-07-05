@@ -29,9 +29,9 @@ into local `refs/tags/*`.
   checkout, the workflow removes that stale lock before resolving paths.
 - The resolver collects the unmerged path list before checkout/add/rm operations,
   so a diagnostic `git diff` process cannot race with index writes.
-- Protected paths are restored before the merge commit is completed. This avoids
-  pushing an intermediate commit that touches workflow files and is rejected by
-  GitHub.
+- Protected paths are removed from the index/worktree and restored from the
+  fork baseline before the merge commit is completed. This avoids pushing an
+  intermediate commit or newly-added upstream workflow file that GitHub rejects.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 - `.github/workflows/` is protected as fork-owned. The scheduled workflow runs

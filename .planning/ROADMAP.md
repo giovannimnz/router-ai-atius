@@ -324,7 +324,7 @@ Plans:
 **Status:** Pending
 **Requirements:** PHASE-25-GOVERNED-MODEL-SCOPE, PHASE-25-AUTO-WORKLOAD-INFERENCE, PHASE-25-HEADER-OVERRIDE-COMPATIBILITY, PHASE-25-TEI-BATCH-SAFETY, PHASE-25-CLIENT-SMOKE-VALIDATION
 **Depends on:** Phase 20 Go-native embedding governor and Phase 24 final runtime/catalog state. Uses Codex session `019f2dc6-858a-79e1-a78d-495ee5631235` as design input.
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
@@ -338,7 +338,7 @@ Plans:
 
 **Wave 3** *(blocked on Waves 1-2 completion)*
 
-- [ ] 25-03-PLAN.md - smoke defaults, operator docs, and conditional live validation
+- [x] 25-03-PLAN.md - smoke defaults, operator docs, and conditional live validation
 
 ---
 

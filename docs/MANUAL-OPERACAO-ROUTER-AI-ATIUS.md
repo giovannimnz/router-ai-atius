@@ -138,8 +138,7 @@ Precos cadastrados/validados no backend:
 Comandos de verificacao:
 
 ```bash
-VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
-eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
+source <(/home/ubuntu/.local/bin/atius-vault-env router-ai-atius)
 
 bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
@@ -174,17 +173,18 @@ Regras praticas:
 
 ## Governor de embeddings Go-native
 
-Estado atualizado em 2026-06-26:
+Estado atualizado em 2026-07-05:
 
 - O governor de embeddings roda dentro do proprio processo Go do router; nao ha sidecar, middleware Python, container adicional ou rota `model-detailed` no caminho canonico.
 - Implementacao principal: `service/embeddinggovernor/` e integracao em `relay/embedding_handler.go`.
 - Escopo default: somente `embedding-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
 - `embedding-gte-v1` e o unico alias publico governado; `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` nao muda durante a recuperacao/catalog restore.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=3`, `batch_concurrency=1`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. O valor `4` continua reservado para override/manual turbo window; nao faz parte da escala automatica diaria.
-- Classificacao de workload e metadata-only. Ordem de precedencia:
+- Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
-  2. thresholds locais derivados do request (`InputCount >= 4` ou `InputChars >= 12000`).
-- Nao exponha um alias publico `*-batch`: batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
+  2. thresholds locais derivados do request (`InputCount >= 2` ou `InputChars >= 12000`).
+- Nao exponha um alias publico `*-batch`: sem alias publico batch; batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
+- arrays governados de `embedding-gte-v1` acima de `4` itens fazem fail-closed no relay antes do acquire do governor ou dispatch upstream. O header `interactive` nao bypassa esse cap, porque o TEI local nao tem caminho seguro de recomposicao transparente de resposta para batches maiores.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
 - Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
@@ -201,6 +201,8 @@ Variaveis de ambiente suportadas:
 EMBEDDING_GOVERNOR_ENABLED=true
 EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1
 EMBEDDING_GOVERNOR_BATCH_MODELS=
+EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true
+EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2
 EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY=2
 EMBEDDING_GOVERNOR_MIN_CONCURRENCY=1
 EMBEDDING_GOVERNOR_MAX_CONCURRENCY=3
@@ -226,6 +228,8 @@ EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s
 
 Significado operacional dos envs novos:
 
+- `EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true`: default seguro. Sem header explicito, o router infere `interactive` ou `batch` para modelos governados usando apenas metadata agregada.
+- `EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2`: threshold default para classificar arrays de input sem header como batch quando `InputCount >= 2`.
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=false`: default seguro. Sem isso, o governor ignora completamente o sinal de `/health`.
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=`: endpoint read-only do TEI. Se vazio, invalido ou exigir auth por URL, o probe fica desabilitado.
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT=30s`: timeout minimo seguro. Timeouts menores que isso ficam normalizados para `30s`.
@@ -261,7 +265,13 @@ Validacao local e gate operacional apos mudanca no governor:
 test -n "$ATIUS_ROUTER_TOKEN" && \
   ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
   ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
-  ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
+  python3 scripts/smoke-embeddings.py
+
+# Smoke autenticado no-header com array pequeno; valida inferencia batch automatica
+test -n "$ATIUS_ROUTER_TOKEN" && \
+  ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
+  ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
+  ATIUS_ROUTER_EMBEDDINGS_INPUT_MODE=array \
   python3 scripts/smoke-embeddings.py
 
 # Gate Graphify do checkout
@@ -497,8 +507,7 @@ bin/clianything endpoint list --classification api-action
 Smoke local:
 
 ```bash
-VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
-eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
+source <(/home/ubuntu/.local/bin/atius-vault-env router-ai-atius)
 ATIUS_ROUTER_ACTIVE_ONLY=1 python3 scripts/smoke-provider-consolidation.py
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'

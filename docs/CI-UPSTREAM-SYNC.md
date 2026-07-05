@@ -31,6 +31,9 @@ into local `refs/tags/*`.
   so a diagnostic `git diff` process cannot race with index writes.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
+- `.github/workflows/` is protected as fork-owned. The scheduled workflow runs
+  with `GITHUB_TOKEN`, which cannot create or update workflow files from an
+  upstream merge unless it has the `workflow` permission.
 
 ## Local guard
 

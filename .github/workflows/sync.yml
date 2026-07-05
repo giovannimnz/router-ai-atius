@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   packages: none
   deployments: none
 
@@ -247,7 +248,19 @@ jobs:
           git tag "v$NEW_TAG"
           git push origin "v$NEW_TAG"
           echo "🏷️ Created and pushed tag v$NEW_TAG"
-          # This tag push triggers docker-publish.yml via workflow_run
+
+      - name: Dispatch release workflows
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
+        run: |
+          set -euo pipefail
+          TAG="v$NEW_TAG"
+          gh workflow run release.yml --ref "$TAG" -f name="sync release $TAG"
+          gh workflow run docker-build.yml --ref main -f tag="$TAG"
+          gh workflow run electron-build.yml --ref "$TAG"
+          echo "🚦 Dispatched Release, Docker Multi-arch, and Electron workflows for $TAG"
 
       - name: Sync summary
         if: always()
@@ -267,7 +280,7 @@ jobs:
             if [[ "$CHANGED" == "true" && -n "$TAG" ]]; then
               echo "| Version | \`$TAG\` |"
               echo "| Tag pushed | ✅ \`v$TAG\` |"
-              echo "| Docker build | ⏳ Triggered automatically |"
+              echo "| Release workflows | ⏳ Dispatched by workflow_dispatch |"
             else
               echo "| Status | ⏭️ Already up to date |"
             fi

@@ -1,10 +1,10 @@
 name: Publish Docker Image (GHCR)
 
-# Triggered automatically after sync.yml pushes a version tag
+# Triggered automatically after sync.yml completes
 # Also triggerable manually with any tag
 on:
   workflow_run:
-    workflows: ["Daily Upstream Sync"]
+    workflows: ["Sync Upstream + Release"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -67,7 +67,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GHCR_TOKEN || github.token }}
 
       - name: Extract metadata
         id: meta
@@ -78,6 +78,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Validate Dockerfile asset references
+        run: scripts/check-dockerfile-assets.sh
 
       - name: Build & push (amd64)
         id: build

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 workflow="${1:-.github/workflows/sync.yml}"
+workflow_dir="$(dirname "$workflow")"
+docker_publish_workflow="${workflow_dir}/docker-publish.yml"
 
 if [[ ! -f "$workflow" ]]; then
   echo "workflow not found: $workflow" >&2
@@ -22,6 +24,18 @@ grep -Eq 'git ls-remote --tags --refs upstream' "$workflow" || {
   echo "sync workflow must detect upstream versions through ls-remote --tags --refs" >&2
   exit 1
 }
+
+grep -Eq 'actions: write' "$workflow" || {
+  echo "sync workflow must allow workflow_dispatch calls with actions: write" >&2
+  exit 1
+}
+
+for release_workflow in release.yml docker-build.yml electron-build.yml; do
+  grep -Eq "gh workflow run ${release_workflow}" "$workflow" || {
+    echo "sync workflow must dispatch ${release_workflow} after creating the version tag" >&2
+    exit 1
+  }
+done
 
 grep -Eq 'resolve_conflicts_with_side theirs' "$workflow" || {
   echo "sync workflow must use the per-path theirs resolver when strategy=theirs" >&2
@@ -51,6 +65,13 @@ grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
 if grep -Eq 'git commit -m "Resolve conflicts:' "$workflow"; then
   echo "sync workflow must restore protected paths before completing the merge commit" >&2
   exit 1
+fi
+
+if [[ -f "$docker_publish_workflow" ]]; then
+  grep -Fq 'workflows: ["Sync Upstream + Release"]' "$docker_publish_workflow" || {
+    echo "docker-publish workflow_run must reference Sync Upstream + Release" >&2
+    exit 1
+  }
 fi
 
 echo "upstream sync workflow guard passed"

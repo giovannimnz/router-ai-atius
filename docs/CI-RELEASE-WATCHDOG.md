@@ -36,7 +36,17 @@ The release checker scans all runs for the tag, calls the watchdog for retryable
 failures, and stops with the failed log when it sees deterministic failures such
 as missing scripts or missing registry credentials.
 
+Docker image workflows run `scripts/check-dockerfile-assets.sh` before buildx.
+That guard catches stale Dockerfile references and verifies that the Dockerfile
+uses the workspace root lockfile `web/bun.lock` before the expensive multi-arch
+build starts.
+
 If a run was created from an old tag or commit with a broken workflow file,
 rerunning it will keep using that old workflow. In that case, push a corrected
 commit and run `workflow_dispatch`, create a new patch tag, or intentionally
 move the tag only after confirming that rewriting the published tag is allowed.
+
+When `sync.yml` creates a tag with `GITHUB_TOKEN`, do not rely on `push` tag
+events to start release builds. GitHub suppresses most workflow runs caused by
+`GITHUB_TOKEN` pushes. The sync workflow should dispatch release, Docker, and
+Electron workflows directly after the tag is pushed.

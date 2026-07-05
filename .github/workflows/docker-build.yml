@@ -114,6 +114,9 @@ jobs:
             ${{ steps.image_targets.outputs.ghcr_image }}
             ${{ steps.image_targets.outputs.dockerhub_image }}
 
+      - name: Validate Dockerfile asset references
+        run: scripts/check-dockerfile-assets.sh
+
       - name: Build & push
         id: build
         uses: docker/build-push-action@v6

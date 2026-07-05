@@ -37,6 +37,13 @@ into local `refs/tags/*`.
 - `.github/workflows/` is protected as fork-owned. The scheduled workflow runs
   with `GITHUB_TOKEN`, which cannot create or update workflow files from an
   upstream merge unless it has the `workflow` permission.
+- A tag pushed by `GITHUB_TOKEN` does not trigger `push`-based workflows. After
+  creating the fork tag, the sync workflow dispatches `release.yml`,
+  `docker-build.yml`, and `electron-build.yml` explicitly with
+  `workflow_dispatch`.
+- The legacy GHCR workflow uses `workflow_run` against the actual workflow name
+  `Sync Upstream + Release` and falls back to `github.token` when `GHCR_TOKEN`
+  is not configured.
 
 ## Local guard
 
@@ -46,5 +53,6 @@ Run:
 scripts/check-upstream-sync-workflow.sh
 ```
 
-The guard fails if the workflow regresses to fetching upstream tags or if the
-merge-strategy mapping is inverted again.
+The guard fails if the workflow regresses to fetching upstream tags, loses the
+post-tag dispatch calls, points the GHCR workflow at the wrong sync workflow
+name, or inverts the merge-strategy mapping again.

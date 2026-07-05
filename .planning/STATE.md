@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v2.13
 milestone_name: Router DB/catalog recovery on canonical host DB
 current_phase: 24
-status: in_progress
+status: executing
 stopped_at: Phase 24 runtime fully standardized on DBRouterAiAtius after PgBouncer cleanup and provider validation
-last_updated: "2026-07-04T16:27:00-03:00"
-last_activity: 2026-07-04
-last_activity_desc: Phase 24 runtime fully standardized on DBRouterAiAtius; Codex and DeepSeek validated, MiniMax disabled and removed from public catalog
+last_updated: "2026-07-05T10:27:00.639Z"
+last_activity: 2026-07-05
+last_activity_desc: Phase 25 execution started
 progress:
-  total_phases: 26
-  completed_phases: 0
-  total_plans: 9
-  completed_plans: 4
-  percent: 44
+  total_phases: 27
+  completed_phases: 2
+  total_plans: 17
+  completed_plans: 10
+  percent: 7
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: phase-24 (router-db-catalog-recovery-and-canonical-host-db) — IN PROGRESS
-Plan: 4/4 execution plans executed with residual upstream blockers
+Phase: 25 (embedding-governor-auto-workload-inference) — EXECUTING
+Plan: 2 of 3
 **Milestone:** v2.13 — router DB/catalog recovery on canonical host DB (current)
 **Phase:** 24
-**Status:** In Progress
-**Last activity:** 2026-07-04 — Phase 24 runtime finalized on `DBRouterAiAtius`; Codex and DeepSeek validated, MiniMax disabled and removed from public catalog
+**Status:** Ready to execute
+**Last activity:** 2026-07-05 — Phase 25 execution started
 
 ## What Was Done
 
@@ -186,6 +186,7 @@ Runbook: docs/PODMAN.md
 | Phase phase-20 P02 | 14 min | 6 tasks | 15 files |
 | Phase 24 P02 | 8 min | 3 tasks | 4 files |
 | Phase 24 P03 | 12 min | 3 tasks | 4 files |
+| Phase 25 P01 | 14 min | 2 tasks | 2 files |
 
 ## Decisions
 

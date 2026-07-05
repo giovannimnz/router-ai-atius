@@ -324,13 +324,13 @@ Plans:
 **Status:** Pending
 **Requirements:** PHASE-25-GOVERNED-MODEL-SCOPE, PHASE-25-AUTO-WORKLOAD-INFERENCE, PHASE-25-HEADER-OVERRIDE-COMPATIBILITY, PHASE-25-TEI-BATCH-SAFETY, PHASE-25-CLIENT-SMOKE-VALIDATION
 **Depends on:** Phase 20 Go-native embedding governor and Phase 24 final runtime/catalog state. Uses Codex session `019f2dc6-858a-79e1-a78d-495ee5631235` as design input.
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 25-01-PLAN.md - governor classifier, model scope, defaults, and service tests
+- [x] 25-01-PLAN.md - governor classifier, model scope, defaults, and service tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

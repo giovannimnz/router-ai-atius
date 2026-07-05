@@ -722,6 +722,13 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
         self.assertEqual(array_payload["input"], ["a", "b"])
         self.assertNotIn("type", array_payload)
 
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1"), 768)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embo-01"), 768)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("text-embedding-3-large"), 3072)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("text-embedding-3-small"), 1536)
+        self.assertIsNone(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1", "skip"))
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1", "1024"), 1024)
+
         self.assertEqual(smoke_embeddings.assert_embedding_vector_shape([1.0, 2.0, 3.0], 3, "embo-01"), 3)
         with self.assertRaises(ValueError):
             smoke_embeddings.assert_embedding_vector_shape(["x"], 1, "embo-01")

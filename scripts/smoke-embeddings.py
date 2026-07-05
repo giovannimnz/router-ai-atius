@@ -138,6 +138,18 @@ def assert_embedding_vector_shape(embedding: object, expected_dim: int | None, m
     return dimension
 
 
+def expected_embedding_dimension(model: str, expected_dim_raw: str | None = None) -> int | None:
+    if expected_dim_raw == "skip":
+        return None
+    if expected_dim_raw:
+        return int(expected_dim_raw)
+    if model in {DEFAULT_MODEL, "embo-01"}:
+        return DEFAULT_EXPECTED_DIM
+    if model == "text-embedding-3-large":
+        return 3072
+    return 1536
+
+
 def _request_embeddings(base_url: str, token: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any] | None, str]:
     url = base_url.rstrip("/") + "/embeddings"
     body = json.dumps(payload).encode("utf-8")
@@ -194,16 +206,7 @@ def main() -> int:
         )
         return 2
 
-    if expected_dim_raw == "skip":
-        expected_dim: int | None = None
-    elif expected_dim_raw:
-        expected_dim = int(expected_dim_raw)
-    elif model == "embo-01":
-        expected_dim = DEFAULT_EXPECTED_DIM
-    elif model == "text-embedding-3-large":
-        expected_dim = 3072
-    else:
-        expected_dim = 1536
+    expected_dim = expected_embedding_dimension(model, expected_dim_raw)
 
     if input_mode == "array":
         input_items = ["hello", "world"]

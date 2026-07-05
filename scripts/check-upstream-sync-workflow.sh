@@ -43,4 +43,9 @@ grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
   exit 1
 }
 
+if grep -Eq 'git commit -m "Resolve conflicts:' "$workflow"; then
+  echo "sync workflow must restore protected paths before completing the merge commit" >&2
+  exit 1
+fi
+
 echo "upstream sync workflow guard passed"

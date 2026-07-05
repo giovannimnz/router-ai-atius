@@ -188,11 +188,10 @@ jobs:
               clear_stale_index_lock
               if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
                 resolve_conflicts_with_side theirs
-                git commit -m "Resolve conflicts: prefer upstream"
               else
                 resolve_conflicts_with_side ours
-                git commit -m "Resolve conflicts: prefer fork (ours)"
               fi
+              restore_protected_paths "$BASE_HEAD"
             }
 
             restore_protected_paths "$BASE_HEAD"

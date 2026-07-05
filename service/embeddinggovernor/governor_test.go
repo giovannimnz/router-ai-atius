@@ -24,6 +24,7 @@ func TestAcquireNoopsForNonGovernedModel(t *testing.T) {
 }
 
 func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_AUTO_WORKLOAD", "")
 	t.Setenv("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", "")
 	t.Setenv("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", "")
 	t.Setenv("EMBEDDING_GOVERNOR_MAX_CONCURRENCY", "")
@@ -39,6 +40,8 @@ func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
 	assert.Equal(t, 1, cfg.BatchConcurrency)
 	assert.Equal(t, 10*time.Minute, cfg.BatchTimeout)
 	assert.Equal(t, 10*time.Minute, cfg.BatchSlowRequestDuration)
+	assert.True(t, cfg.AutoWorkload)
+	assert.Equal(t, 2, cfg.BatchInputCountThreshold)
 	assert.True(t, cfg.Models["embedding-gte-v1"])
 	assert.False(t, cfg.Models["embedding-gte-v1-batch"])
 	assert.Empty(t, cfg.BatchModels)
@@ -46,7 +49,7 @@ func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
 
 func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
-		cfg.BatchInputCountThreshold = 4
+		cfg.BatchInputCountThreshold = 2
 		cfg.BatchInputCharsThreshold = 12000
 	}))
 
@@ -68,7 +71,7 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 			name: "large unlabeled request by count becomes batch",
 			req: Request{
 				Model:      "embedding-gte-v1",
-				InputCount: 4,
+				InputCount: 2,
 				InputChars: 2000,
 			},
 			want: true,
@@ -86,6 +89,7 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, map[bool]string{true: "batch", false: "interactive"}[tc.want], g.ClassifyWorkload(tc.req))
 			assert.Equal(t, tc.want, g.isBatch(tc.req))
 		})
 	}
@@ -93,7 +97,7 @@ func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {
 
 func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
-		cfg.BatchInputCountThreshold = 4
+		cfg.BatchInputCountThreshold = 2
 		cfg.BatchInputCharsThreshold = 12000
 	}))
 
@@ -146,19 +150,68 @@ func TestWorkloadHeaderOverridesMetadataClassification(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, map[bool]string{true: "batch", false: "interactive"}[tc.want], g.ClassifyWorkload(tc.req))
 			assert.Equal(t, tc.want, g.isBatch(tc.req))
 		})
 	}
 }
 
 func TestLoadConfigNormalizesWorkloadMetadataThresholds(t *testing.T) {
+	t.Setenv("EMBEDDING_GOVERNOR_AUTO_WORKLOAD", "false")
 	t.Setenv("EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD", "-1")
 	t.Setenv("EMBEDDING_GOVERNOR_BATCH_INPUT_CHARS_THRESHOLD", "not-a-number")
 
 	cfg := LoadConfigFromEnv()
 
+	assert.False(t, cfg.AutoWorkload)
 	assert.Equal(t, defaultBatchInputCountThreshold, cfg.BatchInputCountThreshold)
 	assert.Equal(t, defaultBatchInputCharsThreshold, cfg.BatchInputCharsThreshold)
+}
+
+func TestAutoWorkloadDisabledFallsBackToHeadersAndBatchModels(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.AutoWorkload = false
+		cfg.BatchModels = map[string]bool{}
+		cfg.BatchInputCountThreshold = 2
+		cfg.BatchInputCharsThreshold = 12000
+	}))
+
+	assert.Equal(t, "interactive", g.ClassifyWorkload(Request{
+		Model:      "embedding-gte-v1",
+		InputCount: 2,
+		InputChars: 20000,
+	}))
+	assert.Equal(t, "batch", g.ClassifyWorkload(Request{
+		Model:      "embedding-gte-v1",
+		Workload:   "batch",
+		InputCount: 1,
+		InputChars: 100,
+	}))
+	assert.Equal(t, "interactive", g.ClassifyWorkload(Request{
+		Model:      "embedding-gte-v1",
+		Workload:   "interactive",
+		InputCount: 2,
+		InputChars: 20000,
+	}))
+
+	gWithBatchModel := New(testConfigWith(func(cfg *Config) {
+		cfg.AutoWorkload = false
+		cfg.BatchModels = map[string]bool{
+			"embedding-gte-v1": true,
+		}
+	}))
+	assert.Equal(t, "batch", gWithBatchModel.ClassifyWorkload(Request{
+		Model: "embedding-gte-v1",
+	}))
+}
+
+func TestIsGovernedModelMatchesDefaultScope(t *testing.T) {
+	restore := ResetForTest(testConfig())
+	defer restore()
+
+	assert.True(t, IsGovernedModel("embedding-gte-v1"))
+	assert.False(t, IsGovernedModel("embedding-gte-v1-batch"))
+	assert.False(t, IsGovernedModel("gpt-5.4"))
 }
 
 func TestHealthProbeDisabledByDefault(t *testing.T) {
@@ -724,6 +777,7 @@ func testConfig() Config {
 		Enabled:                  true,
 		Models:                   parseCSVSet(defaultModels),
 		BatchModels:              parseCSVSet(defaultBatchModels),
+		AutoWorkload:             true,
 		InitialConcurrency:       2,
 		MinConcurrency:           1,
 		MaxConcurrency:           3,

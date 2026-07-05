@@ -20,7 +20,7 @@ const (
 	defaultMinConcurrency           = 1
 	defaultMaxConcurrency           = 3
 	defaultBatchConcurrency         = 1
-	defaultBatchInputCountThreshold = 4
+	defaultBatchInputCountThreshold = 2
 	defaultBatchInputCharsThreshold = 12000
 	defaultQueueLimit               = 128
 	defaultBatchQueueLimit          = 512
@@ -52,6 +52,7 @@ type Config struct {
 	Enabled                  bool
 	Models                   map[string]bool
 	BatchModels              map[string]bool
+	AutoWorkload             bool
 	InitialConcurrency       int
 	MinConcurrency           int
 	MaxConcurrency           int
@@ -170,6 +171,7 @@ func LoadConfigFromEnv() Config {
 		Enabled:                  envBool("EMBEDDING_GOVERNOR_ENABLED", true),
 		Models:                   parseCSVSet(envString("EMBEDDING_GOVERNOR_MODELS", defaultModels)),
 		BatchModels:              parseCSVSet(envString("EMBEDDING_GOVERNOR_BATCH_MODELS", defaultBatchModels)),
+		AutoWorkload:             envBool("EMBEDDING_GOVERNOR_AUTO_WORKLOAD", true),
 		InitialConcurrency:       envInt("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", defaultInitialConcurrency),
 		MinConcurrency:           envInt("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", defaultMinConcurrency),
 		MaxConcurrency:           envInt("EMBEDDING_GOVERNOR_MAX_CONCURRENCY", defaultMaxConcurrency),
@@ -222,6 +224,10 @@ func Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 
 func CurrentSnapshot() Snapshot {
 	return global.Snapshot()
+}
+
+func IsGovernedModel(model string) bool {
+	return global.IsGovernedModel(model)
 }
 
 func ResetForTest(cfg Config) func() {
@@ -421,7 +427,7 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 	g.cond.Broadcast()
 }
 
-func (g *Governor) applies(model string) bool {
+func (g *Governor) IsGovernedModel(model string) bool {
 	if !g.cfg.Enabled {
 		return false
 	}
@@ -432,21 +438,34 @@ func (g *Governor) applies(model string) bool {
 	return g.cfg.Models[model]
 }
 
-func (g *Governor) isBatch(req Request) bool {
+func (g *Governor) applies(model string) bool {
+	return g.IsGovernedModel(model)
+}
+
+func (g *Governor) ClassifyWorkload(req Request) string {
 	workload := strings.ToLower(strings.TrimSpace(req.Workload))
 	if workload == "batch" || workload == "bulk" {
-		return true
+		return "batch"
 	}
 	if workload == "interactive" || workload == "realtime" {
-		return false
+		return "interactive"
 	}
-	if g.cfg.BatchInputCountThreshold > 0 && req.InputCount >= g.cfg.BatchInputCountThreshold {
-		return true
+	if g.cfg.AutoWorkload {
+		if g.cfg.BatchInputCountThreshold > 0 && req.InputCount >= g.cfg.BatchInputCountThreshold {
+			return "batch"
+		}
+		if g.cfg.BatchInputCharsThreshold > 0 && req.InputChars >= g.cfg.BatchInputCharsThreshold {
+			return "batch"
+		}
 	}
-	if g.cfg.BatchInputCharsThreshold > 0 && req.InputChars >= g.cfg.BatchInputCharsThreshold {
-		return true
+	if g.cfg.BatchModels[strings.TrimSpace(req.Model)] {
+		return "batch"
 	}
-	return g.cfg.BatchModels[strings.TrimSpace(req.Model)]
+	return "interactive"
+}
+
+func (g *Governor) isBatch(req Request) bool {
+	return g.ClassifyWorkload(req) == "batch"
 }
 
 func (g *Governor) queueCapacityRejectLocked(batch bool) *Reject {

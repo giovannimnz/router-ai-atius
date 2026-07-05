@@ -135,6 +135,13 @@ jobs:
             done
           }
 
+          clear_stale_index_lock() {
+            if [[ -f .git/index.lock ]]; then
+              echo "Removing stale Git index lock left after failed merge"
+              rm -f .git/index.lock
+            fi
+          }
+
           resolve_conflicts_with_side() {
             local side="$1"
             local stage
@@ -144,6 +151,8 @@ jobs:
             else
               stage=2
             fi
+
+            clear_stale_index_lock
 
             while IFS= read -r -d '' path; do
               if git ls-files -u -- "$path" | awk -v stage="$stage" '$3 == stage { found = 1 } END { exit(found ? 0 : 1) }'; then
@@ -169,6 +178,7 @@ jobs:
             # Merge upstream
             git merge -X "$SYNC_STRATEGY" upstream/main -m "Merge upstream/main into fork" || {
               echo "Merge conflict detected, using strategy: $SYNC_STRATEGY"
+              clear_stale_index_lock
               if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
                 resolve_conflicts_with_side theirs
                 git commit -m "Resolve conflicts: prefer upstream"

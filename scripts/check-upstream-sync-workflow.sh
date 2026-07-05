@@ -33,4 +33,9 @@ grep -Eq 'git rm -f --ignore-unmatch' "$workflow" || {
   exit 1
 }
 
+grep -Eq 'clear_stale_index_lock' "$workflow" || {
+  echo "sync workflow must clear stale index locks after failed merges" >&2
+  exit 1
+}
+
 echo "upstream sync workflow guard passed"

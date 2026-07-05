@@ -25,6 +25,8 @@ into local `refs/tags/*`.
 - On merge conflict, `strategy=theirs` means upstream wins. The workflow resolves
   each unmerged path individually, because modify/delete conflicts may not have a
   file on the selected side.
+- If a failed merge leaves `.git/index.lock` behind in the ephemeral Actions
+  checkout, the workflow removes that stale lock before resolving paths.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 

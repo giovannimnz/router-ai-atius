@@ -49,23 +49,37 @@ jobs:
           git config merge.conflictstyle merge
           git config push.default simple
 
-      - name: Add upstream remote
+      - name: Validate sync workflow guard
+        run: scripts/check-upstream-sync-workflow.sh
+
+      - name: Configure upstream remote
         run: |
-          git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git 2>/dev/null || \
-            git remote set-url upstream https://github.com/${{ env.UPSTREAM_REPO }}.git
-          git fetch upstream --prune --tags
+          set -euo pipefail
+          upstream_url="https://github.com/${UPSTREAM_REPO}.git"
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream "$upstream_url"
+          else
+            git remote add upstream "$upstream_url"
+          fi
+
+          # Do not fetch upstream tags into the fork namespace. Upstream and fork
+          # release tags can share names while pointing to different objects.
+          git fetch --no-tags --prune upstream '+refs/heads/main:refs/remotes/upstream/main'
 
       - name: Detect upstream version
         id: upstream_version
         run: |
           # Get latest tag from upstream (follows upstream exactly — includes rc, alpha, etc.)
-          UPSTREAM_TAG=$(git ls-remote --tags upstream 'refs/tags/v*' 2>/dev/null | \
-                         grep -v '\^{}' | \
+          UPSTREAM_TAG=$(git ls-remote --tags --refs upstream 'refs/tags/v*' 2>/dev/null | \
                          awk '{print $2}' | \
                          sed 's|refs/tags/||' | \
                          grep -v '^$' | \
                          sort -V | \
                          tail -1 | sed 's/^v//')
+          if [[ -z "$UPSTREAM_TAG" ]]; then
+            echo "::error::Unable to detect latest upstream tag from ${{ env.UPSTREAM_REPO }}"
+            exit 1
+          fi
           echo "upstream_version=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
           echo "Upstream latest tag: $UPSTREAM_TAG"
 
@@ -75,18 +89,51 @@ jobs:
           SYNC_STRATEGY: ${{ env.STRATEGY }}
           UPSTREAM_VER: ${{ steps.upstream_version.outputs.upstream_version }}
         run: |
+          set -euo pipefail
+          BASE_HEAD=$(git rev-parse HEAD)
           UPSTREAM_SHA=$(git rev-parse upstream/main)
           LOCAL_SHA=$(git rev-parse HEAD)
           COMMON=$(git merge-base HEAD upstream/main)
 
           echo "Local:      $LOCAL_SHA"
-          echo "Upstream:   $UPSTREAM_SHA (${{ env.UPSTREAM_VER }})"
+          echo "Upstream:   $UPSTREAM_SHA ($UPSTREAM_VER)"
           echo "Common:     $COMMON"
           echo "Strategy:   $SYNC_STRATEGY"
           echo ""
 
           CHANGED=false
           NEW_TAG=""
+
+          restore_protected_paths() {
+            local base_ref="$1"
+            local path
+            local protected_paths=(
+              .dockerignore
+              .github/workflows/sync.yml
+              .github/workflows/docker-publish.yml
+              docker-compose.yml
+              integration/middleware/model_detailed.py
+              integration/middleware/model_details.py
+              integration/middleware/model_enrichment.py
+              controller/model.go
+              controller/model_list_test.go
+              relay/common/relay_utils.go
+              relay/common/relay_utils_test.go
+              relay/embedding_handler.go
+              relay/channel/codex
+              service/codex_auth.go
+              service/codex_device.go
+              service/codex_models.go
+              service/modelcatalog
+            )
+
+            echo "Restoring protected fork paths from $base_ref..."
+            for path in "${protected_paths[@]}"; do
+              if git cat-file -e "${base_ref}:${path}" 2>/dev/null; then
+                git checkout "$base_ref" -- "$path"
+              fi
+            done
+          }
 
           # Check if upstream has new commits
           if [[ "$COMMON" != "$UPSTREAM_SHA" ]]; then
@@ -96,36 +143,22 @@ jobs:
             git merge upstream/main -m "Merge upstream/main into fork" || {
               echo "Merge conflict detected, using strategy: $SYNC_STRATEGY"
               if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
-                git checkout --ours .
+                git checkout --theirs .
                 git add -A
                 git commit -m "Resolve conflicts: prefer upstream"
               else
-                git checkout --theirs .
+                git checkout --ours .
                 git add -A
                 git commit -m "Resolve conflicts: prefer fork (ours)"
               fi
             }
 
-            # Restore protected fork files (these are Atius customizations)
-            echo "📁 Restoring fork-specific files..."
-            for file in docker-compose.yml integration/middleware/model_detailed.py integration/middleware/model_details.py integration/middleware/model_enrichment.py; do
-              if git show upstream/main:"$file" &>/dev/null; then
-                git checkout HEAD -- "$file" 2>/dev/null || true
-              fi
-            done
-
-            # Restore fork-only workflow files (may not exist in upstream)
-            for file in .github/workflows/sync.yml .github/workflows/docker-publish.yml; do
-              if [[ -f "$file" ]] && ! git ls-files --error-unmatch "$file" &>/dev/null; then
-                git checkout HEAD -- "$file" 2>/dev/null || true
-              fi
-            done
+            restore_protected_paths "$BASE_HEAD"
 
             CHANGED=true
 
             # Calculate new fork version: upstream_VERSION.1
             CURRENT=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "0.0.0.0")
-            UPSTREAM_VER="${{ env.UPSTREAM_VER }}"
 
             if [[ "$CURRENT" == "${UPSTREAM_VER}.1" ]] || [[ "$CURRENT" == "v${UPSTREAM_VER}.1" ]]; then
               # Same upstream base, increment suffix
@@ -150,10 +183,10 @@ jobs:
 
             echo "✅ Sync completed successfully"
           else
-            echo "✅ Already up to date with upstream (${{ env.UPSTREAM_VER }})"
+            echo "✅ Already up to date with upstream ($UPSTREAM_VER)"
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "new_tag=" >> $GITHUB_OUTPUT
-            echo "upstream_version=${{ env.UPSTREAM_VER }}" >> $GITHUB_OUTPUT
+            echo "upstream_version=$UPSTREAM_VER" >> $GITHUB_OUTPUT
           fi
 
       - name: Push commit

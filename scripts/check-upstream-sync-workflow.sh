@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+workflow="${1:-.github/workflows/sync.yml}"
+
+if [[ ! -f "$workflow" ]]; then
+  echo "workflow not found: $workflow" >&2
+  exit 1
+fi
+
+if grep -Eq 'git fetch upstream .*--tags|git fetch .*--tags .*upstream' "$workflow"; then
+  echo "sync workflow must not fetch upstream tags into the fork namespace" >&2
+  exit 1
+fi
+
+grep -Eq 'git fetch --no-tags --prune upstream' "$workflow" || {
+  echo "sync workflow must fetch upstream branches with --no-tags" >&2
+  exit 1
+}
+
+grep -Eq 'git ls-remote --tags --refs upstream' "$workflow" || {
+  echo "sync workflow must detect upstream versions through ls-remote --tags --refs" >&2
+  exit 1
+}
+
+grep -Eq 'git checkout --theirs \.' "$workflow" || {
+  echo "sync workflow must use --theirs when strategy=theirs" >&2
+  exit 1
+}
+
+echo "upstream sync workflow guard passed"

@@ -92,7 +92,7 @@ check_local_docs_route() {
   local path="$1"
   local url="$LOCAL_DOCS_URL$path"
   local code
-  code="$("$CURL_BIN" -sS -o /dev/null -w '%{http_code}' "$url")" ||
+  code="$("$CURL_BIN" -sSL -o /dev/null -w '%{http_code}' "$url")" ||
     fail "could not fetch local docs route $url"
   if [[ "$code" != "200" ]]; then
     fail "$url returned $code"

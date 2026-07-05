@@ -129,7 +129,7 @@ Comandos de verificacao:
 
 ```bash
 VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
-eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
+eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)[\"data\"][\"data\"][\"values\"]; api=j[\"ATIUS_ROUTER_API_KEY\"]; print(\"export ATIUS_ROUTER_TOKEN\" + \"=\" + shlex.quote(api))')"
 
 bin/clianything api GET /api/pricing --bearer "$ATIUS_ROUTER_ADMIN_TOKEN"
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
@@ -173,8 +173,11 @@ Estado atualizado em 2026-06-26:
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=3`, `batch_concurrency=1`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. O valor `4` continua reservado para override/manual turbo window; nao faz parte da escala automatica diaria.
 - Classificacao de workload e metadata-only. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
-  2. thresholds locais derivados do request (`InputCount >= 4` ou `InputChars >= 12000`).
-- Nao exponha um alias publico `*-batch`: batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
+  2. thresholds locais derivados do request (`InputCount >= 2` ou `InputChars >= 12000`).
+- `X-Embedding-Workload` e opcional para clientes normais. O uso esperado e override operacional; Graphify, GBrain e outros clientes nao precisam enviar o header para obter o comportamento default correto.
+- `EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true` mantem a inferencia local ligada para requests governados sem header.
+- Nao exponha alias publico `*-batch`: o contrato correto e sem alias publico batch, porque batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
+- Requests governados para `embedding-gte-v1` com mais de `4` itens falham fechado no router antes do dispatch para o TEI. Em outras palavras: arrays acima de 4 entram em fail-closed, independentemente do header. Esse cap existe porque o relay atual nao tem caminho seguro de recomposicao para sub-batch transparente.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
 - Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
@@ -191,6 +194,8 @@ Variaveis de ambiente suportadas:
 EMBEDDING_GOVERNOR_ENABLED=true
 EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1
 EMBEDDING_GOVERNOR_BATCH_MODELS=
+EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true
+EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2
 EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY=2
 EMBEDDING_GOVERNOR_MIN_CONCURRENCY=1
 EMBEDDING_GOVERNOR_MAX_CONCURRENCY=3
@@ -244,14 +249,26 @@ Validacao local e gate operacional apos mudanca no governor:
 # Regressao do pacote do governor
 /usr/local/go/bin/go test ./service/embeddinggovernor -count=1
 
-# Gate Go mais amplo antes de deploy controlado
-/usr/local/go/bin/go test ./common ./controller ./service/modelcatalog ./relay/common ./service/embeddinggovernor ./relay -count=1
+# Testes focados da relay para metadata/no-header e cap > 4
+/usr/local/go/bin/go test -c ./relay -o /tmp/relay.test.bin
+timeout 20s /tmp/relay.test.bin -test.run '^TestEmbeddingHelperPassesGovernorRequestMetadata$' -test.v
+timeout 20s /tmp/relay.test.bin -test.run '^TestEmbeddingHelperRejectsGovernedInputAboveTEICap$' -test.v
 
-# Smoke autenticado de embeddings locais (dimension 768)
+# Gate Go mais amplo antes de deploy controlado
+/usr/local/go/bin/go test ./dto ./service/embeddinggovernor -count=1
+
+# Smoke autenticado de embeddings locais (dimension 768, sem header por default)
 test -n "$ATIUS_ROUTER_TOKEN" && \
   ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
   ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
   ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
+  python3 scripts/smoke-embeddings.py
+
+test -n "$ATIUS_ROUTER_TOKEN" && \
+  ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://127.0.0.1:3000/v1 \
+  ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
+  ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
+  ATIUS_ROUTER_EMBEDDINGS_INPUT_MODE=array \
   python3 scripts/smoke-embeddings.py
 
 # Gate Graphify do checkout
@@ -488,7 +505,7 @@ Smoke local:
 
 ```bash
 VAULT_JSON="$(ssh -o BatchMode=yes atius-srv-3-vpn 'sudo /usr/local/sbin/atius-vault kv get -format=json kv/atius/srv1/shell-exports/home-ubuntu-merged')"
-eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)["data"]["data"]["values"]; api=j["ATIUS_ROUTER_API_KEY"]; print("export ATIUS_ROUTER_TOKEN="+shlex.quote(api))')"
+eval "$(printf '%s' "$VAULT_JSON" | python3 -c 'import json,shlex,sys; j=json.load(sys.stdin)[\"data\"][\"data\"][\"values\"]; api=j[\"ATIUS_ROUTER_API_KEY\"]; print(\"export ATIUS_ROUTER_TOKEN\" + \"=\" + shlex.quote(api))')"
 ATIUS_ROUTER_ACTIVE_ONLY=1 python3 scripts/smoke-provider-consolidation.py
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" http://127.0.0.1:3000/v1/models
 curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v1/models?api_format=anthropic'

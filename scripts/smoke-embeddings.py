@@ -15,9 +15,9 @@ from urllib.request import Request, urlopen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BASE_URL = "http://127.0.0.1:3001/v1"
-DEFAULT_MODEL = "embo-01"
-DEFAULT_EXPECTED_DIM = 1536
+DEFAULT_BASE_URL = "http://127.0.0.1:3000/v1"
+DEFAULT_MODEL = "embedding-gte-v1"
+DEFAULT_EXPECTED_DIM = 768
 USER_AGENT = os.environ.get("ATIUS_ROUTER_USER_AGENT", "Mozilla/5.0 AtiusRouterSmoke/1.0")
 MAX_OUTPUT_CHARS = 180
 ACCEPTABLE_UPSTREAM_CODES = {400, 402, 429}
@@ -114,10 +114,12 @@ def build_embedding_payload(
     *,
     model: str,
     input_text: str,
+    input_items: list[str] | None = None,
     embedding_type: str | None = None,
     openai_dimensions: int | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {"model": model, "input": input_text}
+    payload_input: Any = input_items if input_items is not None else input_text
+    payload: dict[str, Any] = {"model": model, "input": payload_input}
     if model == "embo-01":
         payload["type"] = embedding_type if embedding_type in {"query", "db"} else "query"
     if openai_dimensions is not None:
@@ -179,6 +181,7 @@ def main() -> int:
     base_url = _env("ATIUS_ROUTER_EMBEDDINGS_BASE_URL", DEFAULT_BASE_URL) or DEFAULT_BASE_URL
     model = _env("ATIUS_ROUTER_EMBEDDINGS_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL
     embedding_type = _env("ATIUS_ROUTER_EMBEDDING_TYPE", "query") or "query"
+    input_mode = (_env("ATIUS_ROUTER_EMBEDDINGS_INPUT_MODE", "single") or "single").lower()
     expected_dim_raw = _env("ATIUS_ROUTER_EXPECT_EMBEDDING_DIM")
     openai_dimensions_raw = _env("ATIUS_ROUTER_OPENAI_EMBEDDING_DIMENSIONS")
     expected_channel_name = _env("ATIUS_ROUTER_EXPECT_CHANNEL_NAME")
@@ -202,10 +205,19 @@ def main() -> int:
     else:
         expected_dim = 1536
 
+    if input_mode == "array":
+        input_items = ["hello", "world"]
+        input_text = input_items[0]
+    else:
+        input_mode = "single"
+        input_items = None
+        input_text = "hello"
+
     openai_dimensions = int(openai_dimensions_raw) if openai_dimensions_raw else None
     payload = build_embedding_payload(
         model=model,
-        input_text="hello",
+        input_text=input_text,
+        input_items=input_items,
         embedding_type=embedding_type,
         openai_dimensions=openai_dimensions,
     )
@@ -231,16 +243,20 @@ def main() -> int:
     if not isinstance(embedding_rows, list) or not embedding_rows:
         print("embeddings error: missing data[0]", file=sys.stderr)
         return 1
-    first = embedding_rows[0]
-    if not isinstance(first, dict):
-        print("embeddings error: malformed data[0]", file=sys.stderr)
+    if input_items is not None and len(embedding_rows) != len(input_items):
+        print(f"embeddings error: expected {len(input_items)} rows, got {len(embedding_rows)}", file=sys.stderr)
         return 1
 
-    try:
-        dimension = assert_embedding_vector_shape(first.get("embedding"), expected_dim, model)
-    except ValueError as exc:
-        print(f"embeddings error: {_scrub(str(exc), [token])}", file=sys.stderr)
-        return 1
+    dimensions: list[int] = []
+    for index, row in enumerate(embedding_rows):
+        if not isinstance(row, dict):
+            print(f"embeddings error: malformed data[{index}]", file=sys.stderr)
+            return 1
+        try:
+            dimensions.append(assert_embedding_vector_shape(row.get("embedding"), expected_dim, model))
+        except ValueError as exc:
+            print(f"embeddings error: {_scrub(str(exc), [token])}", file=sys.stderr)
+            return 1
 
     if expected_channel_name:
         found, channel_names = _wait_for_channel_name(expected_channel_name)
@@ -255,7 +271,9 @@ def main() -> int:
             return 1
 
     display_type = embedding_type if model == "embo-01" else "openai"
-    print(f"embeddings ok: model={model} type={display_type} dimension={dimension}")
+    print(
+        f"embeddings ok: model={model} type={display_type} dimension={dimensions[0]} rows={len(embedding_rows)} mode={input_mode}"
+    )
     return 0
 
 

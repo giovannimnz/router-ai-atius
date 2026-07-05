@@ -417,12 +417,12 @@ assert.Equal(t, http.StatusTooManyRequests, err.StatusCode)
 |---|-------|---------|---------------|
 | none | All factual claims above are tied to current code, planning artifacts, Context7 docs, Graphify/GBrain, or runtime probes from this session. | n/a | n/a |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should arrays over `4` succeed transparently or fail closed?**
    - What we know: Current relay/adaptor path does not split or cap arrays before OpenAI-compatible TEI dispatch. `[VERIFIED: relay/helper/valid_request.go; relay/channel/openai/adaptor.go]`
-   - What's unclear: Whether product needs transparent success for arrays larger than `4`, or whether a clear router-side rejection is acceptable. `[VERIFIED: .planning/REQUIREMENTS.md]`
-   - Recommendation: Plan fail-closed validation first unless the planner interprets the requirement as requiring transparent success; transparent sub-batching should be an explicit higher-risk task because it must preserve embedding order, response shape, and usage accounting. `[VERIFIED: docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md; relay/channel/openai/adaptor.go]`
+   - Resolution: Phase 25 plans choose fail-closed validation for governed `embedding-gte-v1` requests with more than `4` input items. This satisfies the TEI safety requirement without inventing a response recomposition path that the current relay does not already have. `[VERIFIED: 25-02-PLAN.md; 25-PATTERNS.md]`
+   - Deferred: Transparent sub-batching remains out of scope unless a later phase explicitly designs ordered response merge and usage accounting. `[VERIFIED: relay/channel/openai/adaptor.go; 25-02-PLAN.md]`
 
 ## Environment Availability
 

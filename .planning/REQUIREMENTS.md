@@ -245,3 +245,60 @@ Recovery is not complete until runtime, docs, and verification agree:
 - The final runtime must pass `bin/clianything status --strict`, authenticated `/v1/models`, authenticated `/v1/embeddings`, and representative GPT/DeepSeek routing checks.
 - Documentation must be reconciled so the runtime DB path, provider inventory, and backup/restore story match reality after recovery.
 - The rollback plan must name the exact backup artifacts and runtime re-point steps needed to undo the recovery if validation fails.
+
+## Phase 25 Requirements
+
+| Requirement ID | Summary |
+|---|---|
+| PHASE-25-GOVERNED-MODEL-SCOPE | Keep `embedding-gte-v1` as the single default public governed local embedding alias, with no public batch alias. |
+| PHASE-25-AUTO-WORKLOAD-INFERENCE | Infer governed embedding workload from metadata when the client omits `X-Embedding-Workload`. |
+| PHASE-25-HEADER-OVERRIDE-COMPATIBILITY | Preserve explicit `X-Embedding-Workload` values as operator overrides. |
+| PHASE-25-TEI-BATCH-SAFETY | Keep conservative governor limits and enforce the TEI max client batch-size contract. |
+| PHASE-25-CLIENT-SMOKE-VALIDATION | Prove the client-facing `/v1/embeddings` contract with tests, docs, and token-safe smoke validation. |
+
+### PHASE-25-GOVERNED-MODEL-SCOPE
+
+`embedding-gte-v1` must remain the single default public governed local embedding alias:
+
+- `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` remains the intended default.
+- `EMBEDDING_GOVERNOR_BATCH_MODELS=` remains empty; batch is not a public alias.
+- `embedding-gte-v1-batch` or any similar `*-batch` model must not be exposed in `/v1/models`.
+- Unknown or non-governed models must preserve current no-op governor behavior.
+
+### PHASE-25-AUTO-WORKLOAD-INFERENCE
+
+The router must classify unlabeled governed embedding requests before or at governor acquisition:
+
+- Explicit `X-Embedding-Workload` stays highest priority.
+- Without header, `input` arrays with at least 2 text items classify as batch.
+- Without header, a single string classifies as interactive unless its configured character threshold marks it batch.
+- Add a safe, testable `EMBEDDING_GOVERNOR_AUTO_WORKLOAD` control, defaulting to enabled for the governed local model path.
+- Add or normalize `EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2`.
+- The classifier must use metadata (`InputCount`, `InputChars`, model, header), not raw embedding text retained in governor state or snapshots.
+
+### PHASE-25-HEADER-OVERRIDE-COMPATIBILITY
+
+Existing operational overrides must continue to work:
+
+- `X-Embedding-Workload: batch` and existing `bulk` behavior force batch.
+- `X-Embedding-Workload: interactive` and `realtime` force interactive.
+- Invalid header values fall back to safe automatic inference rather than disabling the governor.
+- Docs must state that the header is optional for normal clients and only needed as an override.
+
+### PHASE-25-TEI-BATCH-SAFETY
+
+Automatic batch inference must not overload the local TEI deployment:
+
+- Batch concurrency remains conservative by default.
+- Interactive and batch accounting remain separate.
+- Automatic governor concurrency stays capped at 3; 4 remains an explicit/manual turbo window only.
+- Requests with more than 4 input items must respect the TEI max client batch size 4 through existing behavior, new sub-batching, or a blocking validation that proves the current upstream path already enforces the cap.
+
+### PHASE-25-CLIENT-SMOKE-VALIDATION
+
+The phase is complete only when tests and runtime smokes prove the client-facing contract:
+
+- Service tests cover governed model scope and classifier decisions.
+- Relay tests cover the captured governor request for header and no-header cases.
+- Docs and smoke scripts show that Graphify/GBrain/future clients can omit `X-Embedding-Workload` for normal operation.
+- Authenticated `/v1/embeddings` smoke for `embedding-gte-v1` returns dimension `768` without printing tokens.

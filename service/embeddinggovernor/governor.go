@@ -18,8 +18,8 @@ const (
 	defaultBatchModels              = ""
 	defaultInitialConcurrency       = 2
 	defaultMinConcurrency           = 1
-	defaultMaxConcurrency           = 3
-	defaultBatchConcurrency         = 1
+	defaultMaxConcurrency           = 0
+	defaultBatchConcurrency         = 0
 	defaultBatchInputCountThreshold = 2
 	defaultBatchInputCharsThreshold = 12000
 	defaultQueueLimit               = 128
@@ -415,7 +415,7 @@ func (g *Governor) finish(batch bool, success bool, statusCode int, latency time
 		g.interactiveCompleted++
 	}
 	g.lastSuccessAt = now
-	if g.currentConcurrency < g.cfg.MaxConcurrency && g.canIncreaseLocked(now, batch) {
+	if !g.maxConcurrencyReachedLocked() && g.canIncreaseLocked(now, batch) {
 		g.successes++
 		if g.successes >= g.cfg.SuccessWindow {
 			g.currentConcurrency++
@@ -499,6 +499,9 @@ func (g *Governor) canStartLocked(batch bool) bool {
 	if g.waitingInteractive > 0 {
 		return false
 	}
+	if g.cfg.BatchConcurrency <= 0 {
+		return true
+	}
 	return g.runningBatch < g.cfg.BatchConcurrency
 }
 
@@ -519,7 +522,7 @@ func (g *Governor) maybeScaleForDemandLocked(now time.Time) {
 }
 
 func (g *Governor) canIncreaseLocked(now time.Time, batch bool) bool {
-	if g.currentConcurrency >= g.cfg.MaxConcurrency {
+	if g.maxConcurrencyReachedLocked() {
 		return false
 	}
 	if now.Before(g.cooldownUntil) {
@@ -538,6 +541,10 @@ func (g *Governor) canIncreaseLocked(now time.Time, batch bool) bool {
 		return false
 	}
 	return true
+}
+
+func (g *Governor) maxConcurrencyReachedLocked() bool {
+	return g.cfg.MaxConcurrency > 0 && g.currentConcurrency >= g.cfg.MaxConcurrency
 }
 
 func (g *Governor) scaleUpLatencyLocked(batch bool) time.Duration {
@@ -771,19 +778,22 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.MinConcurrency < 1 {
 		cfg.MinConcurrency = defaultMinConcurrency
 	}
-	if cfg.MaxConcurrency < cfg.MinConcurrency {
+	if cfg.MaxConcurrency < 0 {
+		cfg.MaxConcurrency = 0
+	}
+	if cfg.MaxConcurrency > 0 && cfg.MaxConcurrency < cfg.MinConcurrency {
 		cfg.MaxConcurrency = cfg.MinConcurrency
 	}
 	if cfg.InitialConcurrency < cfg.MinConcurrency {
 		cfg.InitialConcurrency = cfg.MinConcurrency
 	}
-	if cfg.InitialConcurrency > cfg.MaxConcurrency {
+	if cfg.MaxConcurrency > 0 && cfg.InitialConcurrency > cfg.MaxConcurrency {
 		cfg.InitialConcurrency = cfg.MaxConcurrency
 	}
-	if cfg.BatchConcurrency < 1 {
+	if cfg.BatchConcurrency < 0 {
 		cfg.BatchConcurrency = defaultBatchConcurrency
 	}
-	if cfg.BatchConcurrency > cfg.MaxConcurrency {
+	if cfg.MaxConcurrency > 0 && cfg.BatchConcurrency > cfg.MaxConcurrency {
 		cfg.BatchConcurrency = cfg.MaxConcurrency
 	}
 	if cfg.BatchInputCountThreshold <= 0 {

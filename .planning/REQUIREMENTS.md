@@ -289,9 +289,9 @@ Existing operational overrides must continue to work:
 
 Automatic batch inference must not overload the local TEI deployment:
 
-- Batch concurrency remains conservative by default.
+- Batch concurrency no longer has a separate static router ceiling by default; batch still yields to waiting interactive requests and shares the adaptive total pool.
 - Interactive and batch accounting remain separate.
-- Automatic governor concurrency stays capped at 3; 4 remains an explicit/manual turbo window only.
+- Automatic governor concurrency has no static router ceiling by default. `EMBEDDING_GOVERNOR_MAX_CONCURRENCY=0` means the governor can scale with healthy demand and available TEI pod capacity; a positive value reintroduces an explicit cap.
 - Requests with more than 4 input items must respect the TEI max client batch size 4 through existing behavior, new sub-batching, or a blocking validation that proves the current upstream path already enforces the cap.
 
 ### PHASE-25-CLIENT-SMOKE-VALIDATION

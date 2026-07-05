@@ -23,7 +23,7 @@ func TestAcquireNoopsForNonGovernedModel(t *testing.T) {
 	assert.Equal(t, 0, g.Snapshot().Running)
 }
 
-func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
+func TestLoadConfigUsesAdaptiveAutoscalingDefaults(t *testing.T) {
 	t.Setenv("EMBEDDING_GOVERNOR_AUTO_WORKLOAD", "")
 	t.Setenv("EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY", "")
 	t.Setenv("EMBEDDING_GOVERNOR_MIN_CONCURRENCY", "")
@@ -36,8 +36,8 @@ func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
 
 	assert.Equal(t, 1, cfg.MinConcurrency)
 	assert.Equal(t, 2, cfg.InitialConcurrency)
-	assert.Equal(t, 3, cfg.MaxConcurrency)
-	assert.Equal(t, 1, cfg.BatchConcurrency)
+	assert.Equal(t, 0, cfg.MaxConcurrency)
+	assert.Equal(t, 0, cfg.BatchConcurrency)
 	assert.Equal(t, 10*time.Minute, cfg.BatchTimeout)
 	assert.Equal(t, 10*time.Minute, cfg.BatchSlowRequestDuration)
 	assert.True(t, cfg.AutoWorkload)
@@ -45,6 +45,56 @@ func TestLoadConfigUsesDailySafeDefaults(t *testing.T) {
 	assert.True(t, cfg.Models["embedding-gte-v1"])
 	assert.False(t, cfg.Models["embedding-gte-v1-batch"])
 	assert.Empty(t, cfg.BatchModels)
+}
+
+func TestUnboundedMaxConcurrencyScalesPastLegacyCapWhenHealthy(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 1
+		cfg.MaxConcurrency = 0
+		cfg.ScaleUpMinInterval = 0
+		cfg.LatencyTarget = 0
+		cfg.SuccessWindow = 100
+	}))
+
+	leases := make([]*Lease, 0, 5)
+	for i := 0; i < 5; i++ {
+		lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+		require.Nil(t, reject)
+		require.NotNil(t, lease)
+		leases = append(leases, lease)
+	}
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, 5, snapshot.CurrentConcurrency)
+	assert.Equal(t, 5, snapshot.Running)
+	assert.Equal(t, 0, snapshot.MaxConcurrency)
+
+	for _, lease := range leases {
+		lease.Finish(true, http.StatusOK, time.Millisecond)
+	}
+}
+
+func TestUnboundedBatchConcurrencyUsesTotalAdaptivePool(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 0
+		cfg.BatchConcurrency = 0
+	}))
+
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1", Workload: "batch"})
+	require.Nil(t, reject)
+	require.NotNil(t, first)
+
+	second, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1", Workload: "batch"})
+	require.Nil(t, reject)
+	require.NotNil(t, second)
+
+	snapshot := g.Snapshot()
+	assert.Equal(t, 2, snapshot.RunningBatch)
+	assert.Equal(t, 0, snapshot.BatchConcurrency)
+
+	first.Finish(true, http.StatusOK, time.Millisecond)
+	second.Finish(true, http.StatusOK, time.Millisecond)
 }
 
 func TestWorkloadMetadataClassifiesUnlabeledLargeInputsAsBatch(t *testing.T) {

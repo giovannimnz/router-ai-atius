@@ -62,6 +62,17 @@ Esse script puxa `ghcr.io/giovannimnz/router-ai-atius:latest`, reinicia
 Para um tag versionado, use `scripts/pull-and-restart.sh vX.Y.Z`; o script
 retaga o mesmo digest para `:latest`, que é o tag consumido pela unit.
 
+Autocorreções do deploy:
+
+- Se o restart falhar por storage stale do pod rootless, com erro em
+  `userdata/shm`, o script recria `pod-atius-ai-router.service`, sobe Redis e
+  Postgres, e tenta o router uma vez novamente.
+- Se o router falhar na inicialização com `cached plan must not change result
+  type` / `SQLSTATE 0A000`, o script reinicia `pgbouncer` uma vez via
+  `sudo -n systemctl restart pgbouncer` e reinicia o router. Esse caminho limpa
+  planos preparados velhos após migrations; o código do fork também mantém
+  `PrepareStmt=false` para PostgreSQL para evitar recorrência.
+
 ## Workarounds aplicados
 
 ### 1. Network namespace compartilhado

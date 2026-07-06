@@ -16,6 +16,7 @@ sync_fork_script="$repo_root/scripts/sync-fork.sh"
 auto_sync_deploy_script="$repo_root/scripts/auto-sync-deploy.sh"
 pull_restart_script="$repo_root/scripts/pull-and-restart.sh"
 deploy_ghcr_script="$repo_root/scripts/deploy-ghcr.sh"
+model_main="$repo_root/model/main.go"
 
 if [[ ! -f "$workflow" ]]; then
   echo "workflow not found: $workflow" >&2
@@ -237,6 +238,21 @@ for deploy_script in "$auto_sync_deploy_script" "$pull_restart_script" "$deploy_
   fi
 done
 
+grep -Fq 'recover_stale_pod_storage' "$pull_restart_script" || {
+  echo "pull-and-restart.sh must recover stale Podman pod storage once" >&2
+  exit 1
+}
+
+grep -Fq 'recover_cached_plan' "$pull_restart_script" || {
+  echo "pull-and-restart.sh must recover PostgreSQL cached-plan failures once" >&2
+  exit 1
+}
+
+grep -Fq 'systemctl restart pgbouncer' "$pull_restart_script" || {
+  echo "pull-and-restart.sh cached-plan recovery must restart PgBouncer once" >&2
+  exit 1
+}
+
 if [[ ! -x "$next_version_script" ]]; then
   echo "next fork version script must exist and be executable: $next_version_script" >&2
   exit 1
@@ -254,6 +270,24 @@ fi
 
 grep -Eq 'RelayIdleConnTimeout' common/constants.go common/init.go || {
   echo "fork must preserve common.RelayIdleConnTimeout required by upstream protected fetch client" >&2
+  exit 1
+}
+
+postgres_prepare_stmt="$(
+  awk '
+    /strings.HasPrefix\(dsn, "postgres:\/\// { in_pg=1 }
+    in_pg && /PrepareStmt:/ { print $0 }
+    in_pg && /return db, common.DatabaseTypePostgreSQL/ { in_pg=0 }
+  ' "$model_main"
+)"
+
+if grep -Eq 'PrepareStmt:[[:space:]]+true' <<<"$postgres_prepare_stmt"; then
+  echo "PostgreSQL must not use GORM PrepareStmt=true behind PgBouncer" >&2
+  exit 1
+fi
+
+grep -Eq 'PrepareStmt:[[:space:]]+false' <<<"$postgres_prepare_stmt" || {
+  echo "PostgreSQL must explicitly set GORM PrepareStmt=false behind PgBouncer" >&2
   exit 1
 }
 

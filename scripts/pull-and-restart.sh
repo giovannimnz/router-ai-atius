@@ -9,6 +9,8 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 IMAGE="${IMAGE:-ghcr.io/giovannimnz/router-ai-atius}"
 TAG="${1:-${TAG:-latest}}"
 SERVICE="${SERVICE:-container-router-ai-atius.service}"
+POD_SERVICE="${POD_SERVICE:-pod-atius-ai-router.service}"
+DEPENDENCY_SERVICES="${DEPENDENCY_SERVICES:-container-redis.service container-postgres.service}"
 CONTAINER="${CONTAINER:-router-ai-atius}"
 LOG="$REPO_ROOT/logs/auto-update.log"
 FORCE_RESTART="${FORCE_RESTART:-false}"
@@ -39,6 +41,52 @@ health_ok() {
       return 0
     fi
   done
+  return 1
+}
+
+wait_healthy() {
+  local attempts="${1:-45}"
+  for _ in $(seq 1 "$attempts"); do
+    if systemctl --user is-active --quiet "$SERVICE" && health_ok; then
+      podman inspect "$CONTAINER" --format 'Container={{.Name}} Image={{.ImageName}} Started={{.State.StartedAt}}' 2>/dev/null | tee -a "$LOG" || true
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+service_logs() {
+  journalctl --user -u "$SERVICE" -n 160 --no-pager 2>/dev/null || true
+}
+
+recover_stale_pod_storage() {
+  if ! service_logs | grep -Eiq 'unable to determine if .*/userdata/shm|no such file or directory'; then
+    return 1
+  fi
+
+  log "Detected stale Podman pod storage; recreating pod and dependencies once"
+  systemctl --user reset-failed "$SERVICE" "$POD_SERVICE" || true
+  systemctl --user restart "$POD_SERVICE"
+  for unit in $DEPENDENCY_SERVICES; do
+    systemctl --user start "$unit"
+  done
+  systemctl --user restart "$SERVICE"
+}
+
+recover_cached_plan() {
+  if ! service_logs | grep -Eiq 'cached plan must not change result type|SQLSTATE 0A000|plano em cache'; then
+    return 1
+  fi
+
+  log "Detected stale PostgreSQL prepared plan; restarting PgBouncer once"
+  if sudo -n systemctl restart pgbouncer; then
+    systemctl --user reset-failed "$SERVICE" || true
+    systemctl --user restart "$SERVICE"
+    return 0
+  fi
+
+  log "WARN: PgBouncer recovery skipped; sudo -n systemctl restart pgbouncer failed"
   return 1
 }
 
@@ -89,13 +137,17 @@ fi
 log "Restarting user unit: $SERVICE"
 systemctl --user restart "$SERVICE"
 
-for _ in {1..45}; do
-  if systemctl --user is-active --quiet "$SERVICE" && health_ok; then
-    podman inspect "$CONTAINER" --format 'Container={{.Name}} Image={{.ImageName}} Started={{.State.StartedAt}}' 2>/dev/null | tee -a "$LOG" || true
-    exit 0
-  fi
-  sleep 2
-done
+if wait_healthy 45; then
+  exit 0
+fi
+
+if recover_stale_pod_storage && wait_healthy 45; then
+  exit 0
+fi
+
+if recover_cached_plan && wait_healthy 45; then
+  exit 0
+fi
 
 log "ERROR: $SERVICE did not become healthy after restart"
 systemctl --user --no-pager status "$SERVICE" | tail -40 | tee -a "$LOG" || true

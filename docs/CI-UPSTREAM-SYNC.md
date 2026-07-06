@@ -69,6 +69,11 @@ into local `refs/tags/*`.
   dispatches the fork sync workflow, waits for the fork GHCR build when a sync
   produced a new tag, then deploys `ghcr.io/giovannimnz/router-ai-atius:latest`
   through the managed Podman user unit `container-router-ai-atius.service`.
+- Host deploy recovery may restart the rootless Podman pod once when the pod
+  storage is stale, and may restart PgBouncer once when startup logs show
+  PostgreSQL stale prepared-plan errors (`SQLSTATE 0A000`). PostgreSQL runs with
+  GORM `PrepareStmt=false` in the fork to avoid reintroducing those cached plans
+  after migrations.
 - Before pushing the sync commit or version tag, the workflow runs
   `scripts/ci-build-frontends.sh "v$NEW_TAG"` after installing Bun `1.3.14`.
   A broken frontend sync now stops inside the sync workflow instead of

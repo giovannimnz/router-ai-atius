@@ -144,7 +144,10 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, common.DatabaseType, error)
 				DSN:                  dsn,
 				PreferSimpleProtocol: true, // disables implicit prepared statement usage
 			}), &gorm.Config{
-				PrepareStmt: true, // precompile SQL
+				// PgBouncer can retain server-side plans across app restarts. After
+				// migrations, those plans can fail with "cached plan must not change
+				// result type", so PostgreSQL must not use GORM prepared statements.
+				PrepareStmt: false,
 			})
 			return db, common.DatabaseTypePostgreSQL, err
 		}

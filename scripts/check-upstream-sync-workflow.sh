@@ -2,8 +2,11 @@
 set -euo pipefail
 
 workflow="${1:-.github/workflows/sync.yml}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
 workflow_dir="$(dirname "$workflow")"
 docker_publish_workflow="${workflow_dir}/docker-publish.yml"
+next_version_script="$repo_root/scripts/next-fork-version.sh"
 
 if [[ ! -f "$workflow" ]]; then
   echo "workflow not found: $workflow" >&2
@@ -27,6 +30,11 @@ grep -Eq 'git ls-remote --tags --refs upstream' "$workflow" || {
 
 grep -Eq 'actions: write' "$workflow" || {
   echo "sync workflow must allow workflow_dispatch calls with actions: write" >&2
+  exit 1
+}
+
+grep -Eq 'actions/checkout@v5' "$workflow" || {
+  echo "sync workflow must use actions/checkout@v5 to avoid Node 20 deprecation warnings" >&2
   exit 1
 }
 
@@ -72,8 +80,23 @@ grep -Eq 'Verify frontend release build' "$workflow" || {
   exit 1
 }
 
+grep -Eq 'oven-sh/setup-bun@v2' "$workflow" || {
+  echo "sync workflow must install Bun before frontend verification" >&2
+  exit 1
+}
+
+grep -Eq 'bun-version:[[:space:]]+1\.3\.14' "$workflow" || {
+  echo "sync workflow must use Bun 1.3.14 for frontend verification" >&2
+  exit 1
+}
+
 grep -Eq 'scripts/ci-build-frontends.sh "v\$NEW_TAG"' "$workflow" || {
   echo "sync workflow must run scripts/ci-build-frontends.sh for the new tag before push" >&2
+  exit 1
+}
+
+grep -Eq 'scripts/next-fork-version\.sh "\$CURRENT" "\$UPSTREAM_VER"' "$workflow" || {
+  echo "sync workflow must calculate fork suffix through scripts/next-fork-version.sh" >&2
   exit 1
 }
 
@@ -102,6 +125,21 @@ if [[ -f "$docker_publish_workflow" ]]; then
     echo "docker-publish workflow_run must reference Sync Upstream + Release" >&2
     exit 1
   }
+fi
+
+if [[ ! -x "$next_version_script" ]]; then
+  echo "next fork version script must exist and be executable: $next_version_script" >&2
+  exit 1
+fi
+
+if [[ "$("$next_version_script" 1.0.0-rc.16.5 1.0.0-rc.16)" != "1.0.0-rc.16.6" ]]; then
+  echo "next fork version script must increment rc suffixes without resetting to .1" >&2
+  exit 1
+fi
+
+if [[ "$("$next_version_script" 1.0.0-rc.15.9 1.0.0-rc.16)" != "1.0.0-rc.16.1" ]]; then
+  echo "next fork version script must reset suffix when upstream base changes" >&2
+  exit 1
 fi
 
 echo "upstream sync workflow guard passed"

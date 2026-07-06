@@ -49,13 +49,18 @@ into local `refs/tags/*`.
   `Sync Upstream + Release` and falls back to `github.token` when `GHCR_TOKEN`
   is not configured.
 - Before pushing the sync commit or version tag, the workflow runs
-  `scripts/ci-build-frontends.sh "v$NEW_TAG"`. A broken frontend sync now stops
-  inside the sync workflow instead of publishing a tag that immediately fails
-  Release, Docker, and Electron.
+  `scripts/ci-build-frontends.sh "v$NEW_TAG"` after installing Bun `1.3.14`.
+  A broken frontend sync now stops inside the sync workflow instead of
+  publishing a tag that immediately fails Release, Docker, and Electron.
 - Before pushing the sync commit or version tag, the workflow also runs
   `scripts/ci-build-backend.sh "v$NEW_TAG"`. Backend compile errors introduced
   by conflict resolution now fail in the sync workflow before any release tag is
   published.
+- Fork patch suffixes are calculated by `scripts/next-fork-version.sh`. For the
+  same upstream base, `1.0.0-rc.16.5` becomes `1.0.0-rc.16.6`; when the
+  upstream base changes, the suffix resets to `.1`.
+- GitHub Actions should use `actions/checkout@v5` so scheduled sync runs do not
+  emit Node.js 20 deprecation warnings from older checkout actions.
 
 ## Local guard
 
@@ -67,5 +72,6 @@ scripts/check-upstream-sync-workflow.sh
 
 The guard fails if the workflow regresses to fetching upstream tags, loses the
 post-tag dispatch calls, points the GHCR workflow at the wrong sync workflow
-name, omits the pre-tag frontend/backend builds, omits upstream-owned
-`web/default` restoration, or inverts the merge-strategy mapping again.
+name, omits the Bun setup/pre-tag frontend/backend builds, omits upstream-owned
+`web/default` restoration, resets same-base fork suffixes to `.1`, or inverts
+the merge-strategy mapping again.

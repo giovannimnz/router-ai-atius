@@ -38,7 +38,7 @@ jobs:
       upstream_version: ${{ steps.sync.outputs.upstream_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -222,20 +222,9 @@ jobs:
 
             CHANGED=true
 
-            # Calculate new fork version: upstream_VERSION.1
             CURRENT=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "0.0.0.0")
-
-            if [[ "$CURRENT" == "${UPSTREAM_VER}.1" ]] || [[ "$CURRENT" == "v${UPSTREAM_VER}.1" ]]; then
-              # Same upstream base, increment suffix
-              SUFFIX=$(echo "$CURRENT" | sed "s/.*\.//" | tr -d 'v')
-              NEW_SUFFIX=$((SUFFIX + 1))
-              NEW_TAG="${UPSTREAM_VER}.${NEW_SUFFIX}"
-              echo "📦 Version increment: $CURRENT → $NEW_TAG"
-            else
-              # New upstream version or first sync, set to upstream_VERSION.1
-              NEW_TAG="${UPSTREAM_VER}.1"
-              echo "📦 Version bump: $CURRENT → $NEW_TAG (upstream $UPSTREAM_VER + fork suffix)"
-            fi
+            NEW_TAG=$(scripts/next-fork-version.sh "$CURRENT" "$UPSTREAM_VER")
+            echo "📦 Version resolved: $CURRENT → $NEW_TAG (upstream $UPSTREAM_VER + fork suffix)"
 
             echo "$NEW_TAG" > VERSION
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -253,6 +242,12 @@ jobs:
             echo "new_tag=" >> $GITHUB_OUTPUT
             echo "upstream_version=$UPSTREAM_VER" >> $GITHUB_OUTPUT
           fi
+
+      - name: Setup Bun
+        if: steps.sync.outputs.changed == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
 
       - name: Verify frontend release build
         if: steps.sync.outputs.changed == 'true'

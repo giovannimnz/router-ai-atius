@@ -285,9 +285,9 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v$NEW_TAG"
-          gh workflow run release.yml --ref "$TAG" -f name="sync release $TAG"
-          gh workflow run docker-build.yml --ref main -f tag="$TAG"
-          gh workflow run electron-build.yml --ref "$TAG"
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" -f name="sync release $TAG"
+          gh workflow run docker-build.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
+          gh workflow run electron-build.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
           echo "🚦 Dispatched Release, Docker Multi-arch, and Electron workflows for $TAG"
 
       - name: Sync summary

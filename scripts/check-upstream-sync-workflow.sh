@@ -39,8 +39,8 @@ grep -Eq 'actions/checkout@v5' "$workflow" || {
 }
 
 for release_workflow in release.yml docker-build.yml electron-build.yml; do
-  grep -Eq "gh workflow run ${release_workflow}" "$workflow" || {
-    echo "sync workflow must dispatch ${release_workflow} after creating the version tag" >&2
+  grep -Eq "gh workflow run ${release_workflow} --repo \"\\\$GITHUB_REPOSITORY\"" "$workflow" || {
+    echo "sync workflow must dispatch ${release_workflow} against the fork repository after creating the version tag" >&2
     exit 1
   }
 done

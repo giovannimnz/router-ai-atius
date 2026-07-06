@@ -44,7 +44,8 @@ into local `refs/tags/*`.
 - A tag pushed by `GITHUB_TOKEN` does not trigger `push`-based workflows. After
   creating the fork tag, the sync workflow dispatches `release.yml`,
   `docker-build.yml`, and `electron-build.yml` explicitly with
-  `workflow_dispatch`.
+  `workflow_dispatch` and `--repo "$GITHUB_REPOSITORY"` so `gh` cannot infer the
+  upstream repository after a merge.
 - The legacy GHCR workflow uses `workflow_run` against the actual workflow name
   `Sync Upstream + Release` and falls back to `github.token` when `GHCR_TOKEN`
   is not configured.

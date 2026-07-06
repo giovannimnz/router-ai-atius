@@ -60,34 +60,19 @@ jobs:
 
       - name: Resolve image targets
         id: image_targets
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          ghcr_image="ghcr.io/${owner}/new-api"
-          dockerhub_image="calciumion/new-api"
+          ghcr_image="ghcr.io/${GITHUB_REPOSITORY,,}"
 
           echo "ghcr_image=${ghcr_image}" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_image=${dockerhub_image}" >> "$GITHUB_OUTPUT"
 
           {
             echo "tags<<EOF"
             echo "${ghcr_image}:${TAG}-${{ matrix.arch }}"
             echo "${ghcr_image}:latest-${{ matrix.arch }}"
-            if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-              echo "${dockerhub_image}:${TAG}-${{ matrix.arch }}"
-              echo "${dockerhub_image}:latest-${{ matrix.arch }}"
-            fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DockerHub secrets are not configured; publishing GHCR only."
-          fi
+          echo "::notice::Publishing fork image to GHCR only: ${ghcr_image}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -99,20 +84,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN || github.token }}
 
-      - name: Log in to Docker Hub
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Extract metadata (labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ steps.image_targets.outputs.ghcr_image }}
-            ${{ steps.image_targets.outputs.dockerhub_image }}
+          images: ${{ steps.image_targets.outputs.ghcr_image }}
 
       - name: Validate Dockerfile asset references
         run: scripts/check-dockerfile-assets.sh
@@ -137,18 +113,12 @@ jobs:
       - name: Sign image with cosign
         run: |
           cosign sign --yes "${{ steps.image_targets.outputs.ghcr_image }}@${{ steps.build.outputs.digest }}"
-          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
-            cosign sign --yes "${{ steps.image_targets.outputs.dockerhub_image }}@${{ steps.build.outputs.digest }}"
-          fi
 
       - name: Image summary
         run: |
           echo "### Docker Image Digest (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.image_targets.outputs.ghcr_image }}:${TAG}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
-            echo "${{ steps.image_targets.outputs.dockerhub_image }}:${TAG}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          fi
           echo "${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
@@ -167,19 +137,9 @@ jobs:
 
       - name: Resolve image targets
         id: image_targets
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "ghcr_image=ghcr.io/${owner}/new-api" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_image=calciumion/new-api" >> "$GITHUB_OUTPUT"
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DockerHub secrets are not configured; publishing GHCR manifest only."
-          fi
+          echo "ghcr_image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Publishing fork manifests to GHCR only."
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -187,13 +147,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN || github.token }}
-
-      - name: Log in to Docker Hub
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create & push GHCR manifest (version)
         run: |
@@ -209,28 +162,9 @@ jobs:
             "${{ steps.image_targets.outputs.ghcr_image }}:latest-amd64" \
             "${{ steps.image_targets.outputs.ghcr_image }}:latest-arm64"
 
-      - name: Create & push Docker Hub manifest (version)
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        run: |
-          docker buildx imagetools create \
-            -t "${{ steps.image_targets.outputs.dockerhub_image }}:${TAG}" \
-            "${{ steps.image_targets.outputs.dockerhub_image }}:${TAG}-amd64" \
-            "${{ steps.image_targets.outputs.dockerhub_image }}:${TAG}-arm64"
-
-      - name: Create & push Docker Hub manifest (latest)
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        run: |
-          docker buildx imagetools create \
-            -t "${{ steps.image_targets.outputs.dockerhub_image }}:latest" \
-            "${{ steps.image_targets.outputs.dockerhub_image }}:latest-amd64" \
-            "${{ steps.image_targets.outputs.dockerhub_image }}:latest-arm64"
-
       - name: Manifest summary
         run: |
           echo "### Multi-arch Manifest" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           docker buildx imagetools inspect "${{ steps.image_targets.outputs.ghcr_image }}:${TAG}" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.image_targets.outputs.dockerhub_enabled }}" == "true" ]]; then
-            docker buildx imagetools inspect "${{ steps.image_targets.outputs.dockerhub_image }}:${TAG}" >> $GITHUB_STEP_SUMMARY
-          fi
           echo '```' >> $GITHUB_STEP_SUMMARY

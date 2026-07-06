@@ -46,33 +46,19 @@ jobs:
 
       - name: Resolve image targets
         id: image_targets
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           ghcr_image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          dockerhub_image="calciumion/new-api"
 
           echo "ghcr_image=${ghcr_image}" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_image=${dockerhub_image}" >> "$GITHUB_OUTPUT"
 
           {
             echo "tags<<EOF"
             echo "${ghcr_image}:nightly-${{ matrix.arch }}"
             echo "${ghcr_image}:${VERSION}-${{ matrix.arch }}"
-            if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-              echo "${dockerhub_image}:nightly-${{ matrix.arch }}"
-              echo "${dockerhub_image}:${VERSION}-${{ matrix.arch }}"
-            fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DockerHub secrets are not configured; publishing GHCR only."
-          fi
+          echo "::notice::Publishing fork nightly image to GHCR only: ${ghcr_image}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -84,20 +70,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Docker Hub
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Extract metadata (labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ steps.image_targets.outputs.dockerhub_image }}
-            ${{ steps.image_targets.outputs.ghcr_image }}
+          images: ${{ steps.image_targets.outputs.ghcr_image }}
 
       - name: Build & push single-arch
         uses: docker/build-push-action@v6
@@ -113,7 +90,7 @@ jobs:
           sbom: false
 
   create_manifests:
-    name: Create multi-arch manifests (Docker Hub)
+    name: Create multi-arch manifests (GHCR)
     needs: [build_single_arch]
     runs-on: ubuntu-latest
     permissions:
@@ -135,18 +112,9 @@ jobs:
 
       - name: Resolve image targets
         id: image_targets
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "ghcr_image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_image=calciumion/new-api" >> "$GITHUB_OUTPUT"
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "dockerhub_enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dockerhub_enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DockerHub secrets are not configured; publishing GHCR manifest only."
-          fi
+          echo "::notice::Publishing fork nightly manifests to GHCR only."
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -154,13 +122,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to Docker Hub
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create & push manifest (GHCR - nightly)
         run: |
@@ -175,19 +136,3 @@ jobs:
             -t "${{ steps.image_targets.outputs.ghcr_image }}:${VERSION}" \
             "${{ steps.image_targets.outputs.ghcr_image }}:${VERSION}-amd64" \
             "${{ steps.image_targets.outputs.ghcr_image }}:${VERSION}-arm64"
-
-      - name: Create & push manifest (Docker Hub - nightly)
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        run: |
-          docker buildx imagetools create \
-            -t calciumion/new-api:nightly \
-            calciumion/new-api:nightly-amd64 \
-            calciumion/new-api:nightly-arm64
-
-      - name: Create & push manifest (Docker Hub - versioned nightly)
-        if: steps.image_targets.outputs.dockerhub_enabled == 'true'
-        run: |
-          docker buildx imagetools create \
-            -t calciumion/new-api:${VERSION} \
-            calciumion/new-api:${VERSION}-amd64 \
-            calciumion/new-api:${VERSION}-arm64

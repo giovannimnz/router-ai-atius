@@ -6,12 +6,51 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 workflow_dir="$(dirname "$workflow")"
 docker_publish_workflow="${workflow_dir}/docker-publish.yml"
+docker_build_workflow="${workflow_dir}/docker-build.yml"
+docker_alpha_workflow="${workflow_dir}/docker-image-alpha.yml"
+docker_nightly_workflow="${workflow_dir}/docker-image-nightly.yml"
+gitee_sync_workflow="${workflow_dir}/sync-to-gitee.yml"
 next_version_script="$repo_root/scripts/next-fork-version.sh"
+guard_script="$repo_root/scripts/fork-sync-guard.sh"
+sync_fork_script="$repo_root/scripts/sync-fork.sh"
+auto_sync_deploy_script="$repo_root/scripts/auto-sync-deploy.sh"
+pull_restart_script="$repo_root/scripts/pull-and-restart.sh"
+deploy_ghcr_script="$repo_root/scripts/deploy-ghcr.sh"
 
 if [[ ! -f "$workflow" ]]; then
   echo "workflow not found: $workflow" >&2
   exit 1
 fi
+
+if [[ ! -x "$guard_script" ]]; then
+  echo "fork sync guard must exist and be executable: $guard_script" >&2
+  exit 1
+fi
+
+grep -Eq 'FORK_REPO:[[:space:]]+giovannimnz/router-ai-atius' "$workflow" || {
+  echo "sync workflow must pin the writable fork repository" >&2
+  exit 1
+}
+
+grep -Eq 'scripts/fork-sync-guard\.sh ensure-actions-repo' "$workflow" || {
+  echo "sync workflow must validate it is running in the fork repository" >&2
+  exit 1
+}
+
+grep -Eq 'scripts/fork-sync-guard\.sh configure-remotes' "$workflow" || {
+  echo "sync workflow must configure upstream through the fork sync guard" >&2
+  exit 1
+}
+
+grep -Eq 'UPSTREAM_PUSH_URL="\$\{UPSTREAM_PUSH_URL:-DISABLED\}"' "$guard_script" || {
+  echo "fork sync guard must default upstream push URL to DISABLED" >&2
+  exit 1
+}
+
+grep -Eq 'git remote set-url --push "\$UPSTREAM_REMOTE" "\$UPSTREAM_PUSH_URL"' "$guard_script" || {
+  echo "fork sync guard must disable the upstream push URL" >&2
+  exit 1
+}
 
 if grep -Eq 'git fetch upstream .*--tags|git fetch .*--tags .*upstream' "$workflow"; then
   echo "sync workflow must not fetch upstream tags into the fork namespace" >&2
@@ -39,11 +78,28 @@ grep -Eq 'actions/checkout@v5' "$workflow" || {
 }
 
 for release_workflow in release.yml docker-build.yml electron-build.yml; do
-  grep -Eq "gh workflow run ${release_workflow} --repo \"\\\$GITHUB_REPOSITORY\"" "$workflow" || {
+  grep -Eq "scripts/fork-sync-guard\\.sh workflow-run ${release_workflow}" "$workflow" || {
     echo "sync workflow must dispatch ${release_workflow} against the fork repository after creating the version tag" >&2
     exit 1
   }
 done
+
+grep -Eq 'scripts/fork-sync-guard\.sh push origin main' "$workflow" || {
+  echo "sync workflow must push main through the fork sync guard" >&2
+  exit 1
+}
+
+grep -Eq 'scripts/fork-sync-guard\.sh push origin "v\$NEW_TAG"' "$workflow" || {
+  echo "sync workflow must push tags through the fork sync guard" >&2
+  exit 1
+}
+
+naked_workflow_runs="$(find "$repo_root/.github/workflows" "$repo_root/scripts" -type f \( -name '*.yml' -o -name '*.yaml' -o -name '*.sh' \) -print0 | xargs -0 grep -n 'gh workflow run' 2>/dev/null | grep -v 'fork-sync-guard.sh' | grep -v 'check-upstream-sync-workflow.sh' || true)"
+if [[ -n "$naked_workflow_runs" ]]; then
+  echo "workflow dispatches must go through scripts/fork-sync-guard.sh workflow-run:" >&2
+  echo "$naked_workflow_runs" >&2
+  exit 1
+fi
 
 grep -Eq 'resolve_conflicts_with_side theirs' "$workflow" || {
   echo "sync workflow must use the per-path theirs resolver when strategy=theirs" >&2
@@ -126,6 +182,60 @@ if [[ -f "$docker_publish_workflow" ]]; then
     exit 1
   }
 fi
+
+if [[ -f "$gitee_sync_workflow" ]]; then
+  grep -Fq "GITEE_OWNER: 'giovannimnz'" "$gitee_sync_workflow" || {
+    echo "sync-to-gitee workflow must target the fork owner by default" >&2
+    exit 1
+  }
+
+  grep -Fq "GITEE_REPO: 'router-ai-atius'" "$gitee_sync_workflow" || {
+    echo "sync-to-gitee workflow must target the fork repo by default" >&2
+    exit 1
+  }
+
+  grep -Fq "vars.ENABLE_GITEE_SYNC == 'true'" "$gitee_sync_workflow" || {
+    echo "sync-to-gitee workflow must be disabled unless explicitly enabled" >&2
+    exit 1
+  }
+fi
+
+for image_workflow in "$docker_build_workflow" "$docker_alpha_workflow" "$docker_nightly_workflow"; do
+  [[ -f "$image_workflow" ]] || continue
+
+  grep -Fq 'ghcr.io/${GITHUB_REPOSITORY,,}' "$image_workflow" || {
+    echo "image workflow must publish to the fork GHCR repository: $image_workflow" >&2
+    exit 1
+  }
+
+  if grep -Eq 'calciumion/new-api|dockerhub_enabled=true|DOCKERHUB_' "$image_workflow"; then
+    echo "image workflow must not publish to upstream/DockerHub targets: $image_workflow" >&2
+    exit 1
+  fi
+done
+
+grep -Fq '"$GUARD" configure-remotes' "$sync_fork_script" || {
+  echo "sync-fork.sh must configure remotes through the fork sync guard" >&2
+  exit 1
+}
+
+grep -Fq 'git fetch "$UPSTREAM_NAME" --no-tags --prune' "$sync_fork_script" || {
+  echo "sync-fork.sh must fetch upstream with --no-tags" >&2
+  exit 1
+}
+
+grep -Fq '"$GUARD" push "$FORK_REMOTE"' "$sync_fork_script" || {
+  echo "sync-fork.sh must push through the fork sync guard" >&2
+  exit 1
+}
+
+for deploy_script in "$auto_sync_deploy_script" "$pull_restart_script" "$deploy_ghcr_script"; do
+  [[ -f "$deploy_script" ]] || continue
+  if grep -Eq 'docker build|docker compose|git merge upstream|git push upstream|Authorization: Bearer' "$deploy_script"; then
+    echo "deploy automation must not perform local builds, local upstream merges, upstream pushes, or hardcoded bearer probes: $deploy_script" >&2
+    exit 1
+  fi
+done
 
 if [[ ! -x "$next_version_script" ]]; then
   echo "next fork version script must exist and be executable: $next_version_script" >&2

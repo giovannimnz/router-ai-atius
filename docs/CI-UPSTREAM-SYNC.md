@@ -19,6 +19,15 @@ into local `refs/tags/*`.
 
 ## Contract
 
+- `QuantumNous/new-api` is an upstream source only. Sync automation may fetch
+  branches and inspect tags from it, but must never push, dispatch workflows, or
+  publish containers under upstream/DockerHub identities.
+- `giovannimnz/router-ai-atius` is the only writable repository for sync
+  commits, version tags, release workflow dispatches, and container images.
+- All push and workflow-dispatch operations go through
+  `scripts/fork-sync-guard.sh`. The guard pins the fork repo, sets the
+  upstream push URL to `DISABLED`, and refuses pushes to remotes other than
+  `origin`.
 - Fetch upstream branches with `--no-tags`.
 - Detect the latest upstream version with `git ls-remote --tags --refs`.
 - Keep fork-owned release tags untouched.
@@ -43,12 +52,23 @@ into local `refs/tags/*`.
   upstream merge unless it has the `workflow` permission.
 - A tag pushed by `GITHUB_TOKEN` does not trigger `push`-based workflows. After
   creating the fork tag, the sync workflow dispatches `release.yml`,
-  `docker-build.yml`, and `electron-build.yml` explicitly with
-  `workflow_dispatch` and `--repo "$GITHUB_REPOSITORY"` so `gh` cannot infer the
-  upstream repository after a merge.
+  `docker-build.yml`, and `electron-build.yml` explicitly through
+  `scripts/fork-sync-guard.sh workflow-run` so `gh` cannot infer the upstream
+  repository after a merge.
 - The legacy GHCR workflow uses `workflow_run` against the actual workflow name
   `Sync Upstream + Release` and falls back to `github.token` when `GHCR_TOKEN`
   is not configured.
+- Docker image workflows publish only to `ghcr.io/${GITHUB_REPOSITORY}`. They do
+  not login to DockerHub and do not create `calciumion/new-api` tags or
+  manifests, even if old DockerHub secrets still exist in repository settings.
+- The Gitee release mirror is disabled by default and, when explicitly enabled
+  through `ENABLE_GITEE_SYNC=true`, targets the fork mirror
+  `giovannimnz/router-ai-atius`; it must not mirror releases to the upstream
+  Gitee project.
+- Host deploy automation does not build locally or merge upstream locally. It
+  dispatches the fork sync workflow, waits for the fork GHCR build when a sync
+  produced a new tag, then deploys `ghcr.io/giovannimnz/router-ai-atius:latest`
+  through the managed Podman user unit `container-router-ai-atius.service`.
 - Before pushing the sync commit or version tag, the workflow runs
   `scripts/ci-build-frontends.sh "v$NEW_TAG"` after installing Bun `1.3.14`.
   A broken frontend sync now stops inside the sync workflow instead of
@@ -74,7 +94,8 @@ scripts/check-upstream-sync-workflow.sh
 ```
 
 The guard fails if the workflow regresses to fetching upstream tags, loses the
-post-tag dispatch calls, points the GHCR workflow at the wrong sync workflow
-name, omits the Bun setup/pre-tag frontend/backend builds, omits upstream-owned
-`web/default` restoration, resets same-base fork suffixes to `.1`, or inverts
-the merge-strategy mapping again.
+post-tag guarded dispatch calls, points image workflows at upstream/DockerHub
+targets, points the GHCR workflow at the wrong sync workflow name, omits the Bun
+setup/pre-tag frontend/backend builds, omits upstream-owned `web/default`
+restoration, resets same-base fork suffixes to `.1`, reintroduces direct local
+sync/build/deploy scripts, or inverts the merge-strategy mapping again.

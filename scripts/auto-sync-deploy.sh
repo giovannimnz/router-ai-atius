@@ -1,94 +1,104 @@
-#!/bin/bash
-# Auto-sync-deploy: Sincroniza upstream + build local + restart container
-# Run: manual ou via cron
+#!/usr/bin/env bash
+#
+# Dispatch the fork-only upstream sync, wait for the fork GHCR image, then
+# deploy the latest image through the local Podman/systemd runtime.
+#
+set -euo pipefail
 
-set -e
-CDIR="$(cd "$(dirname "$0")" && pwd)"
-LOG="$CDIR/../logs/auto-sync-deploy.log"
-IMG="ghcr.io/giovannimnz/router-ai-atius"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+GUARD="$SCRIPT_DIR/fork-sync-guard.sh"
+FORK_REPO="${FORK_REPO:-giovannimnz/router-ai-atius}"
+SYNC_STRATEGY="${SYNC_STRATEGY:-theirs}"
+WAIT_FOR_WORKFLOWS="${WAIT_FOR_WORKFLOWS:-true}"
+DEPLOY_AFTER_GHCR="${DEPLOY_AFTER_GHCR:-true}"
+DEPLOY_TAG="${DEPLOY_TAG:-latest}"
+LOG="$REPO_ROOT/logs/auto-sync-deploy.log"
 
 mkdir -p "$(dirname "$LOG")"
 
 log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
 }
 
-cd "$CDIR/.."
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    log "ERROR: missing required command: $1"
+    exit 1
+  }
+}
 
-log "=== INICIO AUTO-SYNC-DEPLOY ==="
+wait_for_workflow_run() {
+  local workflow="$1"
+  local started_at="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+  local run_id=""
 
-# 1. Sync upstream
-log "Sincronizando com upstream..."
-git fetch upstream
+  while (( SECONDS < deadline )); do
+    run_id="$(gh run list \
+      --repo "$FORK_REPO" \
+      --workflow "$workflow" \
+      --limit 20 \
+      --json databaseId,createdAt,event \
+      --jq "map(select(.event == \"workflow_dispatch\" and .createdAt >= \"$started_at\")) | sort_by(.createdAt) | reverse | .[0].databaseId // empty")"
 
-# Get latest upstream tag
-UPSTREAM_TAG=$(timeout 30 git ls-remote upstream --tags 2>/dev/null | awk -F'/' '{print $3}' | grep -E '^v[0-9]' | sort -V | tail -1)
-UPSTREAM_CLEAN=$(echo "$UPSTREAM_TAG" | sed 's/^v//')
-CURRENT_TAG=$(cat VERSION)
+    if [[ -n "$run_id" ]]; then
+      echo "$run_id"
+      return 0
+    fi
 
-log "Upstream latest tag: $UPSTREAM_TAG | Current VERSION: $CURRENT_TAG"
+    sleep 10
+  done
 
-if [ -n "$UPSTREAM_TAG" ] && [ "${UPSTREAM_CLEAN}.1" != "$CURRENT_TAG" ]; then
-  log "Nova versao detectada: $UPSTREAM_TAG -> ${UPSTREAM_CLEAN}.1"
+  return 1
+}
 
-  # Merge upstream with theirs strategy
-  git checkout main
-  git fetch upstream
-  git merge upstream/main -X theirs -m "chore: auto-merge upstream $(date)"
+cd "$REPO_ROOT"
 
-  # Update VERSION with .1 suffix
-  echo "${UPSTREAM_CLEAN}.1" > VERSION
-  git add VERSION
-  git commit -m "chore: version bump to ${UPSTREAM_CLEAN}.1"
+require_cmd gh
+require_cmd git
 
-  # Push
-  git push origin main
+log "=== AUTO SYNC DEPLOY START ==="
+log "Fork repo: $FORK_REPO"
+log "Sync strategy: $SYNC_STRATEGY"
 
-  # Tag
-  git tag -f "v${UPSTREAM_CLEAN}.1"
-  git push origin "v${UPSTREAM_CLEAN}.1"
+"$GUARD" configure-remotes
 
-  log "Push concluido: v${UPSTREAM_CLEAN}.1"
-else
-  log "Versao ja atualizada, pulando sync. ($CURRENT_TAG)"
+started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+log "Dispatching Sync Upstream + Release on fork..."
+"$GUARD" workflow-run sync.yml --ref main -f strategy="$SYNC_STRATEGY"
+
+if [[ "$WAIT_FOR_WORKFLOWS" != "true" ]]; then
+  log "WAIT_FOR_WORKFLOWS=false; dispatched sync and exiting."
+  exit 0
 fi
 
-# 2. Build local (arm64)
-log "Buildando imagem Docker (linux/arm64)..."
-docker build --pull --platform linux/arm64 -t "$IMG:local" . 2>&1 | tail -5 >> "$LOG"
-
-# Tag with version
-VERSION_TAG=$(cat VERSION)
-docker tag "$IMG:local" "$IMG:latest"
-docker tag "$IMG:local" "$IMG:$VERSION_TAG"
-
-log "Imagem buildada: $VERSION_TAG"
-
-# 3. Restart container
-log "Restartando container..."
-cd "$CDIR/.."
-docker compose stop new-api
-docker compose rm -f new-api
-docker compose create new-api
-docker compose start new-api
-
-# Wait for healthy
-for i in $(seq 1 30); do
-  HEALTH=$(docker inspect --format='{{.State.Health.Status}}' new-api 2>/dev/null || echo "starting")
-  if [ "$HEALTH" = "healthy" ]; then
-    log "Container healthy!"
-    break
-  fi
-  log "Aguardando container... ($i/30) status=$HEALTH"
-  sleep 2
-done
-
-# Verify
-RESP=$(curl -s -o /dev/null -w "%{http_code}" "https://router.atius.com.br/v1/models" -H "Authorization: Bearer giovanniS23h3rm3s2026at1usr0ut3rk3yXYZ123456ABCD" 2>/dev/null || echo "000")
-if [ "$RESP" = "200" ]; then
-  log "SUCESSO! /v1/models retornou 200"
-else
-  log "ERRO! /v1/models retornou $RESP"
+sync_run="$(wait_for_workflow_run sync.yml "$started_at" 180 || true)"
+if [[ -z "$sync_run" ]]; then
+  log "ERROR: could not find dispatched sync.yml run for $FORK_REPO"
+  exit 1
 fi
 
-log "=== FIM AUTO-SYNC-DEPLOY ==="
+log "Watching sync run: https://github.com/$FORK_REPO/actions/runs/$sync_run"
+gh run watch "$sync_run" --repo "$FORK_REPO" --exit-status
+
+if [[ "$DEPLOY_AFTER_GHCR" != "true" ]]; then
+  log "DEPLOY_AFTER_GHCR=false; sync succeeded and deploy is disabled."
+  exit 0
+fi
+
+log "Waiting for docker-build.yml run dispatched by sync, if upstream changed..."
+docker_run="$(wait_for_workflow_run docker-build.yml "$started_at" 900 || true)"
+if [[ -z "$docker_run" ]]; then
+  log "No docker-build.yml run found after sync. Upstream was probably already current; deploy skipped."
+  exit 0
+fi
+
+log "Watching GHCR build run: https://github.com/$FORK_REPO/actions/runs/$docker_run"
+gh run watch "$docker_run" --repo "$FORK_REPO" --exit-status
+
+log "Deploying GHCR image tag: $DEPLOY_TAG"
+"$SCRIPT_DIR/pull-and-restart.sh" "$DEPLOY_TAG"
+
+log "=== AUTO SYNC DEPLOY COMPLETE ==="

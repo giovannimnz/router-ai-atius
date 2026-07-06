@@ -22,6 +22,7 @@ permissions:
 
 env:
   STRATEGY: ${{ github.event.inputs.strategy || 'theirs' }}
+  FORK_REPO: giovannimnz/router-ai-atius
   UPSTREAM_REPO: QuantumNous/new-api
 
 jobs:
@@ -49,6 +50,7 @@ jobs:
           git config user.email "actions@github.com"
           git config merge.conflictstyle merge
           git config push.default simple
+          scripts/fork-sync-guard.sh ensure-actions-repo
 
       - name: Validate sync workflow guard
         run: scripts/check-upstream-sync-workflow.sh
@@ -56,12 +58,7 @@ jobs:
       - name: Configure upstream remote
         run: |
           set -euo pipefail
-          upstream_url="https://github.com/${UPSTREAM_REPO}.git"
-          if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream "$upstream_url"
-          else
-            git remote add upstream "$upstream_url"
-          fi
+          scripts/fork-sync-guard.sh configure-remotes
 
           # Do not fetch upstream tags into the fork namespace. Upstream and fork
           # release tags can share names while pointing to different objects.
@@ -265,7 +262,7 @@ jobs:
       - name: Push commit
         if: steps.sync.outputs.changed == 'true'
         run: |
-          git push origin main
+          scripts/fork-sync-guard.sh push origin main
           echo "🚀 Commit pushed to main"
 
       - name: Create & push version tag
@@ -274,7 +271,7 @@ jobs:
           NEW_TAG: ${{ steps.sync.outputs.new_tag }}
         run: |
           git tag "v$NEW_TAG"
-          git push origin "v$NEW_TAG"
+          scripts/fork-sync-guard.sh push origin "v$NEW_TAG"
           echo "🏷️ Created and pushed tag v$NEW_TAG"
 
       - name: Dispatch release workflows
@@ -285,9 +282,9 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v$NEW_TAG"
-          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" -f name="sync release $TAG"
-          gh workflow run docker-build.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
-          gh workflow run electron-build.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
+          scripts/fork-sync-guard.sh workflow-run release.yml --ref "$TAG" -f name="sync release $TAG"
+          scripts/fork-sync-guard.sh workflow-run docker-build.yml --ref main -f tag="$TAG"
+          scripts/fork-sync-guard.sh workflow-run electron-build.yml --ref "$TAG"
           echo "🚦 Dispatched Release, Docker Multi-arch, and Electron workflows for $TAG"
 
       - name: Sync summary
@@ -313,5 +310,5 @@ jobs:
               echo "| Status | ⏭️ Already up to date |"
             fi
             echo ""
-            echo "**Repository:** https://github.com/${{ github.repository }}"
+            echo "**Repository:** https://github.com/${{ env.FORK_REPO }}"
           } >> "$GITHUB_STEP_SUMMARY"

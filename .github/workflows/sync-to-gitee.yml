@@ -11,14 +11,15 @@ on:
         required: true
         type: string
 
-# 配置你的 Gitee 仓库信息
+# Fork-only Gitee mirror. Disabled unless ENABLE_GITEE_SYNC=true is set in repo vars.
 env:
-  GITEE_OWNER: 'QuantumNous'  # 修改为你的 Gitee 用户名
-  GITEE_REPO: 'new-api'                # 修改为你的 Gitee 仓库名
+  GITEE_OWNER: 'giovannimnz'
+  GITEE_REPO: 'router-ai-atius'
 
 jobs:
   sync-to-gitee:
     runs-on: sync
+    if: ${{ vars.ENABLE_GITEE_SYNC == 'true' && github.repository == 'giovannimnz/router-ai-atius' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -88,4 +89,3 @@ jobs:
         run: |
           echo "✅ Successfully synced release ${{ github.event.inputs.tag_name }} to Gitee!"
           echo "🔗 Gitee Release URL: https://gitee.com/${{ env.GITEE_OWNER }}/${{ env.GITEE_REPO }}/releases/tag/${{ github.event.inputs.tag_name }}"
-

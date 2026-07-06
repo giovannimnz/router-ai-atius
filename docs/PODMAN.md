@@ -49,6 +49,19 @@ do driver overlay/Volumes).
 **Workaround `docker save | podman load`** foi aplicado para todas
 as 4 imagens durante a migração inicial 2026-06-04.
 
+### Deploy da imagem do fork
+
+O caminho atual de deploy do `router-ai-atius` é GHCR -> Podman user unit:
+
+```bash
+scripts/pull-and-restart.sh latest
+```
+
+Esse script puxa `ghcr.io/giovannimnz/router-ai-atius:latest`, reinicia
+`container-router-ai-atius.service` com `systemctl --user` e valida health local.
+Para um tag versionado, use `scripts/pull-and-restart.sh vX.Y.Z`; o script
+retaga o mesmo digest para `:latest`, que é o tag consumido pela unit.
+
 ## Workarounds aplicados
 
 ### 1. Network namespace compartilhado
@@ -97,7 +110,9 @@ senhas ficam em:
 
 ## Próximos passos
 
-- [ ] Push `ghcr.io/giovannimnz/router-ai-atius:latest` com tag pinned (não só `latest`)
-- [ ] Criar `systemd` user service `pod-atius-ai-router.service` para auto-restart no boot
+- [x] Push multi-arch de `ghcr.io/giovannimnz/router-ai-atius:<tag>` e
+  `:latest` pelo workflow `docker-build.yml`
+- [x] Usar `container-router-ai-atius.service` / `pod-atius-ai-router.service`
+  para restart gerenciado no runtime Podman rootless
 - [ ] Adicionar `omni srv1-ops podman status` ao omni-srv-admin CLI (já existe esboço)
 - [ ] Vault log do dia 2026-06-12 com SHA + container IDs preservados

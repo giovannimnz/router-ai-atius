@@ -1,72 +1,102 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# pull-and-restart.sh — Pull latest GHCR image and restart new-api container
-# Run via cron: 0 * * * * /home/ubuntu/docker/Atius/router-ai-atius/scripts/pull-and-restart.sh
+# Pull the fork GHCR image and restart the managed Podman user unit.
 #
 set -euo pipefail
 
-REPO_DIR="/home/ubuntu/docker/Atius/router-ai-atius"
-IMAGE="ghcr.io/giovannimnz/router-ai-atius"
-LOG="$REPO_DIR/logs/auto-update.log"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+IMAGE="${IMAGE:-ghcr.io/giovannimnz/router-ai-atius}"
+TAG="${1:-${TAG:-latest}}"
+SERVICE="${SERVICE:-container-router-ai-atius.service}"
+CONTAINER="${CONTAINER:-router-ai-atius}"
+LOG="$REPO_ROOT/logs/auto-update.log"
+FORCE_RESTART="${FORCE_RESTART:-false}"
+ENV_FILE="${ENV_FILE:-/home/ubuntu/.config/router-ai-atius/.env}"
+
+mkdir -p "$(dirname "$LOG")"
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
 }
 
-cd "$REPO_DIR"
-
-# Source GHCR credentials from .env
-if [[ -f "$REPO_DIR/.env" ]]; then
-    set -a
-    source "$REPO_DIR/.env"
-    set +a
-fi
-
-# Login to GHCR if token is available
-if [[ -n "${GHCR_TOKEN:-}" ]]; then
-    echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin > /dev/null 2>&1
-    log "Logged in to GHCR as $GHCR_USER"
-fi
-
-# Get current container version
-CURRENT_VERSION=$(docker exec new-api /new-api --version 2>/dev/null || echo "unknown")
-log "Current container version: $CURRENT_VERSION"
-
-# Pull latest image
-log "Pulling latest image from GHCR..."
-if ! docker pull "${IMAGE}:latest" 2>&1 | tail -3; then
-    log "ERROR: Failed to pull ${IMAGE}:latest"
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    log "ERROR: missing required command: $1"
     exit 1
-fi
+  }
+}
 
-# Get new image tag/digest
-NEW_DIGEST=$(docker inspect "${IMAGE}:latest" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo "unknown")
-log "New image digest: $NEW_DIGEST"
-
-# Check if image changed (compare digests)
-CURRENT_DIGEST=$(docker inspect "new-api" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo "")
-if [[ "$CURRENT_DIGEST" == "$NEW_DIGEST" ]]; then
-    log "Image unchanged, skipping restart"
-    exit 0
-fi
-
-log "Image updated, restarting new-api container..."
-
-# Restart the container
-docker compose -f "$REPO_DIR/docker-compose.yml" up -d new-api
-
-# Wait for healthy
-sleep 5
-for i in {1..30}; do
-    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' new-api 2>/dev/null || echo "none")
-    if [[ "$HEALTH" == "healthy" ]]; then
-        break
+health_ok() {
+  local url
+  for url in \
+    "http://127.0.0.1:3030/api/status" \
+    "http://127.0.0.1:3000/api/status" \
+    "http://127.0.0.1:3030/health" \
+    "http://127.0.0.1:3000/health"; do
+    if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      log "Health OK: $url"
+      return 0
     fi
-    sleep 2
+  done
+  return 1
+}
+
+require_cmd podman
+require_cmd systemctl
+require_cmd curl
+
+cd "$REPO_ROOT"
+
+load_optional_env_var() {
+  local key="$1"
+  local line value
+  [[ -f "$ENV_FILE" ]] || return 0
+  line="$(grep -E "^${key}=" "$ENV_FILE" | tail -1 || true)"
+  [[ -n "$line" ]] || return 0
+  value="${line#*=}"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  export "$key=$value"
+}
+
+load_optional_env_var GHCR_USER
+load_optional_env_var GHCR_TOKEN
+
+if [[ -n "${GHCR_TOKEN:-}" ]]; then
+  printf '%s' "$GHCR_TOKEN" | podman login ghcr.io --username "${GHCR_USER:-$USER}" --password-stdin >/dev/null 2>&1
+  log "Authenticated to GHCR as ${GHCR_USER:-$USER}"
+fi
+
+current_image_id="$(podman inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)"
+
+log "Pulling ${IMAGE}:${TAG}"
+podman pull "${IMAGE}:${TAG}"
+
+if [[ "$TAG" != "latest" ]]; then
+  log "Retagging ${IMAGE}:${TAG} as ${IMAGE}:latest for $SERVICE"
+  podman tag "${IMAGE}:${TAG}" "${IMAGE}:latest"
+fi
+
+new_image_id="$(podman image inspect "${IMAGE}:latest" --format '{{.Id}}' 2>/dev/null || true)"
+if [[ -n "$current_image_id" && -n "$new_image_id" && "$current_image_id" == "$new_image_id" && "$FORCE_RESTART" != "true" ]]; then
+  log "Image unchanged; restart skipped. Set FORCE_RESTART=true to restart anyway."
+  exit 0
+fi
+
+log "Restarting user unit: $SERVICE"
+systemctl --user restart "$SERVICE"
+
+for _ in {1..45}; do
+  if systemctl --user is-active --quiet "$SERVICE" && health_ok; then
+    podman inspect "$CONTAINER" --format 'Container={{.Name}} Image={{.ImageName}} Started={{.State.StartedAt}}' 2>/dev/null | tee -a "$LOG" || true
+    exit 0
+  fi
+  sleep 2
 done
 
-NEW_VERSION=$(docker exec new-api /new-api --version 2>/dev/null || echo "unknown")
-log "Container restarted successfully. New version: $NEW_VERSION"
-
-# Prune old images to save space
-docker image prune -f >> /dev/null 2>&1 || true
+log "ERROR: $SERVICE did not become healthy after restart"
+systemctl --user --no-pager status "$SERVICE" | tail -40 | tee -a "$LOG" || true
+exit 1

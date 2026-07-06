@@ -4,15 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_CPU_COUNT="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)"
 HOST_MEMORY_MIB="$(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo)"
-MAX_CPU_CORES="$(awk -v cpus="$HOST_CPU_COUNT" 'BEGIN { max = cpus / 2; if (max < 0.5) max = 0.5; printf "%.3f", max }')"
-MAX_CPUSET_CPUS="$((HOST_CPU_COUNT / 2))"
-if [[ "$MAX_CPUSET_CPUS" -lt 1 ]]; then
-  MAX_CPUSET_CPUS=1
-fi
-MAX_PROFILE_CPU_PERCENT="$((HOST_CPU_COUNT * 50))"
+MAX_ALLOWED_CPU_LIMIT_PERCENT="20"
+CPU_LIMIT_PERCENT="${PODMAN_ADMIN_CPU_LIMIT_PERCENT:-$MAX_ALLOWED_CPU_LIMIT_PERCENT}"
+MAX_CPU_CORES="$(awk -v cpus="$HOST_CPU_COUNT" -v pct="$CPU_LIMIT_PERCENT" 'BEGIN { max = cpus * pct / 100; if (max < 0.1) max = 0.1; printf "%.3f", max }')"
+MAX_CPUSET_CPUS="$(awk -v max="$MAX_CPU_CORES" 'BEGIN { count = int(max); if (max > count) count++; if (count < 1) count = 1; print count }')"
+MAX_PROFILE_CPU_PERCENT="$((HOST_CPU_COUNT * CPU_LIMIT_PERCENT))"
 MAX_MEMORY_MIB="$((HOST_MEMORY_MIB / 2))"
 
-DEFAULT_CPUS="$(awk -v max="$MAX_CPU_CORES" 'BEGIN { if (max >= 2) print "2"; else if (max >= 1) print "1"; else print "0.5" }')"
+DEFAULT_CPUS="$MAX_CPU_CORES"
 DEFAULT_CPUSET_COUNT="$(awk -v cpus="$DEFAULT_CPUS" -v max="$MAX_CPUSET_CPUS" 'BEGIN { count = int(cpus); if (cpus > count) count++; if (count < 1) count = 1; if (count > max) count = max; print count }')"
 if [[ "$DEFAULT_CPUSET_COUNT" -le 1 ]]; then
   DEFAULT_CPUSET="0"
@@ -130,12 +129,14 @@ cpuset_count() {
 }
 
 validate_policy() {
+  numeric_lte "$CPU_LIMIT_PERCENT" "$MAX_ALLOWED_CPU_LIMIT_PERCENT" ||
+    fail_policy "PODMAN_ADMIN_CPU_LIMIT_PERCENT=${CPU_LIMIT_PERCENT} exceeds hard ${MAX_ALLOWED_CPU_LIMIT_PERCENT}% host CPU cap"
   numeric_lte "$CPUS" "$MAX_CPU_CORES" ||
-    fail_policy "PODMAN_ADMIN_CPUS=${CPUS} exceeds 50% host CPU (${MAX_CPU_CORES})"
+    fail_policy "PODMAN_ADMIN_CPUS=${CPUS} exceeds ${CPU_LIMIT_PERCENT}% host CPU (${MAX_CPU_CORES})"
   numeric_lte "$CPU_QUOTA" "$MAX_CPU_QUOTA" ||
-    fail_policy "PODMAN_ADMIN_CPU_QUOTA=${CPU_QUOTA} exceeds 50% host CPU quota (${MAX_CPU_QUOTA})"
+    fail_policy "PODMAN_ADMIN_CPU_QUOTA=${CPU_QUOTA} exceeds ${CPU_LIMIT_PERCENT}% host CPU quota (${MAX_CPU_QUOTA})"
   numeric_lte "$BUILD_JOBS" "$MAX_CPUSET_CPUS" ||
-    fail_policy "PODMAN_ADMIN_BUILD_JOBS=${BUILD_JOBS} exceeds 50% host CPU workers (${MAX_CPUSET_CPUS})"
+    fail_policy "PODMAN_ADMIN_BUILD_JOBS=${BUILD_JOBS} exceeds ${CPU_LIMIT_PERCENT}% host CPU workers (${MAX_CPUSET_CPUS})"
 
   local cpu_count
   cpu_count="$(cpuset_count "$CPUSET")"
@@ -243,6 +244,7 @@ cpuset=${CPUSET}
 cpu_period=${CPU_PERIOD}
 cpu_quota=${CPU_QUOTA}
 build_jobs=${BUILD_JOBS}
+cpu_limit_percent=${CPU_LIMIT_PERCENT}
 memory_reservation=${MEMORY_RESERVATION}
 memory_max=${MEMORY_MAX}
 memory_swap=${MEMORY_SWAP}

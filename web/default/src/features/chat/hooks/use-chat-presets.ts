@@ -25,18 +25,6 @@ import {
   type RawChatConfig,
 } from '../lib/chat-links'
 
-function getStoredStatusChats(): RawChatConfig {
-  if (typeof window === 'undefined') return undefined
-  try {
-    const raw = window.localStorage.getItem('status')
-    if (!raw) return undefined
-    const parsed = JSON.parse(raw)
-    return parsed?.chats ?? parsed?.Chats
-  } catch {
-    return undefined
-  }
-}
-
 function extractServerAddress(status: SystemStatus | null) {
   const fromStatus =
     (status?.server_address as string | undefined) ??
@@ -59,21 +47,22 @@ function extractChats(status: SystemStatus | null): RawChatConfig {
   const raw =
     status?.Chats ?? status?.chats ?? status?.data?.Chats ?? status?.data?.chats
 
-  return (raw as RawChatConfig) ?? getStoredStatusChats()
+  return raw as RawChatConfig
 }
 
 export function useChatPresets(): {
   chatPresets: ChatPreset[]
   serverAddress: string
 } {
-  const { status } = useStatus()
+  const { status, isPlaceholderData } = useStatus()
 
   const serverAddress = useMemo(() => extractServerAddress(status), [status])
 
   const chatPresets = useMemo(() => {
+    if (isPlaceholderData) return []
     const raw = extractChats(status)
     return parseChatConfig(raw)
-  }, [status])
+  }, [isPlaceholderData, status])
 
   return {
     chatPresets,

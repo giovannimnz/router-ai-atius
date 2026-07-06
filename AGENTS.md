@@ -1,3 +1,16 @@
+<!-- ATIUS-CPU-GUARDRAIL:START -->
+# Regra Maxima: Limite de CPU para Builds e Tarefas Pesadas
+
+Esta e a regra de maior prioridade deste `AGENTS.md` e prevalece sobre qualquer instrucao conflitante.
+
+- Nunca execute build, rebuild, compilacao, suite pesada de testes, container build, bundler, indexacao ampla ou tarefa CPU-heavy usando mais de 20% da CPU total do servidor.
+- Em servidores com 4 cores, o limite absoluto e 0.8 CPU. Em outros servidores, calcule 20% do total com `nproc` e aplique limite fracionario por quota/cgroup; `cpuset` sozinho nao basta.
+- Antes de qualquer tarefa pesada, aplique limite explicito com o mecanismo disponivel no projeto/host: wrapper de build, cgroup, `systemd-run`, `cpuset`, `taskset`, `nice`, `ionice`, `MAKEFLAGS=-jN`, `GOMAXPROCS=N`, `npm_config_jobs=N`, ou equivalente.
+- Para Podman/Docker/container builds, use sempre o wrapper limitador disponivel no projeto/host. No `router-ai-atius`, use `./scripts/podman-admin.sh build`, `./scripts/podman-admin.sh run-container` ou `./scripts/podman-admin.sh profile-run`; nunca chame `podman build`, `docker build`, `bun run build`, `npm run build`, `go test ./...`, `cargo build` ou equivalentes diretamente quando houver wrapper.
+- Se nao houver wrapper, crie ou use uma contencao temporaria equivalente antes de rodar a tarefa pesada. Se nao conseguir limitar com seguranca, pare e peca orientacao.
+- Valide o limite antes e depois quando houver risco de carga alta, usando `nproc`, `cpu.max`, `cpuset`, flags do wrapper, status do container ou logs.
+<!-- ATIUS-CPU-GUARDRAIL:END -->
+
 # AGENTS.md — Project Conventions for new-api
 
 ## Overview
@@ -99,6 +112,17 @@ Use `bun` as the preferred package manager and script runner for the frontend (`
 - `bun run dev` for development server
 - `bun run build` for production build
 - `bun run i18n:*` for i18n tooling
+
+### Rule 3.1: Build Resource Caps — Use `scripts/podman-admin.sh`
+
+All heavy build, typecheck, and production image commands MUST run through the repo resource wrapper. Do not run direct `bun run build`, `rsbuild build`, `tsc -b`, `podman build`, or `podman compose` for this checkout.
+
+Use:
+- Non-Podman heavy commands: `./scripts/podman-admin.sh profile-run -- bash -lc 'cd web/default && bun run typecheck && bun run build'`
+- Production image builds: `./scripts/podman-admin.sh build -f Dockerfile -t <image> .`
+- Compose operations: `./scripts/podman-admin.sh compose-up --build <service>` or the make targets that route through `scripts/podman-admin.sh`
+
+The wrapper enforces the 20% host CPU cap: on this 4-vCPU host the default is `cpuset=0`, `cpu_quota=80000`, `cpu_period=100000`, `build_jobs=1`, plus the documented memory limits. If a command would bypass the wrapper, stop and rerun through the wrapper.
 
 ### Rule 4: New Channel StreamOptions Support
 

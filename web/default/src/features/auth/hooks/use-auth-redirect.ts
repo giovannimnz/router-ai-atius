@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate } from '@tanstack/react-router'
 import i18n from 'i18next'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
 import type { User } from '@/features/users/types'
@@ -62,12 +63,15 @@ export function useAuthRedirect() {
       saveUserId(userData.id)
     }
 
+    let verified = false
+
     // Fetch and set user data
     try {
       const self = await getSelf()
       if (self?.success && self.data) {
         const user = self.data as User
         auth.setUser(user)
+        verified = true
 
         // Update user ID if not already set
         if (user.id) {
@@ -83,6 +87,12 @@ export function useAuthRedirect() {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch user data:', error)
+    }
+
+    if (!verified) {
+      auth.reset()
+      toast.error(i18n.t('Login failed'))
+      throw new Error('Failed to verify login session')
     }
 
     // Navigate to target page

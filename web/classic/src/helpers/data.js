@@ -17,6 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
+export const CHAT_CACHE_VERSION = 'atius-wayland-v1';
+export const STATUS_UPDATED_EVENT = 'atius:status-updated';
+
+export function getCachedChats() {
+  try {
+    if (localStorage.getItem('chats_version') !== CHAT_CACHE_VERSION) {
+      return [];
+    }
+    const parsed = JSON.parse(localStorage.getItem('chats') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function setStatusData(data) {
   localStorage.setItem('status', JSON.stringify(data));
   localStorage.setItem('system_name', data.system_name);
@@ -29,7 +44,9 @@ export function setStatusData(data) {
   localStorage.setItem('enable_drawing', data.enable_drawing);
   localStorage.setItem('enable_task', data.enable_task);
   localStorage.setItem('enable_data_export', data.enable_data_export);
+  localStorage.setItem('chats_version', CHAT_CACHE_VERSION);
   localStorage.setItem('chats', JSON.stringify(data.chats));
+  window.dispatchEvent(new Event(STATUS_UPDATED_EVENT));
   localStorage.setItem(
     'data_export_default_time',
     data.data_export_default_time,

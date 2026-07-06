@@ -39,6 +39,7 @@ import {
   renderQuota,
   getModelCategories,
   showError,
+  getCachedChats,
 } from '../../../helpers';
 import {
   IconTreeTriangleDown,
@@ -361,8 +362,7 @@ const renderOperations = (
 ) => {
   let chatsArray = [];
   try {
-    const raw = localStorage.getItem('chats');
-    const parsed = JSON.parse(raw);
+    const parsed = getCachedChats();
     if (Array.isArray(parsed)) {
       for (let i = 0; i < parsed.length; i++) {
         const item = parsed[i];

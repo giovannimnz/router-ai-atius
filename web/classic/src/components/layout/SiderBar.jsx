@@ -25,7 +25,13 @@ import { ChevronLeft } from 'lucide-react';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
-import { isAdmin, isRoot, showError } from '../../helpers';
+import {
+  isAdmin,
+  isRoot,
+  showError,
+  getCachedChats,
+  STATUS_UPDATED_EVENT,
+} from '../../helpers';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
 import { Nav, Divider, Button } from '@douyinfe/semi-ui';
@@ -64,6 +70,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
   const [selectedKeys, setSelectedKeys] = useState(['home']);
   const [chatItems, setChatItems] = useState([]);
+  const [externalChatLinks, setExternalChatLinks] = useState({});
   const [openedKeys, setOpenedKeys] = useState([]);
   const location = useLocation();
   const [routerMapState, setRouterMapState] = useState(routerMap);
@@ -229,7 +236,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
     if (Array.isArray(chats) && chats.length > 0) {
       for (let i = 0; i < chats.length; i++) {
-        newRouterMap['chat' + i] = '/console/chat/' + i;
+        delete newRouterMap['chat' + i];
       }
     }
 
@@ -239,12 +246,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
   // 加载聊天项
   useEffect(() => {
-    let chats = localStorage.getItem('chats');
-    if (chats) {
+    const loadChats = () => {
       try {
-        chats = JSON.parse(chats);
+        const chats = getCachedChats();
         if (Array.isArray(chats)) {
           let chatItems = [];
+          let externalLinks = {};
           for (let i = 0; i < chats.length; i++) {
             let shouldSkip = false;
             let chat = {};
@@ -259,20 +266,26 @@ const SiderBar = ({ onNavigate = () => {} }) => {
                 shouldSkip = true;
                 break;
               }
+              const itemKey = 'chat' + i;
               chat.text = key;
-              chat.itemKey = 'chat' + i;
-              chat.to = '/console/chat/' + i;
+              chat.itemKey = itemKey;
+              externalLinks[itemKey] = link;
             }
             if (shouldSkip || !chat.text) continue; // 避免推入空项
             chatItems.push(chat);
           }
           setChatItems(chatItems);
+          setExternalChatLinks(externalLinks);
           updateRouterMapWithChats(chats);
         }
       } catch (e) {
         showError('聊天数据解析失败');
       }
-    }
+    };
+
+    loadChats();
+    window.addEventListener(STATUS_UPDATED_EVENT, loadChats);
+    return () => window.removeEventListener(STATUS_UPDATED_EVENT, loadChats);
   }, []);
 
   // 根据当前路径设置选中的菜单项
@@ -414,6 +427,21 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           hoverStyle='sidebar-nav-item:hover'
           selectedStyle='sidebar-nav-item-selected'
           renderWrapper={({ itemElement, props }) => {
+            const externalHref = externalChatLinks[props.itemKey];
+            if (externalHref) {
+              return (
+                <a
+                  style={{ textDecoration: 'none' }}
+                  href={externalHref}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  onClick={onNavigate}
+                >
+                  {itemElement}
+                </a>
+              );
+            }
+
             const to =
               routerMapState[props.itemKey] || routerMap[props.itemKey];
 

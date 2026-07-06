@@ -39,13 +39,13 @@ for service in new-api postgres redis; do
 done
 
 echo "[podman-validate] checking cpu caps"
-if [[ "$(grep -Ec '^[[:space:]]+cpus: 2(\.0)?$' <<<"$CONFIG")" -lt 3 ]]; then
-  echo "rendered config is missing cpus: 2 for one or more services" >&2
+if [[ "$(grep -Ec '^[[:space:]]+cpus: 0\.8$' <<<"$CONFIG")" -lt 3 ]]; then
+  echo "rendered config is missing cpus: 0.8 for one or more services" >&2
   exit 2
 fi
 
-if [[ "$(grep -Ec '^[[:space:]]+cpuset: 0-1$' <<<"$CONFIG")" -lt 3 ]]; then
-  echo "rendered config is missing cpuset: 0-1 for one or more services" >&2
+if [[ "$(grep -Ec "^[[:space:]]+cpuset: '?0'?$" <<<"$CONFIG")" -lt 3 ]]; then
+  echo "rendered config is missing cpuset: 0 for one or more services" >&2
   exit 2
 fi
 

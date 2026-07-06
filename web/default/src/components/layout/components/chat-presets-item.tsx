@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, useCallback, useRef, useState } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
+import { useLocation } from '@tanstack/react-router'
 import { ExternalLink, Loader2, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -66,35 +66,17 @@ function ChatMenuItem({
   onOpen: (preset: ChatPreset) => void | Promise<void>
   onNavigate: () => void
 }) {
-  if (preset.type === 'web') {
-    return (
-      <SidebarMenuSubItem>
-        <SidebarMenuSubButton
-          isActive={active}
-          render={
-            <Link
-              to='/chat/$chatId'
-              params={{ chatId: preset.id }}
-              onClick={onNavigate}
-            />
-          }
-        >
-          <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
-            {preset.name}
-          </span>
-        </SidebarMenuSubButton>
-      </SidebarMenuSubItem>
-    )
-  }
-
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
         onClick={() => {
-          if (!loading) void onOpen(preset)
+          if (!loading) {
+            void onOpen(preset)
+            onNavigate()
+          }
         }}
         aria-disabled={loading ? 'true' : undefined}
-        isActive={false}
+        isActive={active}
         className='justify-between'
       >
         <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
@@ -122,16 +104,6 @@ function DropdownPresetItem({
   loading: boolean
   onOpen: (preset: ChatPreset) => void | Promise<void>
 }) {
-  if (preset.type === 'web') {
-    return (
-      <DropdownMenuItem
-        render={<Link to='/chat/$chatId' params={{ chatId: preset.id }} />}
-      >
-        {preset.name}
-      </DropdownMenuItem>
-    )
-  }
-
   return (
     <DropdownMenuItem
       disabled={loading}
@@ -167,8 +139,6 @@ export function ChatPresetsItem({ item }: { item: NavChatPresets }) {
 
   const handleOpenExternal = useCallback(
     async (preset: ChatPreset) => {
-      if (preset.type === 'web') return
-
       const needsKey = chatLinkRequiresApiKey(preset.url)
       let activeKey: string | undefined
 

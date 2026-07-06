@@ -16,8 +16,8 @@ services:
       dockerfile: Dockerfile.dev
     image: router-ai-atius-dev:local
     container_name: router-ai-atius-dev
-    cpus: 2.0
-    cpuset: "0-1"
+    cpus: 0.8
+    cpuset: "0"
     mem_limit: "11987M"
     memswap_limit: "11987M"
     restart: unless-stopped
@@ -41,8 +41,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: router-ai-atius-dev-redis
-    cpus: 2.0
-    cpuset: "0-1"
+    cpus: 0.8
+    cpuset: "0"
     mem_limit: "11987M"
     memswap_limit: "11987M"
     restart: unless-stopped
@@ -52,8 +52,8 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: router-ai-atius-dev-pg
-    cpus: 2.0
-    cpuset: "0-1"
+    cpus: 0.8
+    cpuset: "0"
     mem_limit: "11987M"
     memswap_limit: "11987M"
     restart: unless-stopped

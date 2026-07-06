@@ -22,6 +22,7 @@ import { useTokenKeys } from '../../hooks/chat/useTokenKeys';
 import { Spin } from '@douyinfe/semi-ui';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getCachedChats } from '../../helpers';
 
 const ChatPage = () => {
   const { t } = useTranslation();
@@ -33,18 +34,15 @@ const ChatPage = () => {
     if (!serverAddress || !key) return '';
     let link = '';
     if (id) {
-      let chats = localStorage.getItem('chats');
-      if (chats) {
-        chats = JSON.parse(chats);
-        if (Array.isArray(chats) && chats.length > 0) {
-          for (let k in chats[id]) {
-            link = chats[id][k];
-            link = link.replaceAll(
-              '{address}',
-              encodeURIComponent(serverAddress),
-            );
-            link = link.replaceAll('{key}', 'sk-' + key);
-          }
+      const chats = getCachedChats();
+      if (Array.isArray(chats) && chats.length > 0) {
+        for (let k in chats[id]) {
+          link = chats[id][k];
+          link = link.replaceAll(
+            '{address}',
+            encodeURIComponent(serverAddress),
+          );
+          link = link.replaceAll('{key}', 'sk-' + key);
         }
       }
     }

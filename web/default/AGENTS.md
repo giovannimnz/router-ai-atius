@@ -157,6 +157,7 @@
 ### 3.16 构建与部署
 
 - 使用 Rsbuild，配置见 `rsbuild.config.ts`；脚本以 `package.json` 为准（如 `bun run dev`、`bun run build`、`bun run typecheck`、`bun run lint`、`bun run format`），包管理见 [3.15 依赖管理](#315-依赖管理)。
+- 在本仓库执行重型构建或类型检查时必须从仓库根目录通过资源限制 wrapper 运行，禁止直接执行 `bun run build`、`rsbuild build` 或 `tsc -b`：`./scripts/podman-admin.sh profile-run -- bash -lc 'cd web/default && bun run typecheck && bun run build'`。生产镜像构建必须用 `./scripts/podman-admin.sh build ...`，确保 20% 总 CPU 上限生效；在 4-vCPU 主机上默认约为 `cpuset=0`、`cpu_quota=80000/100000`、`build_jobs=1`。
 - 代码分割与懒加载策略见 [3.4 性能](#34-性能)；资源使用合适格式与压缩，环境变量用 `.env` 且以 `VITE_` 前缀，不在代码中硬编码。
 - **发布前**：执行 typecheck、lint、format 检查，完成生产构建并检查产物体积与环境变量配置。
 

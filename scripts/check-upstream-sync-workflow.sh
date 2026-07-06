@@ -142,4 +142,9 @@ if [[ "$("$next_version_script" 1.0.0-rc.15.9 1.0.0-rc.16)" != "1.0.0-rc.16.1" ]
   exit 1
 fi
 
+grep -Eq 'RelayIdleConnTimeout' common/constants.go common/init.go || {
+  echo "fork must preserve common.RelayIdleConnTimeout required by upstream protected fetch client" >&2
+  exit 1
+}
+
 echo "upstream sync workflow guard passed"

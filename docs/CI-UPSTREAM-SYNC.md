@@ -56,6 +56,8 @@ into local `refs/tags/*`.
   `scripts/ci-build-backend.sh "v$NEW_TAG"`. Backend compile errors introduced
   by conflict resolution now fail in the sync workflow before any release tag is
   published.
+- The fork keeps `common.RelayIdleConnTimeout` because upstream protected-fetch
+  clients and HTTP transports now use that setting during backend compile.
 - Fork patch suffixes are calculated by `scripts/next-fork-version.sh`. For the
   same upstream base, `1.0.0-rc.16.5` becomes `1.0.0-rc.16.6`; when the
   upstream base changes, the suffix resets to `.1`.

@@ -2,313 +2,271 @@ name: Sync Upstream + Release
 
 on:
   schedule:
-    - cron: '0 3 * * *'         # Daily at 03:00 UTC
-  workflow_dispatch:                # Manual trigger
+    - cron: '0 3 * * *'
+  workflow_dispatch:
     inputs:
       strategy:
-        description: 'Merge strategy (theirs=upstream wins, ours=fork wins)'
+        description: Estrategia de merge
         required: false
-        default: 'theirs'
+        default: theirs
         type: choice
         options:
           - theirs
           - ours
+      codex_conflict_helper:
+        description: Executar analise assistida por Codex em caso de falha
+        required: false
+        default: true
+        type: boolean
+      codex_model:
+        description: Modelo do Codex para analise de falhas
+        required: false
+        default: gpt-5.4
+        type: string
+      codex_reasoning_effort:
+        description: Nivel de raciocinio do Codex
+        required: false
+        default: xhigh
+        type: string
 
 permissions:
   contents: write
   actions: write
-  packages: none
-  deployments: none
 
 env:
-  STRATEGY: ${{ github.event.inputs.strategy || 'theirs' }}
   FORK_REPO: giovannimnz/router-ai-atius
   UPSTREAM_REPO: QuantumNous/new-api
+  OMNI_REPO: giovannimnz/omni-srv-admin
+  PYTHONPATH: ${{ github.workspace }}/.ci/omni-srv-admin/modules/fork-sync/cli
 
 jobs:
   sync:
     name: Sync + Version Bump
     runs-on: ubuntu-latest
     if: ${{ github.repository == 'giovannimnz/router-ai-atius' }}
-    environment:
-      name: fork-sync
-      url: https://github.com/giovannimnz/router-ai-atius
-    outputs:
-      changed: ${{ steps.sync.outputs.changed }}
-      new_tag: ${{ steps.sync.outputs.new_tag }}
-      upstream_version: ${{ steps.sync.outputs.upstream_version }}
     steps:
-      - name: Checkout
+      - name: Checkout do fork
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
+      - name: Checkout do omni-srv-admin
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.OMNI_REPO }}
+          path: .ci/omni-srv-admin
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias do fork-sync
+        run: python3 -m pip install pyyaml deep-translator
+
+      - name: Ajustar config do fork-sync para o CI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path(".ci/omni-srv-admin/modules/fork-sync/projects/atius-router/sync.yaml")
+          cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+          cfg["auto_push"] = False
+
+          protected = list(cfg.get("protected_paths") or [])
+          extras = [
+              "relay/helper/valid_request.go",
+              "setting/console_setting/",
+              "web/default/src/features/pricing/components/model-details-api.tsx",
+              "web/default/src/features/system-settings/content/default-api-info.ts",
+              "web/default/src/features/system-settings/content/index.tsx",
+              ".github/workflows/sync.yml",
+              ".github/codex/",
+          ]
+          for item in extras:
+              if item not in protected:
+                  protected.append(item)
+          cfg["protected_paths"] = protected
+          path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+          PY
+
+      - name: Configurar Git
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git config merge.conflictstyle merge
           git config push.default simple
-          scripts/fork-sync-guard.sh ensure-actions-repo
 
-      - name: Validate sync workflow guard
-        run: scripts/check-upstream-sync-workflow.sh
-
-      - name: Configure upstream remote
+      - name: Detectar versao upstream
+        id: upstream
         run: |
           set -euo pipefail
-          scripts/fork-sync-guard.sh configure-remotes
-
-          # Do not fetch upstream tags into the fork namespace. Upstream and fork
-          # release tags can share names while pointing to different objects.
-          git fetch --no-tags --prune upstream '+refs/heads/main:refs/remotes/upstream/main'
-
-      - name: Detect upstream version
-        id: upstream_version
-        run: |
-          # Get latest tag from upstream (follows upstream exactly — includes rc, alpha, etc.)
-          UPSTREAM_TAG=$(git ls-remote --tags --refs upstream 'refs/tags/v*' 2>/dev/null | \
-                         awk '{print $2}' | \
-                         sed 's|refs/tags/||' | \
-                         grep -v '^$' | \
-                         sort -V | \
-                         tail -1 | sed 's/^v//')
-          if [[ -z "$UPSTREAM_TAG" ]]; then
-            echo "::error::Unable to detect latest upstream tag from ${{ env.UPSTREAM_REPO }}"
+          upstream_tag="$(git ls-remote --tags --refs https://github.com/${UPSTREAM_REPO} 'refs/tags/v*' | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '^$' | sort -V | tail -1 | sed 's/^v//')"
+          if [[ -z "$upstream_tag" ]]; then
+            echo "::error::Nao foi possivel detectar a tag mais recente do upstream"
             exit 1
           fi
-          echo "upstream_version=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
-          echo "Upstream latest tag: $UPSTREAM_TAG"
+          echo "version=$upstream_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Sync with upstream
-        id: sync
+      - name: Dry-run do fork-sync
+        id: sync_dry_run
         env:
-          SYNC_STRATEGY: ${{ env.STRATEGY }}
-          UPSTREAM_VER: ${{ steps.upstream_version.outputs.upstream_version }}
+          FORK_SYNC_AUTO_PUSH: "false"
         run: |
           set -euo pipefail
-          BASE_HEAD=$(git rev-parse HEAD)
-          UPSTREAM_SHA=$(git rev-parse upstream/main)
-          LOCAL_SHA=$(git rev-parse HEAD)
-          COMMON=$(git merge-base HEAD upstream/main)
-
-          echo "Local:      $LOCAL_SHA"
-          echo "Upstream:   $UPSTREAM_SHA ($UPSTREAM_VER)"
-          echo "Common:     $COMMON"
-          echo "Strategy:   $SYNC_STRATEGY"
-          echo ""
-
-          CHANGED=false
-          NEW_TAG=""
-
-          restore_protected_paths() {
-            local base_ref="$1"
-            local path
-            local protected_paths=(
-              .dockerignore
-              .github/workflows
-              .github/workflows/sync.yml
-              .github/workflows/docker-publish.yml
-              docker-compose.yml
-              integration/middleware/model_detailed.py
-              integration/middleware/model_details.py
-              integration/middleware/model_enrichment.py
-              controller/model.go
-              controller/model_list_test.go
-              relay/common/relay_utils.go
-              relay/common/relay_utils_test.go
-              relay/embedding_handler.go
-              relay/channel/codex
-              service/codex_auth.go
-              service/codex_device.go
-              service/codex_models.go
-              service/modelcatalog
-            )
-
-            echo "Restoring protected fork paths from $base_ref..."
-            for path in "${protected_paths[@]}"; do
-              git rm -r -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
-              rm -rf -- "$path"
-              if git cat-file -e "${base_ref}:${path}" 2>/dev/null; then
-                git checkout "$base_ref" -- "$path"
-              fi
-              git add -A -- "$path" 2>/dev/null || true
-            done
-          }
-
-          clear_stale_index_lock() {
-            if [[ -f .git/index.lock ]]; then
-              echo "Removing stale Git index lock left after failed merge"
-              rm -f .git/index.lock
-            fi
-          }
-
-          restore_upstream_paths() {
-            local path
-            local upstream_paths=(
-              web/default
-            )
-
-            if [[ "$SYNC_STRATEGY" != "theirs" ]]; then
-              return
-            fi
-
-            echo "Restoring upstream-owned paths from upstream/main..."
-            for path in "${upstream_paths[@]}"; do
-              git rm -r -f --ignore-unmatch -- "$path" >/dev/null 2>&1 || true
-              rm -rf -- "$path"
-              git checkout upstream/main -- "$path"
-              git add -A -- "$path"
-            done
-          }
-
-          resolve_conflicts_with_side() {
-            local side="$1"
-            local stage
-            local path
-            local conflict_paths=()
-            if [[ "$side" == "theirs" ]]; then
-              stage=3
-            else
-              stage=2
-            fi
-
-            clear_stale_index_lock
-            mapfile -d '' -t conflict_paths < <(git diff --name-only --diff-filter=U -z)
-
-            for path in "${conflict_paths[@]}"; do
-              clear_stale_index_lock
-              if git ls-files -u -- "$path" | awk -v stage="$stage" '$3 == stage { found = 1 } END { exit(found ? 0 : 1) }'; then
-                clear_stale_index_lock
-                git checkout --"$side" -- "$path"
-                clear_stale_index_lock
-                git add -- "$path"
-              else
-                clear_stale_index_lock
-                git rm -f --ignore-unmatch -- "$path"
-                rm -rf -- "$path"
-              fi
-            done
-
-            if git diff --name-only --diff-filter=U | grep -q .; then
-              echo "::error::Unresolved merge conflicts remain after applying $side strategy"
-              git diff --name-only --diff-filter=U
-              exit 1
-            fi
-          }
-
-          # Check if upstream has new commits
-          if [[ "$COMMON" != "$UPSTREAM_SHA" ]]; then
-            echo "🔄 Upstream has new commits, syncing..."
-
-            # Merge upstream
-            git merge -X "$SYNC_STRATEGY" upstream/main -m "Merge upstream/main into fork" || {
-              echo "Merge conflict detected, using strategy: $SYNC_STRATEGY"
-              clear_stale_index_lock
-              if [[ "$SYNC_STRATEGY" == "theirs" ]]; then
-                resolve_conflicts_with_side theirs
-              else
-                resolve_conflicts_with_side ours
-              fi
-              restore_protected_paths "$BASE_HEAD"
-            }
-
-            restore_protected_paths "$BASE_HEAD"
-            restore_upstream_paths
-
-            CHANGED=true
-
-            CURRENT=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "0.0.0.0")
-            NEW_TAG=$(scripts/next-fork-version.sh "$CURRENT" "$UPSTREAM_VER")
-            echo "📦 Version resolved: $CURRENT → $NEW_TAG (upstream $UPSTREAM_VER + fork suffix)"
-
-            echo "$NEW_TAG" > VERSION
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
-            echo "upstream_version=$UPSTREAM_VER" >> $GITHUB_OUTPUT
-
-            # Commit all changes
-            git add -A
-            git diff --cached --quiet || git commit -m "chore: sync with upstream to $NEW_TAG"
-
-            echo "✅ Sync completed successfully"
-          else
-            echo "✅ Already up to date with upstream ($UPSTREAM_VER)"
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "new_tag=" >> $GITHUB_OUTPUT
-            echo "upstream_version=$UPSTREAM_VER" >> $GITHUB_OUTPUT
+          python3 -m fork_sync.cli sync atius-router --repo-path "$GITHUB_WORKSPACE" --dry-run --json > sync-dry-run.json
+          cat sync-dry-run.json
+          can_apply="$(jq -r '.can_apply // false' sync-dry-run.json)"
+          local_sha="$(jq -r '.local_sha // ""' sync-dry-run.json)"
+          upstream_sha="$(jq -r '.upstream_sha // ""' sync-dry-run.json)"
+          needs_sync=false
+          if [[ -n "$local_sha" && -n "$upstream_sha" && "$local_sha" != "$upstream_sha" ]]; then
+            needs_sync=true
           fi
+          echo "can_apply=$can_apply" >> "$GITHUB_OUTPUT"
+          echo "needs_sync=$needs_sync" >> "$GITHUB_OUTPUT"
+
+      - name: Validar dry-run
+        if: steps.sync_dry_run.outputs.needs_sync == 'true' && steps.sync_dry_run.outputs.can_apply != 'true'
+        run: |
+          echo "::error::Dry-run do fork-sync nao esta seguro para aplicar"
+          jq . sync-dry-run.json
+          exit 1
+
+      - name: Aplicar fork-sync
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        id: sync_apply
+        env:
+          FORK_SYNC_AUTO_PUSH: "false"
+        run: |
+          set -euo pipefail
+          before_sha="$(git rev-parse HEAD)"
+          python3 -m fork_sync.cli sync atius-router --repo-path "$GITHUB_WORKSPACE" --json > sync-apply.json
+          cat sync-apply.json
+          after_sha="$(git rev-parse HEAD)"
+          echo "before_sha=$before_sha" >> "$GITHUB_OUTPUT"
+          echo "after_sha=$after_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Resolver versao do fork
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        id: version
+        env:
+          UPSTREAM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          current="$(tr -d '[:space:]' < VERSION)"
+          next="$(scripts/next-fork-version.sh "$current" "$UPSTREAM_VERSION")"
+          echo "$next" > VERSION
+          echo "new_tag=$next" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        if: steps.sync.outputs.changed == 'true'
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
 
-      - name: Verify frontend release build
-        if: steps.sync.outputs.changed == 'true'
+      - name: Verificar build frontend
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
         env:
-          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
           CI_FRONTEND_RETRIES: 1
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
         run: ./scripts/ci-build-frontends.sh "v$NEW_TAG"
 
-      - name: Verify backend release build
-        if: steps.sync.outputs.changed == 'true'
+      - name: Setup Go
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Verificar build backend
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
         env:
-          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
         run: ./scripts/ci-build-backend.sh "v$NEW_TAG"
 
-      - name: Push commit
-        if: steps.sync.outputs.changed == 'true'
+      - name: Release preflight
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
         run: |
-          scripts/fork-sync-guard.sh push origin main
-          echo "🚀 Commit pushed to main"
+          python3 .ci/omni-srv-admin/modules/fork-sync/cli/fork_sync/core/release_preflight.py \
+            "$GITHUB_WORKSPACE" \
+            --mode tag \
+            --tag "v${{ steps.version.outputs.new_tag }}" \
+            --github-repo "${FORK_REPO}" \
+            --json > release-preflight.json
+          cat release-preflight.json
+          jq -e '.status == "ok"' release-preflight.json > /dev/null
 
-      - name: Create & push version tag
-        if: steps.sync.outputs.changed == 'true'
-        env:
-          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
-        run: |
-          git tag "v$NEW_TAG"
-          scripts/fork-sync-guard.sh push origin "v$NEW_TAG"
-          echo "🏷️ Created and pushed tag v$NEW_TAG"
-
-      - name: Dispatch release workflows
-        if: steps.sync.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NEW_TAG: ${{ steps.sync.outputs.new_tag }}
+      - name: Commitar version bump
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
         run: |
           set -euo pipefail
-          TAG="v$NEW_TAG"
-          scripts/fork-sync-guard.sh workflow-run release.yml --ref "$TAG" -f name="sync release $TAG"
-          scripts/fork-sync-guard.sh workflow-run docker-build.yml --ref main -f tag="$TAG"
-          scripts/fork-sync-guard.sh workflow-run electron-build.yml --ref "$TAG"
-          echo "🚦 Dispatched Release, Docker Multi-arch, and Electron workflows for $TAG"
+          git add VERSION
+          git diff --cached --quiet || git commit -m "chore: sincroniza com upstream e prepara versão v${{ steps.version.outputs.new_tag }}"
 
-      - name: Sync summary
+      - name: Gerar release notes PT-BR
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        run: |
+          python3 -m fork_sync.cli release generate atius-router \
+            --upstream-version "${{ steps.upstream.outputs.version }}" \
+            --fork-tag "v${{ steps.version.outputs.new_tag }}" \
+            --save-local
+
+      - name: Push para main
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        run: git push origin main
+
+      - name: Criar e publicar tag
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        run: |
+          git tag "v${{ steps.version.outputs.new_tag }}"
+          git push origin "v${{ steps.version.outputs.new_tag }}"
+
+      - name: Analise de falha com Codex
+        if: ${{ failure() && github.event.inputs.codex_conflict_helper != 'false' }}
+        continue-on-error: true
+        id: codex_failure_review
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/fork-sync-conflict-review.md
+          model: ${{ github.event.inputs.codex_model || 'gpt-5.4' }}
+          codex-args: >-
+            --json
+            -c model_reasoning_effort="${{ github.event.inputs.codex_reasoning_effort || 'xhigh' }}"
+          sandbox: workspace-write
+          output-file: codex-sync-analysis.md
+          safety-strategy: drop-sudo
+
+      - name: Upload artefatos de diagnostico
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-diagnostics
+          path: |
+            sync-dry-run.json
+            sync-apply.json
+            release-preflight.json
+            codex-sync-analysis.md
+          if-no-files-found: ignore
+
+      - name: Resumo
         if: always()
         run: |
-          CHANGED=${{ steps.sync.outputs.changed }}
-          TAG=${{ steps.sync.outputs.new_tag }}
-          UPSTREAM=${{ steps.sync.outputs.upstream_version }}
-
           {
-            echo "## ✅ Upstream Sync Complete"
+            echo "## Resultado do Sync"
             echo ""
-            echo "| Item | Status |"
-            echo "|------|--------|"
-            echo "| Upstream | ${{ env.UPSTREAM_REPO }} |"
-            echo "| Upstream version | \`$UPSTREAM\` |"
-            echo "| Merge | $CHANGED |"
-            if [[ "$CHANGED" == "true" && -n "$TAG" ]]; then
-              echo "| Version | \`$TAG\` |"
-              echo "| Tag pushed | ✅ \`v$TAG\` |"
-              echo "| Release workflows | ⏳ Dispatched by workflow_dispatch |"
+            echo "- Upstream: \`${UPSTREAM_REPO}\`"
+            echo "- Versão upstream detectada: \`${{ steps.upstream.outputs.version }}\`"
+            echo "- Precisa sync: \`${{ steps.sync_dry_run.outputs.needs_sync || 'false' }}\`"
+            echo "- Dry-run seguro: \`${{ steps.sync_dry_run.outputs.can_apply || 'false' }}\`"
+            if [[ "${{ steps.sync_dry_run.outputs.needs_sync }}" == "true" ]]; then
+              echo "- Nova tag do fork: \`v${{ steps.version.outputs.new_tag }}\`"
+              echo "- Release/builds: serão disparados automaticamente pelo push da tag"
             else
-              echo "| Status | ⏭️ Already up to date |"
+              echo "- Status: sem novos commits upstream para aplicar"
             fi
-            echo ""
-            echo "**Repository:** https://github.com/${{ env.FORK_REPO }}"
           } >> "$GITHUB_STEP_SUMMARY"

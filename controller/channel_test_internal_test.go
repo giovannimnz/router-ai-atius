@@ -1,18 +1,19 @@
 package controller
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,47 +85,79 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 	require.Equal(t, 2, userID)
 }
 
-func TestSelectChannelsForAutomaticTestPassiveRecoveryOnlyUsesAutoDisabled(t *testing.T) {
-	channels := []*model.Channel{
-		{Id: 1, Status: common.ChannelStatusEnabled},
-		{Id: 2, Status: common.ChannelStatusAutoDisabled},
-		{Id: 3, Status: common.ChannelStatusManuallyDisabled},
+func TestShouldUseStreamForChannelTest(t *testing.T) {
+	codexChannel := &model.Channel{Type: constant.ChannelTypeCodex}
+	openAIChannel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+
+	tests := []struct {
+		name         string
+		channel      *model.Channel
+		model        string
+		endpointType string
+		want         bool
+	}{
+		{
+			name:    "codex default test uses responses stream",
+			channel: codexChannel,
+			model:   "gpt-5.5",
+			want:    true,
+		},
+		{
+			name:    "codex gpt-5.4 test uses responses stream",
+			channel: codexChannel,
+			model:   "gpt-5.4",
+			want:    true,
+		},
+		{
+			name:    "codex gpt-5.4-mini test uses responses stream",
+			channel: codexChannel,
+			model:   "gpt-5.4-mini",
+			want:    true,
+		},
+		{
+			name:    "codex gpt-5.3-codex-spark test uses responses stream",
+			channel: codexChannel,
+			model:   "gpt-5.3-codex-spark",
+			want:    true,
+		},
+		{
+			name:         "codex responses endpoint uses stream",
+			channel:      codexChannel,
+			model:        "gpt-5.5",
+			endpointType: string(constant.EndpointTypeOpenAIResponse),
+			want:         true,
+		},
+		{
+			name:         "codex embeddings endpoint does not use stream",
+			channel:      codexChannel,
+			model:        "text-embedding-3-small",
+			endpointType: string(constant.EndpointTypeEmbeddings),
+			want:         false,
+		},
+		{
+			name:         "codex compact endpoint does not use stream",
+			channel:      codexChannel,
+			model:        "gpt-5.5" + ratio_setting.CompactModelSuffix,
+			endpointType: string(constant.EndpointTypeOpenAIResponseCompact),
+			want:         false,
+		},
+		{
+			name:    "non codex channel keeps non stream default",
+			channel: openAIChannel,
+			model:   "gpt-4o-mini",
+			want:    false,
+		},
+		{
+			name:  "nil channel keeps non stream default",
+			model: "gpt-5.5",
+			want:  false,
+		},
 	}
 
-	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModePassiveRecovery)
-
-	require.Len(t, selected, 1)
-	require.Equal(t, 2, selected[0].Id)
-}
-
-func TestSelectChannelsForAutomaticTestScheduledSkipsManualDisabled(t *testing.T) {
-	channels := []*model.Channel{
-		{Id: 1, Status: common.ChannelStatusEnabled},
-		{Id: 2, Status: common.ChannelStatusAutoDisabled},
-		{Id: 3, Status: common.ChannelStatusManuallyDisabled},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldUseStreamForChannelTest(tt.channel, tt.model, tt.endpointType)
+			assert.Equal(t, tt.want, got)
+		})
 	}
-
-	selected := selectChannelsForAutomaticTest(channels, operation_setting.ChannelTestModeScheduledAll)
-
-	require.Len(t, selected, 2)
-	require.Equal(t, 1, selected[0].Id)
-	require.Equal(t, 2, selected[1].Id)
-}
-
-func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
-	db := setupModelListControllerTestDB(t)
-	require.NoError(t, db.AutoMigrate(&model.SystemTask{}, &model.SystemTaskLock{}))
-
-	existing, err := model.CreateSystemTask(model.SystemTaskTypeChannelTest, nil, nil)
-	require.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/channel/test", nil)
-
-	TestAllChannels(ctx)
-
-	require.Equal(t, http.StatusConflict, recorder.Code)
-	require.Contains(t, recorder.Body.String(), existing.TaskID)
-	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
 }

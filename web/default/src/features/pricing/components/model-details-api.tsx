@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronRight,
   Gauge,
@@ -24,10 +25,11 @@ import {
   Sigma,
   Zap,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BundledLanguage } from 'shiki/bundle/web'
-
+import { useStatus } from '@/hooks/use-status'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   CodeBlock,
   CodeBlockCopyButton,
@@ -36,10 +38,6 @@ import {
   StaticDataTable,
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useStatus } from '@/hooks/use-status'
-
 import {
   buildRateLimits,
   buildSupportedParameters,
@@ -436,6 +434,20 @@ function buildSample(
   return buildChatSample(lang, ctx)
 }
 
+function shouldPreferResponsesForModel(model: PricingModel): boolean {
+  const fingerprint = [
+    model.model_name,
+    model.vendor_name,
+    model.description,
+    model.tags,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return fingerprint.includes('codex')
+}
+
 // ---------------------------------------------------------------------------
 // Code samples section
 // ---------------------------------------------------------------------------
@@ -474,10 +486,22 @@ function CodeSamplesSection(props: {
       .filter((e) => Boolean(e.path))
   }, [props.model, props.endpointMap])
 
-  const [endpointType, setEndpointType] = useState<string>(
-    endpoints[0]?.type ?? ''
-  )
+  const defaultEndpointType = useMemo(() => {
+    if (
+      shouldPreferResponsesForModel(props.model) &&
+      endpoints.some((endpoint) => endpoint.type === 'openai-response')
+    ) {
+      return 'openai-response'
+    }
+    return endpoints[0]?.type ?? ''
+  }, [endpoints, props.model])
+
+  const [endpointType, setEndpointType] = useState<string>(defaultEndpointType)
   const [lang, setLang] = useState<Lang>('curl')
+
+  useEffect(() => {
+    setEndpointType(defaultEndpointType)
+  }, [defaultEndpointType])
 
   const activeEndpoint = useMemo(() => {
     return endpoints.find((e) => e.type === endpointType) ?? endpoints[0]

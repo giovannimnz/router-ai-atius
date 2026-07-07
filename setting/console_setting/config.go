@@ -15,7 +15,7 @@ type ConsoleSetting struct {
 
 // 默认配置
 var defaultConsoleSetting = ConsoleSetting{
-	ApiInfo:              "",
+	ApiInfo:              DefaultAPIInfo,
 	UptimeKumaGroups:     "",
 	Announcements:        "",
 	FAQ:                  "",

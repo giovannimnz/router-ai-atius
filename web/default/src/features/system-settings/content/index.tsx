@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { SettingsPage } from '../components/settings-page'
 import type { ContentSettings, SystemOption } from '../types'
+import { DEFAULT_API_INFO } from './default-api-info'
 import {
   CONTENT_DEFAULT_SECTION,
   getContentSectionContent,
@@ -25,7 +26,7 @@ import {
 } from './section-registry.tsx'
 
 const defaultContentSettings: ContentSettings = {
-  'console_setting.api_info': '[]',
+  'console_setting.api_info': JSON.stringify(DEFAULT_API_INFO),
   'console_setting.announcements': '[]',
   'console_setting.faq': '[]',
   'console_setting.uptime_kuma_groups': '[]',

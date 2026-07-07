@@ -135,7 +135,7 @@ func validateApiInfo(apiInfoStr string) error {
 }
 
 func GetApiInfo() []map[string]interface{} {
-	return getJSONList(GetConsoleSetting().ApiInfo)
+	return normalizeAPIInfoList(getJSONList(GetConsoleSetting().ApiInfo))
 }
 
 func validateAnnouncements(announcementsStr string) error {

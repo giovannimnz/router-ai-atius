@@ -1,4 +1,4 @@
-package openaicompat
+package service
 
 import (
 	"testing"

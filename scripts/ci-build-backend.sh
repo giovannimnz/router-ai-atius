@@ -18,7 +18,7 @@ echo "building backend for ${version}"
 cd "$repo_root"
 
 "$go_bin" mod download
-"$go_bin" build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=${version}'" -o "$build_dir/new-api-${version}"
+"$go_bin" build -buildvcs=false -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=${version}'" -o "$build_dir/new-api-${version}"
 
 test -f "$build_dir/new-api-${version}"
 echo "backend build verified:"

@@ -80,6 +80,9 @@ jobs:
           protected = list(cfg.get("protected_paths") or [])
           extras = [
               "relay/helper/valid_request.go",
+              "service/relayconvert/policy.go",
+              "service/openai_chat_responses_mode_test.go",
+              "controller/channel-test.go",
               "setting/console_setting/",
               "web/default/src/features/pricing/components/model-details-api.tsx",
               "web/default/src/features/system-settings/content/default-api-info.ts",

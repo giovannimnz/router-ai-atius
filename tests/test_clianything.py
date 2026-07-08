@@ -316,6 +316,25 @@ class ReadOnlyGuardTests(unittest.TestCase):
 
 
 class ParserAndIdentifierTests(unittest.TestCase):
+    def test_psql_base_cmd_defaults_to_host_canonical_db(self):
+        self.assertEqual(cli.DB_BACKEND, "host")
+        self.assertEqual(cli.DB_NAME, "DBRouterAiAtius")
+        self.assertEqual(cli.psql_base_cmd("psql"), ["sudo", "-u", "postgres", "psql", "-d", "DBRouterAiAtius"])
+
+    def test_psql_base_cmd_supports_legacy_podman_backend(self):
+        original_backend = cli.DB_BACKEND
+        original_name = cli.DB_NAME
+        try:
+            cli.DB_BACKEND = "podman"
+            cli.DB_NAME = "DBRouterAiAtius"
+            self.assertEqual(
+                cli.psql_base_cmd("psql"),
+                ["podman", "exec", "-i", "postgres", "psql", "-U", "admin", "-d", "DBRouterAiAtius"],
+            )
+        finally:
+            cli.DB_BACKEND = original_backend
+            cli.DB_NAME = original_name
+
     def test_parse_key_values_accepts_values_with_equals(self):
         parsed = cli.parse_key_values(["priority=0", "base_url=https://example.test/a=b", "enabled=true"])
 
@@ -383,6 +402,8 @@ class EndpointCoverageTests(unittest.TestCase):
         return entry
 
     def test_management_docs_and_manifest_are_complete(self):
+        if not cli.MANAGEMENT_DOCS_ROOT.exists():
+            self.skipTest(f"management docs tree not present: {cli.MANAGEMENT_DOCS_ROOT}")
         endpoints, docs_without_ops = cli.parse_management_docs()
         entries = cli.load_endpoint_manifest()
         if hasattr(cli, "coverage_rows"):
@@ -448,10 +469,10 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
     def test_write_channel_from_source_key_preview_is_secret_safe(self):
         sql = cli.write_channel_from_source_key(
             source_id=2,
-            name="DeepSeek - Anthropic-Compatible",
-            type_value=14,
-            base_url="https://api.deepseek.com/anthropic",
-            models="deepseek-v4-flash,deepseek-v4-pro",
+            name="DeepSeek",
+            type_value=43,
+            base_url="https://api.deepseek.com",
+            models="deepseek-v4-pro,deepseek-v4-flash",
             group="default",
             priority=0,
             weight=0,
@@ -460,16 +481,41 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
 
         self.assertIn("select", sql.lower())
         self.assertIn("c.key", sql)
-        self.assertIn("DeepSeek - Anthropic-Compatible", sql)
-        self.assertIn("https://api.deepseek.com/anthropic", sql)
+        self.assertIn("DeepSeek", sql)
+        self.assertIn("https://api.deepseek.com", sql)
         self.assertNotIn("sample-secret-value", sql)
 
-    def test_phase19_actions_skip_openai_embeddings_without_key(self):
+    def test_legacy_split_channel_detection_blocks_old_shapes(self):
+        self.assertTrue(
+            cli.is_legacy_split_channel(
+                "DeepSeek - Anthropic-Compatible",
+                "https://api.deepseek.com/anthropic",
+            )
+        )
+        self.assertTrue(
+            cli.is_legacy_split_channel(
+                "MiniMax - Embeddings",
+                "https://api.minimax.io",
+            )
+        )
+        self.assertFalse(cli.is_legacy_split_channel("DeepSeek", "https://api.deepseek.com"))
+        self.assertFalse(cli.is_legacy_split_channel("MiniMax", "https://api.minimax.io"))
+
+    def test_phase19_actions_consolidate_provider_channels(self):
         actions = cli.build_phase19_provider_actions(None)
         labels = [label for _resource, _sql, label in actions]
+        combined_sql = "\n".join(sql for _resource, sql, _label in actions)
 
-        self.assertTrue(any("DeepSeek Anthropic-compatible" in label for label in labels))
-        self.assertFalse(any("OpenAI embeddings" in label for label in labels))
+        self.assertTrue(any("OpenAI - Codex" in label for label in labels))
+        self.assertTrue(any("consolidate MiniMax" in label for label in labels))
+        self.assertTrue(any("consolidate DeepSeek" in label for label in labels))
+        self.assertTrue(any("disable merged provider channels" in label for label in labels))
+        self.assertIn("type = 35", combined_sql)
+        self.assertIn("type = 43", combined_sql)
+        self.assertIn("MiniMax-M3,MiniMax-M2.7,MiniMax-M2.5-highspeed,MiniMax-M2.5,embo-01", combined_sql)
+        self.assertIn("deepseek-v4-pro,deepseek-v4-flash", combined_sql)
+        self.assertNotIn("OpenAI - Embeddings", combined_sql)
+        self.assertNotIn("DeepSeek - Anthropic-Compatible", combined_sql)
 
     def test_embeddings_overview_sql_targets_embeddings_channels(self):
         sql = cli.build_embeddings_overview_sql()
@@ -661,12 +707,27 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
         self.assertEqual(payload["input"], "hello")
 
         openai_payload = smoke_embeddings.build_embedding_payload(
-            model="text-embedding-3-small",
+            model="embedding-gte-v1",
             input_text="hello",
-            openai_dimensions=1536,
+            openai_dimensions=768,
         )
         self.assertNotIn("type", openai_payload)
-        self.assertEqual(openai_payload["dimensions"], 1536)
+        self.assertEqual(openai_payload["dimensions"], 768)
+
+        array_payload = smoke_embeddings.build_embedding_payload(
+            model="embedding-gte-v1",
+            input_text="ignored",
+            input_items=["a", "b"],
+        )
+        self.assertEqual(array_payload["input"], ["a", "b"])
+        self.assertNotIn("type", array_payload)
+
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1"), 768)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embo-01"), 768)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("text-embedding-3-large"), 3072)
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("text-embedding-3-small"), 1536)
+        self.assertIsNone(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1", "skip"))
+        self.assertEqual(smoke_embeddings.expected_embedding_dimension("embedding-gte-v1", "1024"), 1024)
 
         self.assertEqual(smoke_embeddings.assert_embedding_vector_shape([1.0, 2.0, 3.0], 3, "embo-01"), 3)
         with self.assertRaises(ValueError):

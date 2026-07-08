@@ -1,5 +1,16 @@
 # CI release watchdog
 
+Para a trilha Codex em CI/auth/release, ver também:
+
+- `docs/CODEX-CI-AUTH-RELEASE.md`
+
+Regra local:
+
+- em GitHub Actions, preferir `openai/codex-action@v1`
+- para automação fora do GitHub Actions, preferir `codex exec`
+- API key é o caminho default; `auth.json` de ChatGPT-managed auth é somente
+  para runner privado/confiável
+
 The release and Electron workflows build both frontend variants through
 `scripts/ci-build-frontends.sh`. The script runs `bun install --frozen-lockfile`,
 builds `web/default` and `web/classic`, mirrors `web/default/dist` to `web/dist`

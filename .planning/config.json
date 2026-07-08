@@ -1,0 +1,27 @@
+{
+  "runtime": "codex",
+  "graphify": {
+    "enabled": true,
+    "auto_update": true,
+    "build_timeout": 600
+  },
+  "git": {
+    "base_branch": "main"
+  },
+  "workflow": {
+    "_auto_chain_active": false,
+    "ai_integration_phase": true,
+    "context_coverage_gate": true,
+    "nyquist_validation": true,
+    "plan_review_convergence": true,
+    "post_planning_gaps": true,
+    "ui_phase": true,
+    "ui_safety_gate": true,
+    "use_worktrees": false
+  },
+  "review": {
+    "default_reviewers": [
+      "codex"
+    ]
+  }
+}

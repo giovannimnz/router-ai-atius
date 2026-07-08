@@ -237,9 +237,8 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .github/codex/prompts/fork-sync-conflict-review.md
           model: ${{ github.event.inputs.codex_model || 'gpt-5.4' }}
-          codex-args: >-
-            --json
-            -c model_reasoning_effort="${{ github.event.inputs.codex_reasoning_effort || 'xhigh' }}"
+          effort: ${{ github.event.inputs.codex_reasoning_effort || 'xhigh' }}
+          codex-args: --json
           sandbox: workspace-write
           output-file: codex-sync-analysis.md
           safety-strategy: drop-sudo

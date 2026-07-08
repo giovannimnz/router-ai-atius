@@ -40,6 +40,7 @@ skills-lock.json
 .playwright-mcp
 graphify-out/
 .planning/graphs/.last-build-snapshot.json
+.planning/graphs/.last-build-status.json
 .planning/graphs/.last-build-output.log
 .planning/graphs/.rebuild.lock
 

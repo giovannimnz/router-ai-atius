@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v2.14
 milestone_name: Branch hygiene and mainline reconciliation
 current_phase: 28
-status: Phase 28 Wave 3 complete; Wave 4 local/remote hygiene pending
-stopped_at: Phase 28 Wave 4 pending after origin/main fast-forward
-last_updated: "2026-07-08T17:59:56-03:00"
+status: Phase 28 complete; v2.15 queued for k3s/deferred runtime work
+stopped_at: Phase 28 complete after local/remote branch hygiene
+last_updated: "2026-07-08T18:08:00-03:00"
 last_activity: 2026-07-08
-last_activity_desc: Phase 28 Wave 3 completed; origin/main fast-forwarded to 3c55d7b11
+last_activity_desc: Phase 28 completed; only local main, origin/main, and origin/feat/phase21-pt-native-upstream remain
 progress:
   total_phases: 27
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 22
-  completed_plans: 17
-  percent: 77
+  completed_plans: 18
+  percent: 82
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 28 (branch-hygiene-and-mainline-reconciliation) — WAVE 4 PENDING
-Plan: 3 of 4
+Phase: 28 (branch-hygiene-and-mainline-reconciliation) — COMPLETE
+Plan: 4 of 4
 **Milestone:** v2.14 — branch hygiene and mainline reconciliation (current)
 **Phase:** 28
-**Status:** Wave 3 complete; local/remote hygiene pending
-**Last activity:** 2026-07-08 — selective mainline reconciliation completed and `origin/main` fast-forwarded to `3c55d7b11`
+**Status:** Complete; v2.15 queued
+**Last activity:** 2026-07-08 — local/remote hygiene completed; only local `main`, `origin/main`, and `origin/feat/phase21-pt-native-upstream` remain
 
 ## What Was Done
 
@@ -64,12 +64,10 @@ Plan: 3 of 4
 
 ### Pending operational work (not committed)
 
-- **v2.12 Phase 7 ready for handoff** — branch local `feat/pt-native` contains exatamente:
-  `i18n/i18n.go`, `i18n/locales/pt.yaml`,
-  `web/default/src/i18n/config.ts`,
-  `web/default/src/i18n/languages.ts`,
-  `web/default/src/i18n/locales/pt.json`
-  No commit/push yet by design.
+- **v2.12 Phase 21 handoff preserved remotely** — branch remota
+  `origin/feat/phase21-pt-native-upstream` contains the clean PT-native
+  upstream handoff commit. The old local `feat/pt-native` integration branch
+  was backed up and removed during Phase 28.
 
 - **Podman config/docs reconciliation** — completed 2026-06-29 in this
   checkout. Remaining Docker references are upstream/legacy compatibility or
@@ -145,33 +143,27 @@ Runbook: docs/PODMAN.md
 | v2.10 | MiniMax Anthropic | ✅ done 2026-05-31 |
 | v2.12 | pt-native upstream sync | 🚧 in progress — Phase 21 executed locally; clean upstream handoff still pending |
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
-| v2.14 | Branch hygiene and mainline reconciliation | 🚧 planning |
+| v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
 | v2.15 | K3s transition and deferred runtime validation | planned |
 
 ## Next actions
 
-1. **Plan/execute v2.14 Phase 28 — branch-hygiene-and-mainline-reconciliation**:
-   - Fazer safety backup de todos os worktrees locais
-   - Promover a lane limpa da Phase 21 para branch remota canônica
-   - Reconciliar seletivamente em branch limpa o que deve entrar em `origin/main`
-   - Higienizar local e remoto depois da preservação correta
-2. **Handoff v2.12 Phase 21 — feat-pt-native-pr**:
-   - Usar a lane `/home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream`, não a branch `feat/pt-native`
-   - Commitar o working tree atual de `feat/phase21-pt-native-upstream` com 1 commit limpo
-   - Push para uma única branch remota canônica do handoff PT-native
-   - Abrir PR novo limpo contra `QuantumNous/new-api`
-3. **Plan/execute v2.15 Phase 22 — K3s migration preflight and cutover plan**:
+1. **Optional handoff v2.12 Phase 21 — feat-pt-native-pr**:
+   - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
+   - Validar o diff contra `upstream/main`
+   - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
+2. **Plan/execute v2.15 Phase 22 — K3s migration preflight and cutover plan**:
    - Revisar paridade do runtime full-Go em k3s
    - Preparar manifests/secrets/dry-run sem contaminar o fluxo PT-native
-4. **Plan/execute v2.15 Phase 23 — long-context alias validation**:
+3. **Plan/execute v2.15 Phase 23 — long-context alias validation**:
    - Validar a trilha experimental `-1m` sem reabrir o contrato final público da Phase 24
-5. **Podman runtime guardrail**:
+4. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
    - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
      phase explicitly removes or renames them.
 
-6. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+5. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 
@@ -213,8 +205,8 @@ Runbook: docs/PODMAN.md
 - [Phase 26]: Codex discovery became asynchronous and account-aware, while request-time `/v1/models` remained fully local and deterministic.
 - [Phase 26]: Host validation for guarded Go builds must use `profile-run` outside, real toolchain binaries inside, and isolated `GOCACHE`.
 - [Phase 27]: Official OpenAI/Codex docs are the source of truth for CI/auth behavior; API keys stay default for automation and ChatGPT-managed auth remains private-runner-only.
-- [Repo hygiene]: `origin/main` is the authoritative fork mainline; the local `main` worktree is stale and should not be trusted until explicitly resynced.
-- [Repo hygiene]: `feat/phase21-pt-native-upstream` is the clean Phase 21 handoff lane; `feat/pt-native` is a local integration/planning branch and not an upstream PR base.
+- [Repo hygiene]: `origin/main` is the authoritative fork mainline, and the local `/home/ubuntu/GitHub/containers/router-ai-atius` worktree is a clean `main` tracking it.
+- [Repo hygiene]: `origin/feat/phase21-pt-native-upstream` is the clean Phase 21 handoff lane. `feat/pt-native` and redundant PT branches were backed up and removed.
 - [Phase 28 planning]: v2.14 should own branch/worktree hygiene and mainline reconciliation; v2.15 should own Phases 22 and 23 as deferred platform/runtime work.
 
 ## Accumulated Context

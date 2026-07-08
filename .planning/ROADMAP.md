@@ -374,7 +374,7 @@ Plans:
 ### Phase 28: branch-hygiene-and-mainline-reconciliation
 
 **Goal:** Consolidar definitivamente o estado local/remoto do fork: fazer backup seguro dos worktrees, promover a lane limpa da Phase 21 como branch remota canônica, reconciliar seletivamente o que deve ir para `origin/main`, e então aposentar branches/worktrees stale sem perder a opção de handoff upstream PT-BR.
-**Status:** Wave 3 complete; Wave 4 pending
+**Status:** Complete (2026-07-08)
 **Milestone:** v2.14 — branch hygiene and mainline reconciliation
 **Requirements:** PHASE-28-SAFETY-BACKUP, PHASE-28-PHASE21-CANONICAL-REMOTE, PHASE-28-MAINLINE-RECONCILIATION, PHASE-28-LOCAL-HYGIENE, PHASE-28-REMOTE-HYGIENE, PHASE-28-BRANCH-POLICY
 **Depends on:** Phase 21 local execution artifacts, Phase 24/25/26/27 fork state, and current `origin/main` / `upstream/main` divergence audit.
@@ -396,7 +396,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 28-04-PLAN.md - local/remote cleanup, worktree reset, and final hygiene verification
+- [x] 28-04-PLAN.md - local/remote cleanup, worktree reset, and final hygiene verification
 
 ---
 

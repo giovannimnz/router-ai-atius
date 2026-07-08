@@ -6,17 +6,34 @@ Este documento existe para encerrar a ambiguidade entre branches, worktrees e
 trilhas de planning que se acumularam durante a limpeza do PR PT-BR e das fases
 24-27.
 
-## Diagnóstico curto
+## Estado final após Phase 28
 
-Hoje existem múltiplas linhas locais relacionadas a PT-BR:
+Estado verificado em 2026-07-08:
+
+- worktree local mantida: `/home/ubuntu/GitHub/containers/router-ai-atius`
+- branch local mantida: `main`
+- branches remotas mantidas:
+  - `origin/main`
+  - `origin/feat/phase21-pt-native-upstream`
+- branches remotas removidas:
+  - `origin/feat/pt-native`
+  - `origin/feat/pt-native-i18n-clean`
+
+Backup final antes da limpeza:
+
+- `/home/ubuntu/GitHub/containers/router-ai-atius-phase28-wave4-backup-20260708T210137Z`
+
+## Diagnóstico histórico
+
+Antes da Phase 28 existiam múltiplas linhas locais relacionadas a PT-BR:
 
 - `feat/pt-native`
 - `feat/phase21-pt-native-upstream`
 - `feat/brazilian-portuguese-localization`
 - `feat/pt-native-i18n-clean` (remoto/local quando presente)
 
-Além disso, existe um worktree local chamado `main`, mas ele está atrasado em
-relação a `origin/main` e não deve ser tratado como fonte autoritativa.
+Além disso, existia uma worktree local chamada `main` atrasada em relação a
+`origin/main`.
 
 ## Fonte de verdade por trilha
 
@@ -26,26 +43,22 @@ Fonte de verdade:
 
 - `origin/main`
 
-Não confiar automaticamente no worktree local:
+Worktree local final:
 
-- `/home/ubuntu/GitHub/containers/router-ai-atius-main-exec`
-
-Motivo:
-
-- esse worktree ficou muito atrás de `origin/main`
-- ele também carrega mudanças locais fora do fluxo atual
+- `/home/ubuntu/GitHub/containers/router-ai-atius`
+- branch `main`
+- tracking `origin/main`
 
 ### Phase 21 handoff upstream
 
-Fonte de verdade operacional:
+Fonte de verdade operacional remota:
 
-- worktree `/home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream`
-- branch `feat/phase21-pt-native-upstream`
+- branch `origin/feat/phase21-pt-native-upstream`
 
 Estado esperado:
 
 - branch baseada em `upstream/main`
-- mudanças PT-BR ainda locais/uncommitted até o handoff final
+- commit limpo PT-BR preservado remotamente
 - usar esta lane para:
   - commit limpo
   - push para o fork
@@ -55,9 +68,7 @@ Estado esperado:
 
 Fonte de referência histórica/material:
 
-- worktree `/home/ubuntu/GitHub/containers/router-ai-atius-pt-native-clean`
-- branch `feat/brazilian-portuguese-localization`
-- branch remota/local `feat/pt-native-i18n-clean` quando existir
+- backup da Phase 28 quando for preciso recuperar material histórico
 
 Uso correto:
 
@@ -101,14 +112,15 @@ Regra:
 ## Regra daqui para frente
 
 - `origin/main` = referência do fork
-- `feat/phase21-pt-native-upstream` = handoff limpo da `Phase 21`
-- `feat/pt-native` = branch de integração/planning local, não de PR upstream
-- `feat/brazilian-portuguese-localization` / `feat/pt-native-i18n-clean` = referência de tradução reaproveitável
+- `origin/feat/phase21-pt-native-upstream` = handoff limpo da `Phase 21`
+- branches locais PT antigas = removidas após backup
+- branches remotas PT redundantes = removidas
 
 Antes de qualquer push/PR da `Phase 21`, validar:
 
 ```bash
-git -C /home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream status --short --branch
-git -C /home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream diff --name-status upstream/main...HEAD
-git -C /home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream diff --check upstream/main...HEAD
+git ls-remote --heads origin feat/phase21-pt-native-upstream
+git fetch origin feat/phase21-pt-native-upstream
+git diff --name-status upstream/main...origin/feat/phase21-pt-native-upstream
+git diff --check upstream/main...origin/feat/phase21-pt-native-upstream
 ```

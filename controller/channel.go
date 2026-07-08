@@ -1150,6 +1150,28 @@ func FetchModels(c *gin.Context) {
 	key := strings.TrimSpace(req.Key)
 	key = strings.Split(key, "\n")[0]
 
+	if req.Type == constant.ChannelTypeCodex {
+		channel := &model.Channel{
+			Id:      0,
+			Type:    req.Type,
+			Key:     key,
+			BaseURL: &baseURL,
+		}
+		models, err := service.FetchCodexModelIDsForAdmin(c.Request.Context(), channel)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("获取Codex模型失败: %s", err.Error()),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    models,
+		})
+		return
+	}
+
 	if req.Type == constant.ChannelTypeOllama {
 		models, err := ollama.FetchOllamaModels(baseURL, key)
 		if err != nil {
@@ -1227,7 +1249,7 @@ func FetchModels(c *gin.Context) {
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+	if err := common.DecodeJson(response.Body, &result); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": err.Error(),

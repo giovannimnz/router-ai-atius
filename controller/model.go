@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -142,6 +143,86 @@ func buildOpenAIModel(modelName string, ownerByModel map[string]string) dto.Open
 	return oaiModel
 }
 
+func catalogEntriesForModels(modelNames []string, ownerByModel map[string]string) []dto.ModelCatalogEntry {
+	pricings := model.GetPricing()
+	pricingByModel := make(map[string]model.Pricing, len(pricings))
+	for _, pricing := range pricings {
+		pricingByModel[pricing.ModelName] = pricing
+	}
+
+	entries := make([]dto.ModelCatalogEntry, 0, len(modelNames))
+	for _, modelName := range modelNames {
+		if pricing, ok := pricingByModel[modelName]; ok {
+			entries = append(entries, modelcatalog.BuildCatalogEntry(pricing, ownerByModel))
+			continue
+		}
+		baseModel := buildOpenAIModel(modelName, ownerByModel)
+		entries = append(entries, modelcatalog.BuildCatalogEntryForModel(modelName, baseModel.OwnedBy, baseModel.SupportedEndpointTypes))
+	}
+	modelcatalog.SortEntries(entries)
+	return entries
+}
+
+func buildOpenAIModelFromCatalog(entry dto.ModelCatalogEntry) dto.OpenAIModels {
+	modelItem := buildOpenAIModel(entry.ModelName, map[string]string{entry.ModelName: entry.OwnedBy})
+	modelItem.Name = entry.Name
+	modelItem.Provider = entry.Provider
+	modelItem.ContextWindow = entry.ContextWindow
+	modelItem.SupportedEndpointTypes = entry.SupportedEndpointTypes
+	modelItem.SupportedEndpointTypeLabels = entry.SupportedEndpointTypeLabels
+	modelItem.EndpointRoutes = entry.EndpointRoutes
+	modelItem.Pricing = entry.Pricing
+	modelItem.InputPrice = entry.InputPrice
+	modelItem.OutputPrice = entry.OutputPrice
+	modelItem.QuotaType = entry.QuotaType
+	modelItem.BillingMode = entry.BillingMode
+	modelItem.BillingExpr = entry.BillingExpr
+	modelItem.EnableGroups = entry.EnableGroups
+	return modelItem
+}
+
+func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadataByModel map[string]service.CodexCatalogMetadata) {
+	for i := range entries {
+		meta, ok := metadataByModel[entries[i].ModelName]
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(meta.DisplayName) != "" {
+			entries[i].Name = meta.DisplayName
+		}
+		if strings.TrimSpace(meta.Provider) != "" {
+			entries[i].Provider = meta.Provider
+		}
+		if strings.TrimSpace(meta.OwnedBy) != "" {
+			entries[i].OwnedBy = meta.OwnedBy
+		}
+		if len(meta.SupportedEndpoints) > 0 {
+			entries[i].SupportedEndpointTypes = append([]constant.EndpointType(nil), meta.SupportedEndpoints...)
+			entries[i].SupportedEndpointTypeLabels = modelcatalog.EndpointTypeLabels(meta.SupportedEndpoints)
+			entries[i].EndpointRoutes = modelcatalog.EndpointRoutes(meta.SupportedEndpoints)
+		}
+		if meta.MaxTokens > 0 || meta.MaxCompletionTokens > 0 {
+			entries[i].ContextWindow = &dto.ModelContextWindow{
+				MaxTokens:           meta.MaxTokens,
+				MaxCompletionTokens: meta.MaxCompletionTokens,
+			}
+		}
+	}
+}
+
+func buildAnthropicModelFromCatalog(entry dto.ModelCatalogEntry) dto.AnthropicModel {
+	return dto.AnthropicModel{
+		ID:            entry.ModelName,
+		CreatedAt:     time.Unix(1626777600, 0).UTC().Format(time.RFC3339),
+		DisplayName:   entry.ModelName,
+		Type:          "model",
+		APIFormat:     "anthropic",
+		InputPrice:    entry.InputPrice,
+		OutputPrice:   entry.OutputPrice,
+		EndpointTypes: entry.SupportedEndpointTypes,
+	}
+}
+
 type modelListGroups struct {
 	userGroup   string
 	tokenGroup  string
@@ -245,34 +326,29 @@ func ListModels(c *gin.Context, modelType int) {
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
 	}
-	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
-	for _, modelName := range userModelNames {
-		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
+	catalogEntries := catalogEntriesForModels(userModelNames, ownerByModel)
+	if codexMetadata, err := service.CodexPromotedMetadataByModelName(userModelNames); err == nil && len(codexMetadata) > 0 {
+		applyCodexMetadataToCatalogEntries(catalogEntries, codexMetadata)
 	}
 
 	switch modelType {
 	case constant.ChannelTypeAnthropic:
-		useranthropicModels := make([]dto.AnthropicModel, len(userOpenAiModels))
-		for i, model := range userOpenAiModels {
-			useranthropicModels[i] = dto.AnthropicModel{
-				ID:          model.Id,
-				CreatedAt:   time.Unix(int64(model.Created), 0).UTC().Format(time.RFC3339),
-				DisplayName: model.Id,
-				Type:        "model",
+		useranthropicModels := make([]dto.AnthropicModel, 0, len(catalogEntries))
+		for _, entry := range catalogEntries {
+			if !modelcatalog.IsAnthropicCapable(entry) {
+				continue
 			}
+			useranthropicModels = append(useranthropicModels, buildAnthropicModelFromCatalog(entry))
 		}
 		c.JSON(200, gin.H{
-			"data":     useranthropicModels,
-			"first_id": useranthropicModels[0].ID,
-			"has_more": false,
-			"last_id":  useranthropicModels[len(useranthropicModels)-1].ID,
+			"data": useranthropicModels,
 		})
 	case constant.ChannelTypeGemini:
-		userGeminiModels := make([]dto.GeminiModel, len(userOpenAiModels))
-		for i, model := range userOpenAiModels {
+		userGeminiModels := make([]dto.GeminiModel, len(catalogEntries))
+		for i, entry := range catalogEntries {
 			userGeminiModels[i] = dto.GeminiModel{
-				Name:        model.Id,
-				DisplayName: model.Id,
+				Name:        entry.ModelName,
+				DisplayName: entry.ModelName,
 			}
 		}
 		c.JSON(200, gin.H{
@@ -280,10 +356,12 @@ func ListModels(c *gin.Context, modelType int) {
 			"nextPageToken": nil,
 		})
 	default:
+		userOpenAiModels := make([]dto.OpenAIModels, 0, len(catalogEntries))
+		for _, entry := range catalogEntries {
+			userOpenAiModels = append(userOpenAiModels, buildOpenAIModelFromCatalog(entry))
+		}
 		c.JSON(200, gin.H{
-			"success": true,
-			"data":    userOpenAiModels,
-			"object":  "list",
+			"data": userOpenAiModels,
 		})
 	}
 }
@@ -413,7 +491,6 @@ func ListClaudeModels(c *gin.Context) {
 		}
 	}
 
-
 	// Build Anthropic format response
 	var models []dto.AnthropicModel
 	for modelName := range modelSet {
@@ -424,7 +501,6 @@ func ListClaudeModels(c *gin.Context) {
 			Type:        "model",
 		})
 	}
-
 
 	hasMore := false
 	firstID := ""

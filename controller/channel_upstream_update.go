@@ -231,9 +231,17 @@ func collectPendingUpstreamModelChangesFromModels(
 }
 
 func collectPendingUpstreamModelChanges(channel *model.Channel, settings dto.ChannelOtherSettings) (pendingAddModels []string, pendingRemoveModels []string, err error) {
-	upstreamModels, err := fetchChannelUpstreamModelIDs(channel)
-	if err != nil {
-		return nil, nil, err
+	var upstreamModels []string
+	if channel != nil && channel.Type == constant.ChannelTypeCodex {
+		upstreamModels = service.ListPromotedCodexModelIDs(channel.Id)
+		if len(upstreamModels) == 0 {
+			upstreamModels = fetchCodexModelIDs()
+		}
+	} else {
+		upstreamModels, err = fetchChannelUpstreamModelIDs(channel)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	pendingAddModels, pendingRemoveModels = collectPendingUpstreamModelChangesFromModels(
 		channel.GetModels(),
@@ -283,6 +291,19 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 			return nil, err
 		}
 		return normalizeModelNames(models), nil
+	}
+
+	if channel.Type == constant.ChannelTypeCodex {
+		models, err := fetchDynamicCodexModelIDs(channel)
+		if err == nil && len(models) > 0 {
+			return models, nil
+		}
+		if channel != nil && channel.Id > 0 {
+			if cached := service.ListCachedCodexDiscoveredModelIDs(channel.Id); len(cached) > 0 {
+				return cached, nil
+			}
+		}
+		return fetchCodexModelIDs(), nil
 	}
 
 	var url string

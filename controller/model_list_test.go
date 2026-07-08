@@ -21,9 +21,7 @@ import (
 )
 
 type listModelsResponse struct {
-	Success bool               `json:"success"`
-	Data    []dto.OpenAIModels `json:"data"`
-	Object  string             `json:"object"`
+	Data []dto.OpenAIModels `json:"data"`
 }
 
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
@@ -41,7 +39,15 @@ func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
 	model.DB = db
 	model.LOG_DB = db
 
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{}))
+	require.NoError(t, db.AutoMigrate(
+		&model.User{},
+		&model.Channel{},
+		&model.Ability{},
+		&model.Model{},
+		&model.Vendor{},
+		&model.CodexCatalogSnapshot{},
+		&model.CodexCatalogCandidate{},
+	))
 
 	t.Cleanup(func() {
 		sqlDB, err := db.DB()
@@ -127,10 +133,14 @@ func decodeListModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder)
 	t.Helper()
 
 	require.Equal(t, http.StatusOK, recorder.Code)
+	var raw map[string]any
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &raw))
+	require.Contains(t, raw, "data")
+	require.NotContains(t, raw, "success")
+	require.NotContains(t, raw, "object")
+
 	var payload listModelsResponse
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
-	require.True(t, payload.Success)
-	require.Equal(t, "list", payload.Object)
 
 	ids := make(map[string]struct{}, len(payload.Data))
 	for _, item := range payload.Data {
@@ -213,6 +223,7 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 		"zz-token-tiered-visible-model":    `tier("base", p * 1 + c * 2)`,
 		"zz-token-tiered-empty-expr-model": "",
 	})
+	_ = setupModelListControllerTestDB(t)
 
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)

@@ -19688,5 +19688,20 @@
     "mtime": 1783538262.550318,
     "ast_hash": "94e979f71289685f3151333c58bbf768",
     "semantic_hash": ""
+  },
+  ".planning/graphs/graph.json": {
+    "mtime": 1783541695.7780135,
+    "ast_hash": "1dc3c76369bc59e8c2ed50a76fab801f",
+    "semantic_hash": ""
+  },
+  ".planning/graphs/manifest.json": {
+    "mtime": 1783542048.7841973,
+    "ast_hash": "35bfb10aa46ec772e041d12d7c2555c0",
+    "semantic_hash": ""
+  },
+  ".planning/graphs/GRAPH_REPORT.md": {
+    "mtime": 1783541695.7810137,
+    "ast_hash": "ac401745faff6477f32c9623013babde",
+    "semantic_hash": ""
   }
 }

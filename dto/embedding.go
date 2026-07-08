@@ -2,6 +2,7 @@ package dto
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/types"
 
@@ -32,6 +33,11 @@ type EmbeddingRequest struct {
 	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
 }
 
+type EmbeddingInputStats struct {
+	InputCount int
+	InputChars int
+}
+
 func (r *EmbeddingRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	var texts = make([]string, 0)
 
@@ -43,6 +49,19 @@ func (r *EmbeddingRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	return &types.TokenCountMeta{
 		CombineText: strings.Join(texts, "\n"),
 	}
+}
+
+func (r *EmbeddingRequest) GetInputStats() EmbeddingInputStats {
+	if r == nil {
+		return EmbeddingInputStats{}
+	}
+
+	inputs := r.ParseInput()
+	stats := EmbeddingInputStats{InputCount: len(inputs)}
+	for _, input := range inputs {
+		stats.InputChars += utf8.RuneCountInString(input)
+	}
+	return stats
 }
 
 func (r *EmbeddingRequest) IsStream(c *gin.Context) bool {
@@ -63,6 +82,8 @@ func (r *EmbeddingRequest) ParseInput() []string {
 	switch r.Input.(type) {
 	case string:
 		input = []string{r.Input.(string)}
+	case []string:
+		input = r.Input.([]string)
 	case []any:
 		input = make([]string, 0, len(r.Input.([]any)))
 		for _, item := range r.Input.([]any) {

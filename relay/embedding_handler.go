@@ -19,6 +19,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var acquireEmbeddingGovernor = embeddinggovernor.Acquire
+
+const maxGovernedTEIInputCount = 4
+
 func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
 
@@ -27,6 +31,15 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected *dto.EmbeddingRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 	publicModelName := embeddingReq.Model
+	inputStats := embeddingReq.GetInputStats()
+	if embeddinggovernor.IsGovernedModel(publicModelName) && inputStats.InputCount > maxGovernedTEIInputCount {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("%s supports at most %d input items per request", publicModelName, maxGovernedTEIInputCount),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 
 	request, err := common.DeepCopy(embeddingReq)
 	if err != nil {
@@ -61,7 +74,7 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		}
 	}
 
-	logger.LogDebug(c, "converted embedding request body: %s", jsonData)
+	logger.LogDebug(c, "converted embedding request size: %d bytes", len(jsonData))
 	body, size, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -72,11 +85,13 @@ func EmbeddingHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	var requestBody io.Reader = body
 	statusCodeMappingStr := c.GetString("status_code_mapping")
 
-	lease, reject := embeddinggovernor.Acquire(c.Request.Context(), embeddinggovernor.Request{
+	lease, reject := acquireEmbeddingGovernor(c.Request.Context(), embeddinggovernor.Request{
 		Model:       publicModelName,
 		ChannelID:   c.GetInt("channel_id"),
 		ChannelName: c.GetString("channel_name"),
 		Workload:    c.GetHeader("X-Embedding-Workload"),
+		InputCount:  inputStats.InputCount,
+		InputChars:  inputStats.InputChars,
 	})
 	if reject != nil {
 		if reject.RetryAfter > 0 {

@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v2.14
 milestone_name: Branch hygiene and mainline reconciliation
 current_phase: 28
-status: Phase 28 planned; v2.13 completed; v2.15 queued for k3s/deferred runtime work
-stopped_at: Phase 28 planning requested after full branch/worktree hygiene audit
-last_updated: "2026-07-08T12:13:10-03:00"
+status: Phase 28 Wave 3 complete; Wave 4 local/remote hygiene pending
+stopped_at: Phase 28 Wave 4 pending after origin/main fast-forward
+last_updated: "2026-07-08T17:59:56-03:00"
 last_activity: 2026-07-08
-last_activity_desc: Phase 28 planning initiated after branch/worktree hygiene audit
+last_activity_desc: Phase 28 Wave 3 completed; origin/main fast-forwarded to 3c55d7b11
 progress:
   total_phases: 27
   completed_phases: 5
   total_plans: 22
-  completed_plans: 14
-  percent: 19
+  completed_plans: 17
+  percent: 77
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 28 (branch-hygiene-and-mainline-reconciliation) — PLANNED
-Plan: 0 of 4
+Phase: 28 (branch-hygiene-and-mainline-reconciliation) — WAVE 4 PENDING
+Plan: 3 of 4
 **Milestone:** v2.14 — branch hygiene and mainline reconciliation (current)
 **Phase:** 28
-**Status:** Planning requested after branch/worktree hygiene audit
-**Last activity:** 2026-07-08 — branch/worktree audit completed; hygiene phase planning started
+**Status:** Wave 3 complete; local/remote hygiene pending
+**Last activity:** 2026-07-08 — selective mainline reconciliation completed and `origin/main` fast-forwarded to `3c55d7b11`
 
 ## What Was Done
 

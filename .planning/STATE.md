@@ -1,31 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.15
-milestone_name: k3s transition and deferred runtime validation
-current_phase: 23
-status: Phases 22 and 23 complete; k3s cutover remains manually gated
-stopped_at: Phase 23 local/static harness validation completed
-last_updated: "2026-07-08T23:55:00-03:00"
-last_activity: 2026-07-08
-last_activity_desc: Phase 22 migration-prep package completed and Phase 23 local/static harness completed
+milestone: v2.16
+milestone_name: k3s shadow, cutover, and planning hygiene
+current_phase: 29
+status: v2.15 completed as preparation package; v2.16 planned for shadow/cutover and GSD hygiene
+stopped_at: v2.16 phases added after roadmap and planning-health audit
+last_updated: "2026-07-09T20:20:00-03:00"
+last_activity: 2026-07-09
+last_activity_desc: Added v2.16 phases for k3s shadow, public cutover, and planning structure hygiene
 progress:
-  total_phases: 29
+  total_phases: 32
   completed_phases: 8
   total_plans: 30
   completed_plans: 23
-  percent: 77
+  percent: 72
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 23 (long-context-alias-validation) — COMPLETE
-Plan: 1 of 1
-**Milestone:** v2.15 — k3s transition and deferred runtime validation
-**Phase:** 23
-**Status:** Complete in the local/static scope; k3s public cutover still deferred
-**Last activity:** 2026-07-09 — Phase 22 artifacts completed, backup captured, and Phase 23 harness validated locally/static only
+Phase: 29 (k3s-shadow-restore-and-go-no-go) — PLANNED
+Plan: 0 of 0
+**Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
+**Phase:** 29
+**Status:** Planned after closing the preparation package from v2.15
+**Last activity:** 2026-07-09 — roadmap audited; v2.16 added to separate real shadow/cutover work from preparation-only closure
 
 ## What Was Done
 
@@ -144,7 +144,8 @@ Runbook: docs/PODMAN.md
 | v2.12 | pt-native upstream sync | 🚧 in progress — Phase 21 executed locally; clean upstream handoff still pending |
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
-| v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (cutover still manually gated) |
+| v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (preparation package only; no public cutover) |
+| v2.16 | K3s shadow, cutover, and planning hygiene | 📋 planned |
 
 ## Next actions
 
@@ -152,17 +153,24 @@ Runbook: docs/PODMAN.md
    - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
    - Validar o diff contra `upstream/main`
    - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
-2. **Manual k3s follow-up when desired**:
+2. **Phase 29 — k3s shadow, restore, and go/no-go**:
    - preencher secrets do namespace `router-ai-atius`
-   - executar restore rehearsal e shadow deploy
-   - manter cutover Apache/publico bloqueado ate smoke e rollback passarem
-3. **Podman runtime guardrail**:
+   - executar restore rehearsal e shadow deploy real
+   - rodar smoke local/sombra e registrar go/no-go
+3. **Phase 30 — public cutover and rollback soak**:
+   - mover Apache apenas se a Phase 29 produzir go real
+   - validar smoke publico completo
+   - manter Podman como rollback durante soak
+4. **Phase 31 — planning health normalization**:
+   - resolver warnings atuais do `validate.health`
+   - normalizar/archive phases legacy e artefatos raiz nao canônicos
+5. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
    - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
      phase explicitly removes or renames them.
 
-4. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+6. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 
@@ -209,6 +217,9 @@ Runbook: docs/PODMAN.md
 - [Phase 28 planning]: v2.14 should own branch/worktree hygiene and mainline reconciliation; v2.15 should own Phases 22 and 23 as deferred platform/runtime work.
 - [Phase 22]: k3s migration is now documented and tooled, but public cutover remains manual and blocked by restore/shadow evidence plus current cluster constraints.
 - [Phase 23]: the long-context harness is validated locally/static with the 1M cost gate preserved; new paid live runs remain operator-triggered only.
+- [Phase 29]: real k3s shadow deployment, restore rehearsal, and go/no-go should live in a new phase, not be treated as already completed work from Phase 22.
+- [Phase 30]: public Apache cutover should stay separate from shadow validation and remain rollback-first.
+- [Phase 31]: current `.planning/` health debt is real but historical; fix it in a dedicated hygiene phase instead of mixing it into runtime work.
 
 ## Accumulated Context
 
@@ -217,6 +228,9 @@ Runbook: docs/PODMAN.md
 - Phase 22 added: k3s migration preflight and cutover plan for router-ai-atius. Phase 21 (`feat-pt-native-pr`) remains a separate PT-native upstream PR handoff. Podman remains the current production source of truth until Phase 22 shadow/cutover gates pass.
 - Phase 23 added: long-context alias validation for `gpt-5.5-1m` and `gpt-5.4-1m`. This is an operational validation track for progressive reasoning/context tests up to approximately 1M tokens. It is independent of Phase 21 and blocked on deploying the alias pricing fix before accepting production UAT evidence.
 - Phase 24 added: router DB/catalog recovery and canonical host DB restoration. This phase owns the post-2026-07-02 runtime drift: canonical host PostgreSQL/PgBouncer path, full `OpenAI - Codex` catalog recovery, DeepSeek recovery, MiniMax consolidated-but-disabled recovery, and preservation of the Go embedding governor path. Phase 21 remains parked, not deleted.
+- Phase 29 added: k3s shadow deployment, restore rehearsal, and explicit go/no-go are separated from the already-closed preparation package of Phase 22.
+- Phase 30 added: public k3s cutover and rollback soak are separated from shadow validation and stay blocked on real evidence from Phase 29.
+- Phase 31 added: planning-health normalization and legacy archive now have a dedicated place in the roadmap instead of staying as permanent background debt.
 
 ### Active execution note
 

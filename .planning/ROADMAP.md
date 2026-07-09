@@ -400,6 +400,39 @@ Plans:
 
 ---
 
+## v2.16 — k3s shadow, cutover, and planning hygiene [PLANNED]
+
+**Status:** Planned
+
+### Phase 29: k3s-shadow-restore-and-go-no-go
+
+**Goal:** Executar a parte manual que ficou deliberadamente fora da `Phase 22`: criar secrets fora do git, rodar restore rehearsal real, aplicar o shadow deployment no namespace `router-ai-atius`, validar smoke local/sombra e registrar uma decisão formal de go/no-go antes de qualquer mudança no edge público.
+**Status:** Planned
+**Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
+**Requirements:** PHASE-22-K3S-PREFLIGHT, PHASE-22-STATEFUL-DATA, PHASE-22-RUNTIME-PARITY
+**Depends on:** Phase 22
+**Plans:** 0 plans
+
+### Phase 30: k3s-public-cutover-and-rollback-soak
+
+**Goal:** Se a `Phase 29` passar, executar o cutover manual do Apache para o backend k3s, validar smoke público completo, manter o Podman como rollback ativo durante soak, e registrar a decisão final de permanência ou rollback.
+**Status:** Planned
+**Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
+**Requirements:** PHASE-22-CUTOVER-ROLLBACK, PHASE-20-GO-ONLY-V1-MODELS, PHASE-25-CLIENT-SMOKE-VALIDATION
+**Depends on:** Phase 29
+**Plans:** 0 plans
+
+### Phase 31: planning-health-normalization-and-legacy-archive
+
+**Goal:** Higienizar a estrutura GSD do repo sem perder histórico útil: resolver warnings do `validate.health`, normalizar ou arquivar diretórios legacy fora do padrão, remover referências órfãs do `ROADMAP`/`STATE`, e mover artefatos raiz não canônicos para local apropriado.
+**Status:** Planned
+**Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
+**Requirements:** PHASE-31-GSD-HEALTH, PHASE-31-HISTORICAL-PRESERVATION, PHASE-31-ROADMAP-STATE-CONSISTENCY
+**Depends on:** Phase 28
+**Plans:** 0 plans
+
+---
+
 ## v1.6 — Future
 
 - Monitoring & Health Checks (logs centralizados, métricas, alerting)

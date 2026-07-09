@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: router-ai-atius
+  labels:
+    app.kubernetes.io/part-of: atius-router
+    app.kubernetes.io/name: router-ai-atius

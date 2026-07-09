@@ -11,11 +11,13 @@
 | CLI operacional | `/home/ubuntu/GitHub/containers/router-ai-atius/bin/clianything` |
 | Docs locais | `/home/ubuntu/GitHub/containers/router-ai-atius/docs` |
 | Runbook Podman | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/PODMAN.md` |
+| Runbook k3s migration | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/K3S-MIGRATION.md` |
 | Runbook OpenAI Codex e 1M context | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md` |
 | Runbook oficial de CI/auth/release Codex | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/CODEX-CI-AUTH-RELEASE.md` |
 
 Registro dedicado do corte full-Go 2026-06-18: `docs/FULL-GO-V1-MODELS-CUTOVER-2026-06-18.md`.
 Registro dedicado do provider `OpenAI - Codex`, aliases `-1m`, mapping upstream e custos long-context: `docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md`.
+Trilha de migração para k3s, ainda sem produção movida: `docs/K3S-MIGRATION.md`.
 
 ## Status atual validado
 

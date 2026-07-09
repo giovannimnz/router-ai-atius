@@ -3,6 +3,13 @@
 Este doc captura lições + workarounds aplicados na migração
 Docker → Podman do `router-ai-atius` (precedente 2026-06-04, re-baselined 2026-06-12).
 
+Plano de migração para k3s, ainda sem cutover público executado:
+
+- `docs/K3S-MIGRATION.md`
+
+Podman continua sendo a fonte de verdade da produção atual até existir um
+summary de cutover k3s com smoke público e rollback validados.
+
 ## Contexto
 
 - **Servidor:** ATIUS-SRV-1 (10.1.1.1 / 137.131.190.161)

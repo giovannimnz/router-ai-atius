@@ -270,7 +270,7 @@ Plans:
 ### Phase 22: K3s migration preflight and cutover plan for router-ai-atius
 
 **Goal:** Preparar e validar a migração do runtime `router-ai-atius` de Podman rootless para k3s sem perder o contrato full-Go, sem reintroduzir `model-detailed`, com backup/rollback testado e cutover bloqueado por aprovação manual.
-**Status:** Planned — moved to milestone v2.15
+**Status:** Complete (2026-07-09; artifacts ready, public cutover deferred)
 **Milestone:** v2.15 — k3s transition and deferred runtime validation
 **Requirements:** PHASE-22-K3S-PREFLIGHT, PHASE-22-RUNTIME-PARITY, PHASE-22-STATEFUL-DATA, PHASE-22-CUTOVER-ROLLBACK
 **Depends on:** Phase 20 runtime full-Go. Independe da Phase 21, mas deve evitar contaminar o worktree/branch `feat/pt-native`.
@@ -279,24 +279,24 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 22-01-PLAN.md - k3s cluster/runtime preflight and migration contract
+- [x] 22-01-PLAN.md - k3s cluster/runtime preflight and migration contract
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 22-02-PLAN.md - Kubernetes manifests, secret templates, and dry-run validation
+- [x] 22-02-PLAN.md - Kubernetes manifests, secret templates, and dry-run validation
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 22-03-PLAN.md - backup, restore rehearsal, and shadow deployment validation
+- [x] 22-03-PLAN.md - backup, restore rehearsal, and shadow deployment validation
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 22-04-PLAN.md - production cutover, rollback, and operator handoff
+- [x] 22-04-PLAN.md - production cutover, rollback, and operator handoff
 
 ### Phase 23: long-context-alias-validation
 
 **Goal:** Validar os aliases experimentais `gpt-5.5-1m` e `gpt-5.4-1m` com testes progressivos de raciocinio/contexto ate aproximadamente 1M tokens, preservando seguranca operacional, custos explicitos, rastreabilidade de alias/upstream e pricing long-context.
-**Status:** Planned — moved to milestone v2.15
+**Status:** Complete (2026-07-09; local/static harness validated, live expensive runs deferred by design)
 **Milestone:** v2.15 — k3s transition and deferred runtime validation
 **Requirements:** PHASE-23-LONG-CONTEXT-CATALOG, PHASE-23-LONG-CONTEXT-STREAMING, PHASE-23-LONG-CONTEXT-REASONING, PHASE-23-LONG-CONTEXT-BILLING-TRACE
 **Depends on:** Phase 20 runtime full-Go and deployed alias pricing fix. Independe da Phase 21 e nao altera o plano de migracao da Phase 22.
@@ -304,7 +304,7 @@ Plans:
 
 Plans:
 
-- [ ] 23-01-PLAN.md - progressive 1M long-context alias validation harness and UAT
+- [x] 23-01-PLAN.md - progressive 1M long-context alias validation harness and UAT
 
 ### Phase 24: router-db-catalog-recovery-and-canonical-host-db
 

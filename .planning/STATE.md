@@ -1,31 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.14
-milestone_name: Branch hygiene and mainline reconciliation
-current_phase: 28
-status: Phase 28 complete; v2.15 queued for k3s/deferred runtime work
-stopped_at: Phase 28 complete after local/remote branch hygiene
-last_updated: "2026-07-08T18:08:00-03:00"
+milestone: v2.15
+milestone_name: k3s transition and deferred runtime validation
+current_phase: 23
+status: Phases 22 and 23 complete; k3s cutover remains manually gated
+stopped_at: Phase 23 local/static harness validation completed
+last_updated: "2026-07-08T23:55:00-03:00"
 last_activity: 2026-07-08
-last_activity_desc: Phase 28 completed; only local main, origin/main, and origin/feat/phase21-pt-native-upstream remain
+last_activity_desc: Phase 22 migration-prep package completed and Phase 23 local/static harness completed
 progress:
-  total_phases: 27
-  completed_phases: 6
-  total_plans: 22
-  completed_plans: 18
-  percent: 82
+  total_phases: 29
+  completed_phases: 8
+  total_plans: 30
+  completed_plans: 23
+  percent: 77
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 28 (branch-hygiene-and-mainline-reconciliation) — COMPLETE
-Plan: 4 of 4
-**Milestone:** v2.14 — branch hygiene and mainline reconciliation (current)
-**Phase:** 28
-**Status:** Complete; v2.15 queued
-**Last activity:** 2026-07-08 — local/remote hygiene completed; only local `main`, `origin/main`, and `origin/feat/phase21-pt-native-upstream` remain
+Phase: 23 (long-context-alias-validation) — COMPLETE
+Plan: 1 of 1
+**Milestone:** v2.15 — k3s transition and deferred runtime validation
+**Phase:** 23
+**Status:** Complete in the local/static scope; k3s public cutover still deferred
+**Last activity:** 2026-07-09 — Phase 22 artifacts completed, backup captured, and Phase 23 harness validated locally/static only
 
 ## What Was Done
 
@@ -144,7 +144,7 @@ Runbook: docs/PODMAN.md
 | v2.12 | pt-native upstream sync | 🚧 in progress — Phase 21 executed locally; clean upstream handoff still pending |
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
-| v2.15 | K3s transition and deferred runtime validation | planned |
+| v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (cutover still manually gated) |
 
 ## Next actions
 
@@ -152,18 +152,17 @@ Runbook: docs/PODMAN.md
    - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
    - Validar o diff contra `upstream/main`
    - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
-2. **Plan/execute v2.15 Phase 22 — K3s migration preflight and cutover plan**:
-   - Revisar paridade do runtime full-Go em k3s
-   - Preparar manifests/secrets/dry-run sem contaminar o fluxo PT-native
-3. **Plan/execute v2.15 Phase 23 — long-context alias validation**:
-   - Validar a trilha experimental `-1m` sem reabrir o contrato final público da Phase 24
-4. **Podman runtime guardrail**:
+2. **Manual k3s follow-up when desired**:
+   - preencher secrets do namespace `router-ai-atius`
+   - executar restore rehearsal e shadow deploy
+   - manter cutover Apache/publico bloqueado ate smoke e rollback passarem
+3. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
    - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
      phase explicitly removes or renames them.
 
-5. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+4. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 
@@ -208,6 +207,8 @@ Runbook: docs/PODMAN.md
 - [Repo hygiene]: `origin/main` is the authoritative fork mainline, and the local `/home/ubuntu/GitHub/containers/router-ai-atius` worktree is a clean `main` tracking it.
 - [Repo hygiene]: `origin/feat/phase21-pt-native-upstream` is the clean Phase 21 handoff lane. `feat/pt-native` and redundant PT branches were backed up and removed.
 - [Phase 28 planning]: v2.14 should own branch/worktree hygiene and mainline reconciliation; v2.15 should own Phases 22 and 23 as deferred platform/runtime work.
+- [Phase 22]: k3s migration is now documented and tooled, but public cutover remains manual and blocked by restore/shadow evidence plus current cluster constraints.
+- [Phase 23]: the long-context harness is validated locally/static with the 1M cost gate preserved; new paid live runs remain operator-triggered only.
 
 ## Accumulated Context
 

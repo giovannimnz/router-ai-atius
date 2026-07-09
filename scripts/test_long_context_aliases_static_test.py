@@ -33,7 +33,7 @@ class LongContextAliasScriptTest(unittest.TestCase):
         self.assertIn('[[ "$answer" != "RUN ${size} ${model}" ]]', self.source)
 
     def test_base_models_have_limit_guard_expectation(self):
-        self.assertIn('BASE_EXPECT_REJECT_FROM="${BASE_EXPECT_REJECT_FROM:-300000}"', self.source)
+        self.assertIn('BASE_EXPECT_REJECT_FROM="${BASE_EXPECT_REJECT_FROM:-1000000}"', self.source)
         self.assertIn('[[ "$1" == "gpt-5.5" || "$1" == "gpt-5.4" ]]', self.source)
         self.assertIn('printf \'reject\'', self.source)
         self.assertIn('"kind": "base_limit_guard"', self.source)

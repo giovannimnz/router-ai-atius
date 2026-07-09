@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-ai-atius-config
+  namespace: router-ai-atius
+  labels:
+    app.kubernetes.io/part-of: atius-router
+    app.kubernetes.io/name: router-ai-atius
+data:
+  TZ: "America/Sao_Paulo"
+  LANG: "pt_BR.UTF-8"
+  TRUST_PROXY: "true"
+  ERROR_LOG_ENABLED: "true"
+  BATCH_UPDATE_ENABLED: "true"
+  NODE_NAME: "router-ai-atius-k3s"
+  POSTGRES_USER: "admin"
+  POSTGRES_DB: "DBRouterAiAtius"
+  POSTGRES_HOST: "router-ai-atius-postgres"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "router-ai-atius-redis"
+  REDIS_PORT: "6379"
+  EMBEDDING_GOVERNOR_ENABLED: "true"
+  EMBEDDING_GOVERNOR_MODELS: "embedding-gte-v1"
+  EMBEDDING_GOVERNOR_BATCH_MODELS: ""
+  EMBEDDING_GOVERNOR_INITIAL_CONCURRENCY: "2"
+  EMBEDDING_GOVERNOR_MIN_CONCURRENCY: "1"
+  EMBEDDING_GOVERNOR_MAX_CONCURRENCY: "3"
+  EMBEDDING_GOVERNOR_BATCH_CONCURRENCY: "1"
+  EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED: "false"
+  EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED: "false"
+  TEI_BASE_URL: "http://tei-gte.ai-search.svc.cluster.local"

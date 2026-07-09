@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.16
 milestone_name: k3s shadow, cutover, and planning hygiene
 current_phase: 29
-status: v2.15 completed as preparation package; v2.16 planned for shadow/cutover and GSD hygiene
-stopped_at: v2.16 phases added after roadmap and planning-health audit
-last_updated: "2026-07-09T20:20:00-03:00"
+status: v2.16 in progress; planning health normalized, k3s shadow/cutover still pending
+stopped_at: legacy planning archive moved and validate.health returned healthy
+last_updated: "2026-07-09T20:32:00-03:00"
 last_activity: 2026-07-09
-last_activity_desc: Added v2.16 phases for k3s shadow, public cutover, and planning structure hygiene
+last_activity_desc: Archived legacy planning debt; validate.health is now healthy and only k3s shadow/cutover remain as real pending work
 progress:
   total_phases: 32
   completed_phases: 8
@@ -25,7 +25,7 @@ Plan: 0 of 0
 **Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
 **Phase:** 29
 **Status:** Planned after closing the preparation package from v2.15
-**Last activity:** 2026-07-09 — roadmap audited; v2.16 added to separate real shadow/cutover work from preparation-only closure
+**Last activity:** 2026-07-09 — planning health normalized; real pending work is now limited to k3s shadow/cutover and optional Phase 21 upstream handoff
 
 ## What Was Done
 
@@ -145,7 +145,7 @@ Runbook: docs/PODMAN.md
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
 | v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (preparation package only; no public cutover) |
-| v2.16 | K3s shadow, cutover, and planning hygiene | 📋 planned |
+| v2.16 | K3s shadow, cutover, and planning hygiene | 🚧 in progress — Phase 31 done; 29/30 pending |
 
 ## Next actions
 
@@ -161,16 +161,13 @@ Runbook: docs/PODMAN.md
    - mover Apache apenas se a Phase 29 produzir go real
    - validar smoke publico completo
    - manter Podman como rollback durante soak
-4. **Phase 31 — planning health normalization**:
-   - resolver warnings atuais do `validate.health`
-   - normalizar/archive phases legacy e artefatos raiz nao canônicos
-5. **Podman runtime guardrail**:
+4. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
    - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
      phase explicitly removes or renames them.
 
-6. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+5. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
 
 ## Cross-references (Obsidian)
 
@@ -189,7 +186,7 @@ Runbook: docs/PODMAN.md
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
-| Phase phase-20 P02 | 14 min | 6 tasks | 15 files |
+| Go-native cutover P02 | 14 min | 6 tasks | 15 files |
 | Phase 24 P02 | 8 min | 3 tasks | 4 files |
 | Phase 24 P03 | 12 min | 3 tasks | 4 files |
 | Phase 25 P01 | 14 min | 2 tasks | 2 files |
@@ -200,7 +197,7 @@ Runbook: docs/PODMAN.md
 
 ## Decisions
 
-- [Phase ?]: Use existing GET /v1/models as the only public Go catalog endpoint — Avoids a second source of truth and satisfies the corrected Phase 20 contract.
+- [Go-native cutover]: Use existing GET /v1/models as the only public Go catalog endpoint — Avoids a second source of truth and satisfies the corrected Go-owned catalog contract.
 - [Phase ?]: Use api_format=anthropic and Anthropic headers for model-list intent — Lets Go serve Anthropic-selected model lists under the same root data-only payload contract.
 - [Phase ?]: Keep pricing provenance internal to JSON output — pricing_source and pricing_estimated are useful internally but must not leak from public /v1/models.
 - [Phase 24]: Candidate DB build stays dry-run by default and requires explicit source/target confirmations.
@@ -220,6 +217,7 @@ Runbook: docs/PODMAN.md
 - [Phase 29]: real k3s shadow deployment, restore rehearsal, and go/no-go should live in a new phase, not be treated as already completed work from Phase 22.
 - [Phase 30]: public Apache cutover should stay separate from shadow validation and remain rollback-first.
 - [Phase 31]: current `.planning/` health debt is real but historical; fix it in a dedicated hygiene phase instead of mixing it into runtime work.
+- [Phase 31]: legacy directories and `FORK_MIGRATION.md` were archived into `.planning/milestones/legacy-planning-archive-20260709`, and `validate.health` is now healthy.
 
 ## Accumulated Context
 
@@ -231,6 +229,7 @@ Runbook: docs/PODMAN.md
 - Phase 29 added: k3s shadow deployment, restore rehearsal, and explicit go/no-go are separated from the already-closed preparation package of Phase 22.
 - Phase 30 added: public k3s cutover and rollback soak are separated from shadow validation and stay blocked on real evidence from Phase 29.
 - Phase 31 added: planning-health normalization and legacy archive now have a dedicated place in the roadmap instead of staying as permanent background debt.
+- Phase 31 completed on 2026-07-09 by archiving legacy phase directories and moving `FORK_MIGRATION.md` out of the `.planning/` root; `validate.health` now returns `healthy`.
 
 ### Active execution note
 

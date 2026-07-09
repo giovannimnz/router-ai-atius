@@ -425,7 +425,7 @@ Plans:
 ### Phase 31: planning-health-normalization-and-legacy-archive
 
 **Goal:** Higienizar a estrutura GSD do repo sem perder histórico útil: resolver warnings do `validate.health`, normalizar ou arquivar diretórios legacy fora do padrão, remover referências órfãs do `ROADMAP`/`STATE`, e mover artefatos raiz não canônicos para local apropriado.
-**Status:** Planned
+**Status:** Complete (2026-07-09)
 **Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
 **Requirements:** PHASE-31-GSD-HEALTH, PHASE-31-HISTORICAL-PRESERVATION, PHASE-31-ROADMAP-STATE-CONSISTENCY
 **Depends on:** Phase 28

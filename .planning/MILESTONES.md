@@ -28,7 +28,7 @@
 **Shipped:**
 - `scripts/sync-fork.sh` — 8-step merge workflow com proteção de arquivos locais
 - `scripts/version-bump.sh` — versionamento X.Y.Z.N aware do upstream
-- FORK_MIGRATION.md — documentação completa do fork e sync workflow
+- `.planning/milestones/legacy-planning-archive-20260709/FORK_MIGRATION.md` — documentação histórica do fork e sync workflow
 - `.github/workflows/sync.yml` — weekly upstream sync automatizado
 - `.github/workflows/release.yml` — releases via tag semantic
 - `agent-harness/` — newapi-cli Click-based CLI com container/channel/model commands

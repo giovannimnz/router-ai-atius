@@ -416,3 +416,71 @@ This fork’s operational output remains PT-BR-first:
 
 - Release notes and operator summaries are generated in PT-BR by default.
 - CI/release docs may consume upstream English references, but the fork’s published operator/release text remains Portuguese.
+
+## Phase 32 Requirements
+
+| Requirement ID | Summary |
+|---|---|
+| PHASE-32-CODEX-UI-SINGLE-ENDPOINT | The Codex channel editor must remove generic API/base URL and API key surfaces for type `57`. |
+| PHASE-32-CODEX-OAUTH-REGENERATE | Codex must support Router-owned OAuth regeneration separate from refresh. |
+| PHASE-32-CODEX-CREDENTIAL-HEALTH | Codex credential validity must include live upstream health/probe state, not only local expiration. |
+| PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS | Upstream Codex auth failures must use explicit error codes distinct from Router API key failures. |
+| PHASE-32-FORK-SYNC-GUARD | Fork-sync guards must preserve Codex OAuth UI/backend/error behavior across upstream merges. |
+| PHASE-32-VALIDATION-DOCS-SHIP | The phase is complete only after tests, CPU-capped builds, live smokes, docs, commit, and push. |
+
+### PHASE-32-CODEX-UI-SINGLE-ENDPOINT
+
+The type `57` channel editor must be Codex-specific:
+
+- Do not show generic `Base URL`, generic endpoint/proxy guidance, or `Do not add /v1` copy for `OpenAI - Codex`.
+- Do not show generic `API Key` textarea, current-key reveal, or copy controls for Codex credentials.
+- Show OAuth metadata instead: authenticated state, account/email when available, expiration, refresh-token presence, last refresh, last probe, and last upstream auth error.
+- Keep all new strings in `web/default/src/i18n/locales/pt.json`.
+
+### PHASE-32-CODEX-OAUTH-REGENERATE
+
+Codex credential operations must have separate semantics:
+
+- `Atualizar credencial` uses an existing `refresh_token` and fails clearly when no refresh token exists.
+- `Regenerar credencial` starts a new Authorization Code + PKCE flow for the Router-owned channel credential.
+- The regeneration flow must save a credential with Router-owned `access_token`, `refresh_token`, `account_id`, `email`, `last_refresh`, and `expired`.
+- Browser-assisted operation should support Brave/Chrome login state when available and fallback to manual paste of the final callback URL.
+- Break-glass import from Codex CLI may exist only as explicit temporary access-token-only fallback, without copying `refresh_token`.
+
+### PHASE-32-CODEX-CREDENTIAL-HEALTH
+
+The UI and backend must not treat future local expiration as proof of health:
+
+- The backend must expose credential metadata without exposing tokens.
+- A probe or latest upstream validation result must be visible in admin metadata.
+- `token_invalidated`, `refresh_token_invalidated`, missing `refresh_token`, and upstream 401/403 must mark the credential as requiring regeneration.
+- The auto-refresh task must log and classify refresh-token invalidation in a way operators can find quickly.
+
+### PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS
+
+Auth errors must be operationally separable:
+
+- Invalid/missing client API key to the Router remains an internal Router auth failure.
+- Invalid/expired Codex upstream OAuth must return an upstream-auth-specific code and message.
+- The relay must preserve the upstream status and sanitized upstream code, but must not print secrets.
+- Tests must cover non-stream and streaming paths enough to prove the classification does not regress.
+
+### PHASE-32-FORK-SYNC-GUARD
+
+The protected fork behavior must survive upstream sync:
+
+- Update `omni-srv-admin/modules/fork-sync/projects/atius-router/sync.yaml` or the CI adjustment step if any required path is not protected in the effective CI config.
+- Update `omni-srv-admin/modules/fork-sync/projects/atius-router/UPSTREAM-SYNC-GUARDS.md` with the Codex OAuth UI/regeneration/error contract.
+- Update repo docs that list protected paths or Codex operational contract.
+- Add a regression check where practical so upstream sync cannot silently reintroduce generic Codex base URL/API key UI.
+
+### PHASE-32-VALIDATION-DOCS-SHIP
+
+The phase is not done until evidence exists for:
+
+- Narrow Go tests and frontend i18n/typecheck/build through `./scripts/podman-admin.sh profile-run` under the 20% CPU rule.
+- Local and public authenticated smokes for Codex chat/responses.
+- Negative internal auth and negative upstream auth cases.
+- SQL backup before any live channel credential write.
+- Obsidian/GBrain operational note without secrets.
+- Final commit and push after Graphify freshness check.

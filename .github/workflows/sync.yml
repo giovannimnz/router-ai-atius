@@ -220,7 +220,7 @@ jobs:
             --github-repo "${FORK_REPO}" \
             --json > release-preflight.json
           cat release-preflight.json
-          jq -e '.status == "ok"' release-preflight.json > /dev/null
+          jq -e '.status == "success"' release-preflight.json > /dev/null
 
       - name: Commitar version bump
         if: steps.sync_dry_run.outputs.needs_sync == 'true'

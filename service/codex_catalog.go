@@ -892,13 +892,14 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 	latestSnapshot, _ := model.GetLatestCodexCatalogSnapshot(channelID)
 	if latestSnapshot != nil && latestSnapshot.SnapshotHash == signature {
 		existingCandidates, _ := model.GetCodexCatalogCandidatesByChannel(channelID)
-		if len(existingCandidates) == 0 {
+		promotedModels := ListPromotedCodexModelIDs(channelID)
+		if len(existingCandidates) == 0 || len(promotedModels) == 0 {
 			latestSnapshot = nil
 		} else {
 			return &CodexCatalogSyncResult{
 				ChannelID:  channelID,
 				Discovered: discoveredModels,
-				Promoted:   ListPromotedCodexModelIDs(channelID),
+				Promoted:   promotedModels,
 				Changed:    false,
 			}, nil
 		}

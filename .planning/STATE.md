@@ -7,7 +7,7 @@ status: v2.17 implementation and live API validation complete; blocked on authen
 stopped_at: Phase 32 plan 32-04 OAuth callback gate
 last_updated: "2026-07-12T06:10:00-03:00"
 last_activity: 2026-07-12
-last_activity_desc: Phase 32 deployed and validated; 401 token_invalidated cleared, GPT-5.6 Sol/Terra live, OAuth regeneration awaits authenticated browser
+last_activity_desc: Phase 32 learnings extracted after deploy validation; OAuth regeneration awaits authenticated browser
 progress:
   total_phases: 32
   completed_phases: 8

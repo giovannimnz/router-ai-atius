@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -37,6 +37,28 @@ type CodexOAuthAuthorizationFlow struct {
 	Verifier     string
 	Challenge    string
 	AuthorizeURL string
+}
+
+type CodexUpstreamAuthError struct {
+	Operation        string
+	Status           int
+	UpstreamError    string
+	ErrorDescription string
+}
+
+func (e *CodexUpstreamAuthError) Error() string {
+	if e == nil {
+		return ""
+	}
+	operation := strings.TrimSpace(e.Operation)
+	if operation == "" {
+		operation = "codex upstream auth"
+	}
+	parts := []string{fmt.Sprintf("%s failed: status=%d", operation, e.Status)}
+	if strings.TrimSpace(e.UpstreamError) != "" {
+		parts = append(parts, "error="+strings.TrimSpace(e.UpstreamError))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func RefreshCodexOAuthToken(ctx context.Context, refreshToken string) (*CodexOAuthTokenResult, error) {
@@ -114,17 +136,22 @@ func refreshCodexOAuthToken(
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var payload struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
 		ExpiresIn    int    `json:"expires_in"`
 	}
 
-	if err := common.DecodeJson(resp.Body, &payload); err != nil {
-		return nil, err
-	}
+	decodeErr := common.Unmarshal(body, &payload)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("codex oauth refresh failed: status=%d", resp.StatusCode)
+		return nil, newCodexUpstreamAuthError("codex oauth refresh", resp.StatusCode, body)
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	if strings.TrimSpace(payload.AccessToken) == "" || strings.TrimSpace(payload.RefreshToken) == "" || payload.ExpiresIn <= 0 {
@@ -176,16 +203,21 @@ func exchangeCodexAuthorizationCode(
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var payload struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
 		ExpiresIn    int    `json:"expires_in"`
 	}
-	if err := common.DecodeJson(resp.Body, &payload); err != nil {
-		return nil, err
-	}
+	decodeErr := common.Unmarshal(body, &payload)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("codex oauth code exchange failed: status=%d", resp.StatusCode)
+		return nil, newCodexUpstreamAuthError("codex oauth code exchange", resp.StatusCode, body)
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 	if strings.TrimSpace(payload.AccessToken) == "" || strings.TrimSpace(payload.RefreshToken) == "" || payload.ExpiresIn <= 0 {
 		return nil, errors.New("codex oauth token response missing fields")
@@ -310,8 +342,62 @@ func decodeJWTClaims(token string) (map[string]any, bool) {
 		return nil, false
 	}
 	var claims map[string]any
-	if err := json.Unmarshal(payloadRaw, &claims); err != nil {
+	if err := common.Unmarshal(payloadRaw, &claims); err != nil {
 		return nil, false
 	}
 	return claims, true
+}
+
+func newCodexUpstreamAuthError(operation string, status int, body []byte) error {
+	payload := struct {
+		Error            any    `json:"error"`
+		ErrorDescription string `json:"error_description"`
+		Message          string `json:"message"`
+		Detail           string `json:"detail"`
+	}{}
+	_ = common.Unmarshal(body, &payload)
+	upstreamError := sanitizeCodexOAuthErrorCode(codexOAuthErrorString(payload.Error))
+	description := strings.TrimSpace(payload.ErrorDescription)
+	if description == "" {
+		description = strings.TrimSpace(payload.Message)
+	}
+	if description == "" {
+		description = strings.TrimSpace(payload.Detail)
+	}
+	return &CodexUpstreamAuthError{
+		Operation:        operation,
+		Status:           status,
+		UpstreamError:    upstreamError,
+		ErrorDescription: common.MaskSensitiveInfo(description),
+	}
+}
+
+func sanitizeCodexOAuthErrorCode(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 128 {
+		return ""
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return ""
+	}
+	return value
+}
+
+func codexOAuthErrorString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		for _, key := range []string{"code", "type", "message"} {
+			if raw, ok := v[key]; ok {
+				if s := strings.TrimSpace(fmt.Sprintf("%v", raw)); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
 }

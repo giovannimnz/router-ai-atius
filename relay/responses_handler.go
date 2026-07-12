@@ -126,6 +126,13 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 
 		if httpResp.StatusCode != http.StatusOK {
 			newAPIError = service.RelayErrorHandler(c.Request.Context(), httpResp, false)
+			if info.ApiType == appconstant.APITypeCodex || info.ChannelType == appconstant.ChannelTypeCodex {
+				issue := service.ClassifyCodexCredentialIssue(newAPIError, httpResp.StatusCode)
+				if issue.IsAuth {
+					_ = service.RecordCodexCredentialIssueByChannelID(info.ChannelId, issue)
+				}
+				newAPIError = service.NormalizeCodexUpstreamAuthError(newAPIError)
+			}
 			// reset status code 重置状态码
 			service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 			return newAPIError

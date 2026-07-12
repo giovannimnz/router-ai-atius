@@ -144,6 +144,17 @@ func fetchCodexChannelWhamData(
 				c.JSON(http.StatusOK, gin.H{"success": false, "message": userMessage})
 				return
 			}
+		} else if issue := service.ClassifyCodexCredentialIssue(refreshErr, statusCode); issue.IsAuth {
+			_ = service.RecordCodexCredentialIssue(ch, issue)
+			c.JSON(http.StatusOK, gin.H{
+				"success":                 false,
+				"message":                 issue.Message,
+				"code":                    issue.Code,
+				"requires_regeneration":   issue.RequiresRegeneration,
+				"upstream_status":         statusCode,
+				"refresh_upstream_status": issue.UpstreamStatus,
+			})
+			return
 		}
 	}
 

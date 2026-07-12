@@ -534,7 +534,15 @@ func RefreshCodexChannelCredential(c *gin.Context) {
 	oauthKey, ch, err := service.RefreshCodexChannelCredential(ctx, channelId, service.CodexCredentialRefreshOptions{ResetCaches: true})
 	if err != nil {
 		common.SysError("failed to refresh codex channel credential: " + err.Error())
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "刷新凭证失败，请稍后重试"})
+		issue := service.ClassifyCodexCredentialIssue(err, 0)
+		resp := gin.H{"success": false, "message": "refresh credential failed; retry or regenerate the Codex credential"}
+		if issue.IsAuth {
+			resp["message"] = issue.Message
+			resp["code"] = issue.Code
+			resp["requires_regeneration"] = issue.RequiresRegeneration
+			resp["upstream_status"] = issue.UpstreamStatus
+		}
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 

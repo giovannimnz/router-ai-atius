@@ -303,11 +303,18 @@ func doCodexDiscoveryRequest(ctx context.Context, channel *model.Channel, client
 	}
 
 	var payload codexDiscoveryResponse
-	if err := common.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("codex discovery returned invalid JSON: %w", err)
-	}
+	decodeErr := common.Unmarshal(body, &payload)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, newCodexUpstreamAuthError("codex discovery", resp.StatusCode, body)
+		}
+		if decodeErr != nil {
+			return nil, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
+		}
 		return nil, normalizeCodexDiscoveryError(resp.StatusCode, payload, string(body))
+	}
+	if decodeErr != nil {
+		return nil, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
 	}
 
 	models := normalizeCodexModelIDs(payload.Models)
@@ -333,6 +340,9 @@ func DiscoverCodexModelIDs(ctx context.Context, channel *model.Channel) ([]strin
 				return models, clientVersion, nil
 			}
 			err = retryErr
+		} else if issue := ClassifyCodexCredentialIssue(refreshErr, 0); issue.IsAuth {
+			_ = RecordCodexCredentialIssue(channel, issue)
+			err = refreshErr
 		}
 	}
 	return nil, clientVersion, err
@@ -701,6 +711,10 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 	defer cancel()
 	updatedKey, _, refreshErr := RefreshCodexChannelCredential(refreshCtx, channel.Id, CodexCredentialRefreshOptions{ResetCaches: false})
 	if refreshErr != nil {
+		if issue := ClassifyCodexCredentialIssue(refreshErr, 0); issue.IsAuth {
+			_ = RecordCodexCredentialIssue(channel, issue)
+			return text, refreshErr
+		}
 		return text, err
 	}
 	text, _, err = doRequest(updatedKey.AccessToken)

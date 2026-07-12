@@ -15,7 +15,17 @@ type ChannelSettings struct {
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	// StripCJK removes CJK (Chinese/Japanese/Korean) characters from model responses.
 	// Use for channels like MiniMax that may occasionally generate CJK tokens in non-CJK contexts.
-	StripCJK bool `json:"strip_cjk,omitempty"`
+	StripCJK              bool                   `json:"strip_cjk,omitempty"`
+	CodexCredentialHealth *CodexCredentialHealth `json:"codex_credential_health,omitempty"`
+}
+
+type CodexCredentialHealth struct {
+	LastProbeAt          string `json:"last_probe_at,omitempty"`
+	LastProbeStatus      string `json:"last_probe_status,omitempty"`
+	LastUpstreamStatus   int    `json:"last_upstream_status,omitempty"`
+	LastUpstreamAuthCode string `json:"last_upstream_auth_error,omitempty"`
+	RequiresRegeneration bool   `json:"requires_regeneration,omitempty"`
+	RegenerationReason   string `json:"regeneration_reason,omitempty"`
 }
 
 type VertexKeyType string

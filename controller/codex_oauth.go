@@ -72,6 +72,56 @@ func StartCodexOAuthForChannel(c *gin.Context) {
 	startCodexOAuthWithChannelID(c, channelID)
 }
 
+func GetCodexChannelCredential(c *gin.Context) {
+	channelID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, fmt.Errorf("invalid channel id: %w", err))
+		return
+	}
+	meta, _, err := service.GetCodexCredentialMetadata(channelID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    meta,
+	})
+}
+
+func ProbeCodexChannelCredential(c *gin.Context) {
+	channelID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, fmt.Errorf("invalid channel id: %w", err))
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	meta, err := service.ProbeCodexChannelCredential(ctx, channelID)
+	if err != nil {
+		issue := service.ClassifyCodexCredentialIssue(err, 0)
+		resp := gin.H{
+			"success": false,
+			"message": common.MaskSensitiveInfo(err.Error()),
+			"data":    meta,
+		}
+		if issue.IsAuth {
+			resp["message"] = issue.Message
+			resp["code"] = issue.Code
+			resp["requires_regeneration"] = issue.RequiresRegeneration
+			resp["upstream_status"] = issue.UpstreamStatus
+		}
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "ok",
+		"data":    meta,
+	})
+}
+
 func startCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 	if channelID > 0 {
 		ch, err := model.GetChannelById(channelID, false)
@@ -181,7 +231,13 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 	tokenRes, err := service.ExchangeCodexAuthorizationCodeWithProxy(ctx, code, verifier, channelProxy)
 	if err != nil {
 		common.SysError("failed to exchange codex authorization code: " + err.Error())
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "授权码交换失败，请重试"})
+		resp := gin.H{"success": false, "message": "authorization code exchange failed; retry regeneration"}
+		if issue := service.ClassifyCodexCredentialIssue(err, 0); issue.IsAuth {
+			resp["message"] = issue.Message
+			resp["code"] = issue.Code
+			resp["requires_regeneration"] = issue.RequiresRegeneration
+		}
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 
@@ -216,6 +272,9 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 		if err := model.DB.Model(&model.Channel{}).Where("id = ?", channelID).Update("key", string(encoded)).Error; err != nil {
 			common.ApiError(c, err)
 			return
+		}
+		if refreshedCh, getErr := model.GetChannelById(channelID, true); getErr == nil && refreshedCh != nil {
+			_ = service.ClearCodexCredentialAuthIssue(refreshedCh)
 		}
 		model.InitChannelCache()
 		service.ResetProxyClientCache()

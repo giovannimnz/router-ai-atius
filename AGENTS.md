@@ -200,3 +200,5 @@ This fork has production customizations that are not upstream `QuantumNous/new-a
 - Runtime directories must stay out of build context through `.dockerignore`: `/backups`, `/data`, `/logs`, `/runtime`.
 
 When updating fork-sync protection, keep these paths protected or manually port their semantics before merging upstream changes: `.dockerignore`, `controller/model.go`, `controller/model_list_test.go`, `service/modelcatalog/`, `relay/common/relay_utils.go`, `relay/common/relay_utils_test.go`, `relay/embedding_handler.go`, `relay/channel/codex/`, `service/codex_*.go`, `service/embeddinggovernor/`, `docs/`, and `.planning/`.
+
+PT-BR is a permanent fork feature. Preserve `i18n/locales/pt.yaml`, `i18n/i18n.go`, `web/default/src/i18n/config.ts`, `web/default/src/i18n/languages.ts`, `web/default/src/i18n/locales/pt.json`, `web/classic/src/i18n/`, both language selectors/preferences, and `scripts/smoke-pt-br-i18n.sh`. Any upstream sync must pass that smoke gate.

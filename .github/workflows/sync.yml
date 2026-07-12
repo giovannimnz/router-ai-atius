@@ -187,6 +187,10 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Validar preservacao do PT-BR
+        if: steps.sync_dry_run.outputs.needs_sync == 'true'
+        run: scripts/smoke-pt-br-i18n.sh
+
       - name: Verificar build frontend
         if: steps.sync_dry_run.outputs.needs_sync == 'true'
         env:

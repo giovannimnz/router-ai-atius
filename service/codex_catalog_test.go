@@ -1,13 +1,53 @@
 package service
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestValidateCodexCandidateUsesListInput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Input []map[string]any `json:"input"`
+		}
+		require.NoError(t, common.DecodeJson(r.Body, &payload))
+		require.Len(t, payload.Input, 1)
+		assert.Equal(t, "message", payload.Input[0]["type"])
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"Ok"}]}]}`))
+	}))
+	defer server.Close()
+
+	channel := &model.Channel{
+		Id:   5,
+		Type: constant.ChannelTypeCodex,
+		Key:  `{"access_token":"access-test","account_id":"acct-test"}`,
+	}
+	channel.BaseURL = common.GetPointer(server.URL)
+
+	output, err := validateCodexCandidate(context.Background(), channel, "gpt-5.4")
+	require.NoError(t, err)
+	assert.Equal(t, "Ok", output)
+}
+
+func TestSyncCodexChannelModelsRejectsEmptyPromotion(t *testing.T) {
+	channel := &model.Channel{Id: 5, Models: "gpt-5.4,gpt-5.4-mini"}
+
+	err := syncCodexChannelModels(channel, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty promoted catalog")
+	assert.Equal(t, "gpt-5.4,gpt-5.4-mini", channel.Models)
+}
 
 func TestDefaultCodexCatalogPolicyIncludesOfficialGPT56Overrides(t *testing.T) {
 	policy := defaultCodexCatalogPolicy()

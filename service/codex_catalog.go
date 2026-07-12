@@ -742,8 +742,16 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 	payload := map[string]any{
 		"model":        modelName,
 		"instructions": "",
-		"input":        "Reply only Ok.",
-		"store":        false,
+		"input": []map[string]any{
+			{
+				"type": "message",
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "input_text", "text": "Reply only Ok."},
+				},
+			},
+		},
+		"store": false,
 	}
 	body, err := common.Marshal(payload)
 	if err != nil {
@@ -812,6 +820,9 @@ func syncCodexChannelModels(channel *model.Channel, promotedModels []string) err
 		return errors.New("codex catalog sync: nil channel")
 	}
 	promotedModels = normalizeCodexCatalogModelNames(promotedModels)
+	if len(promotedModels) == 0 {
+		return errors.New("codex catalog sync: refusing to replace channel models with an empty promoted catalog")
+	}
 	newModels := strings.Join(promotedModels, ",")
 	if strings.TrimSpace(channel.Models) == newModels {
 		return nil

@@ -41,14 +41,16 @@ var (
 )
 
 type CodexCatalogMetadata struct {
-	DisplayName         string                  `json:"display_name,omitempty"`
-	Provider            string                  `json:"provider,omitempty"`
-	OwnedBy             string                  `json:"owned_by,omitempty"`
-	EndpointPreference  constant.EndpointType   `json:"endpoint_preference,omitempty"`
-	SupportedEndpoints  []constant.EndpointType `json:"supported_endpoints,omitempty"`
-	ContextWindowTokens int                     `json:"context_window_tokens,omitempty"`
-	MaxTokens           int                     `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int                     `json:"max_completion_tokens,omitempty"`
+	DisplayName               string                  `json:"display_name,omitempty"`
+	Provider                  string                  `json:"provider,omitempty"`
+	OwnedBy                   string                  `json:"owned_by,omitempty"`
+	EndpointPreference        constant.EndpointType   `json:"endpoint_preference,omitempty"`
+	SupportedEndpoints        []constant.EndpointType `json:"supported_endpoints,omitempty"`
+	ContextWindowTokens       int                     `json:"context_window_tokens,omitempty"`
+	MaxTokens                 int                     `json:"max_tokens,omitempty"`
+	MaxCompletionTokens       int                     `json:"max_completion_tokens,omitempty"`
+	SupportedReasoningEfforts []string                `json:"supported_reasoning_efforts,omitempty"`
+	Capabilities              []string                `json:"capabilities,omitempty"`
 }
 
 type codexCatalogPolicy struct {
@@ -94,6 +96,38 @@ func normalizeCodexCatalogModelNames(values []string) []string {
 	return normalized
 }
 
+func officialGPT56CodexMetadata(displayName string, reasoningEfforts []string) CodexCatalogMetadata {
+	return CodexCatalogMetadata{
+		DisplayName:               displayName,
+		Provider:                  "OpenAI Codex",
+		OwnedBy:                   "codex",
+		EndpointPreference:        constant.EndpointTypeOpenAIResponse,
+		SupportedEndpoints:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
+		ContextWindowTokens:       1050000,
+		MaxTokens:                 1050000,
+		MaxCompletionTokens:       128000,
+		SupportedReasoningEfforts: append([]string(nil), reasoningEfforts...),
+		Capabilities: []string{
+			"text_input",
+			"image_input",
+			"text_output",
+			"streaming",
+			"function_calling",
+			"structured_outputs",
+			"web_search",
+			"file_search",
+			"image_generation",
+			"code_interpreter",
+			"hosted_shell",
+			"apply_patch",
+			"skills",
+			"computer_use",
+			"mcp",
+			"tool_search",
+		},
+	}
+}
+
 func defaultCodexCatalogPolicy() codexCatalogPolicy {
 	return codexCatalogPolicy{
 		DefaultModel: "gpt-5.4",
@@ -102,6 +136,18 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 			"gpt-5.5-1m",
 		},
 		Overrides: map[string]CodexCatalogMetadata{
+			"gpt-5.6-sol": officialGPT56CodexMetadata(
+				"OpenAI Codex GPT-5.6 Sol",
+				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
+			),
+			"gpt-5.6-terra": officialGPT56CodexMetadata(
+				"OpenAI Codex GPT-5.6 Terra",
+				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
+			),
+			"gpt-5.6-luna": officialGPT56CodexMetadata(
+				"OpenAI Codex GPT-5.6 Luna",
+				[]string{"low", "medium", "high", "xhigh", "max"},
+			),
 			"gpt-5.5": {
 				DisplayName:         "OpenAI Codex GPT-5.5",
 				Provider:            "OpenAI Codex",
@@ -148,6 +194,9 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 
 func fallbackCodexModelIDs() []string {
 	return []string{
+		"gpt-5.6-sol",
+		"gpt-5.6-terra",
+		"gpt-5.6-luna",
 		"gpt-5.5",
 		"gpt-5.4",
 		"gpt-5.4-mini",
@@ -334,15 +383,18 @@ func DiscoverCodexModelIDs(ctx context.Context, channel *model.Channel) ([]strin
 	if channel != nil && channel.Id > 0 {
 		refreshCtx, cancel := context.WithTimeout(ctx, codexCatalogDefaultDiscoveryTimeout)
 		defer cancel()
-		if _, _, refreshErr := RefreshCodexChannelCredential(refreshCtx, channel.Id, CodexCredentialRefreshOptions{ResetCaches: false}); refreshErr == nil {
-			models, retryErr := doCodexDiscoveryRequest(ctx, channel, clientVersion)
+		if _, refreshedChannel, refreshErr := RefreshCodexChannelCredential(refreshCtx, channel.Id, CodexCredentialRefreshOptions{ResetCaches: false}); refreshErr == nil {
+			models, retryErr := doCodexDiscoveryRequest(ctx, refreshedChannel, clientVersion)
 			if retryErr == nil {
 				return models, clientVersion, nil
 			}
 			err = retryErr
 		} else if issue := ClassifyCodexCredentialIssue(refreshErr, 0); issue.IsAuth {
-			_ = RecordCodexCredentialIssue(channel, issue)
-			err = refreshErr
+			if healthErr := RecordCodexCredentialIssue(channel, issue); healthErr != nil {
+				err = errors.Join(refreshErr, fmt.Errorf("failed to persist Codex auth health: %w", healthErr))
+			} else {
+				err = refreshErr
+			}
 		}
 	}
 	return nil, clientVersion, err
@@ -439,7 +491,7 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 			continue
 		}
 		endpoints := parseCodexCatalogEndpoints(candidate.SupportedEndpoints)
-		result[candidate.ModelName] = CodexCatalogMetadata{
+		metadata := CodexCatalogMetadata{
 			DisplayName:         strings.TrimSpace(candidate.DisplayName),
 			Provider:            strings.TrimSpace(candidate.Provider),
 			OwnedBy:             strings.TrimSpace(candidate.OwnedBy),
@@ -449,6 +501,21 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 			MaxTokens:           candidate.MaxTokens,
 			MaxCompletionTokens: candidate.MaxCompletionTokens,
 		}
+		var sourceMetadata CodexCatalogMetadata
+		if err := common.UnmarshalJsonStr(candidate.SourceMetadata, &sourceMetadata); err == nil {
+			metadata.SupportedReasoningEfforts = append([]string(nil), sourceMetadata.SupportedReasoningEfforts...)
+			metadata.Capabilities = append([]string(nil), sourceMetadata.Capabilities...)
+		}
+		var overrideMetadata CodexCatalogMetadata
+		if err := common.UnmarshalJsonStr(candidate.OverrideMetadata, &overrideMetadata); err == nil {
+			if len(overrideMetadata.SupportedReasoningEfforts) > 0 {
+				metadata.SupportedReasoningEfforts = append([]string(nil), overrideMetadata.SupportedReasoningEfforts...)
+			}
+			if len(overrideMetadata.Capabilities) > 0 {
+				metadata.Capabilities = append([]string(nil), overrideMetadata.Capabilities...)
+			}
+		}
+		result[candidate.ModelName] = metadata
 	}
 	return result, nil
 }
@@ -488,10 +555,15 @@ func codexCatalogStorageReady() bool {
 		model.DB.Migrator().HasTable(&model.CodexCatalogSnapshot{})
 }
 
-func codexCatalogSignature(models []string) string {
+func codexCatalogSignature(models []string, policy codexCatalogPolicy) (string, error) {
 	normalized := normalizeCodexCatalogModelNames(models)
 	sort.Strings(normalized)
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(normalized, "\n"))))
+	policyPayload, err := common.Marshal(policy)
+	if err != nil {
+		return "", err
+	}
+	payload := strings.Join(normalized, "\n") + "\n--policy--\n" + string(policyPayload)
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(payload))), nil
 }
 
 func codexSourceMetadataByModelName(modelNames []string) map[string]CodexCatalogMetadata {
@@ -582,6 +654,12 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 	if source.MaxCompletionTokens > 0 {
 		meta.MaxCompletionTokens = source.MaxCompletionTokens
 	}
+	if len(source.SupportedReasoningEfforts) > 0 {
+		meta.SupportedReasoningEfforts = append([]string(nil), source.SupportedReasoningEfforts...)
+	}
+	if len(source.Capabilities) > 0 {
+		meta.Capabilities = append([]string(nil), source.Capabilities...)
+	}
 
 	if override.DisplayName != "" {
 		meta.DisplayName = override.DisplayName
@@ -606,6 +684,12 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 	}
 	if override.MaxCompletionTokens > 0 {
 		meta.MaxCompletionTokens = override.MaxCompletionTokens
+	}
+	if len(override.SupportedReasoningEfforts) > 0 {
+		meta.SupportedReasoningEfforts = append([]string(nil), override.SupportedReasoningEfforts...)
+	}
+	if len(override.Capabilities) > 0 {
+		meta.Capabilities = append([]string(nil), override.Capabilities...)
 	}
 
 	if meta.EndpointPreference == "" {
@@ -787,7 +871,11 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		return nil, err
 	}
 
-	signature := codexCatalogSignature(discoveredModels)
+	policy := loadCodexCatalogPolicy()
+	signature, err := codexCatalogSignature(discoveredModels, policy)
+	if err != nil {
+		return nil, err
+	}
 	latestSnapshot, _ := model.GetLatestCodexCatalogSnapshot(channelID)
 	if latestSnapshot != nil && latestSnapshot.SnapshotHash == signature {
 		existingCandidates, _ := model.GetCodexCatalogCandidatesByChannel(channelID)
@@ -822,7 +910,6 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		return nil, err
 	}
 
-	policy := loadCodexCatalogPolicy()
 	sourceMetadata := codexSourceMetadataByModelName(discoveredModels)
 	now := common.GetTimestamp()
 	seen := make(map[string]struct{}, len(discoveredModels))

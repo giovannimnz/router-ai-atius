@@ -21,6 +21,12 @@ var expectedCodexFetchModels = []string{
 	"gpt-5.3-codex-spark",
 }
 
+var expectedCodexFallbackModels = append([]string{
+	"gpt-5.6-sol",
+	"gpt-5.6-terra",
+	"gpt-5.6-luna",
+}, expectedCodexFetchModels...)
+
 func TestFetchCodexModelIDsReturnsCanonicalNativeModels(t *testing.T) {
 	models := fetchCodexModelIDs()
 
@@ -39,7 +45,7 @@ func TestFetchChannelUpstreamModelIDsUsesCanonicalCodexModels(t *testing.T) {
 	models, err := fetchChannelUpstreamModelIDs(channel)
 
 	require.NoError(t, err)
-	require.Equal(t, expectedCodexFetchModels, models)
+	require.Equal(t, expectedCodexFallbackModels, models)
 }
 
 func TestFetchModelsPostUsesCanonicalCodexModels(t *testing.T) {
@@ -65,7 +71,7 @@ func TestFetchModelsPostUsesCanonicalCodexModels(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 	require.True(t, response.Success)
 	require.Empty(t, response.Message)
-	require.Equal(t, expectedCodexFetchModels, response.Data)
+	require.Equal(t, expectedCodexFallbackModels, response.Data)
 }
 
 func TestFetchDynamicCodexModelIDsUsesAccountAwareDiscovery(t *testing.T) {

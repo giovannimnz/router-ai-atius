@@ -931,6 +931,37 @@ def cmd_models(args: argparse.Namespace) -> None:
     emit(run_psql_json(sql), args.format)
 
 
+def cmd_codex_catalog(args: argparse.Namespace) -> None:
+    if args.channel_id < 1:
+        raise CliError("--channel-id deve ser positivo.")
+    headers = list(args.header)
+    user_id = args.user_id
+    if user_id is None:
+        raw_user_id = os.environ.get("ATIUS_ROUTER_ADMIN_USER_ID", "").strip()
+        if raw_user_id:
+            try:
+                user_id = int(raw_user_id)
+            except ValueError as exc:
+                raise CliError("ATIUS_ROUTER_ADMIN_USER_ID deve ser inteiro positivo.") from exc
+    if user_id is not None:
+        if user_id < 1:
+            raise CliError("--user-id deve ser positivo.")
+        headers.append(f"New-Api-User: {user_id}")
+    has_user_header = any(header.partition(":")[0].strip().lower() == "new-api-user" for header in headers)
+    if args.execute and not has_user_header:
+        raise CliError("Informe --user-id ou ATIUS_ROUTER_ADMIN_USER_ID para autenticacao root.")
+    request_api(
+        method="POST",
+        path="/api/option/codex_catalog/sync",
+        base_url=args.base_url,
+        data=json.dumps({"channel_id": args.channel_id}),
+        bearer=args.bearer,
+        headers_extra=headers,
+        timeout=args.timeout,
+        execute=args.execute,
+    )
+
+
 def cmd_logs(args: argparse.Namespace) -> None:
     limit = max(1, min(args.limit, 500))
     sql = f"""
@@ -1634,6 +1665,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--from-channels", action="store_true")
     add_common_format(p)
     p.set_defaults(func=cmd_models)
+
+    p_codex_catalog = sub.add_parser("codex-catalog", help="Operacoes root do catalogo Codex.")
+    codex_catalog_sub = p_codex_catalog.add_subparsers(dest="codex_catalog_action", required=True)
+    p = codex_catalog_sub.add_parser("sync", help="Executa discovery, validacao e promocao do catalogo Codex.")
+    p.add_argument("--channel-id", type=int, default=5)
+    p.add_argument("--user-id", type=int, help="ID do usuario root; tambem aceita env ATIUS_ROUTER_ADMIN_USER_ID.")
+    add_api_transport_args(p)
+    p.set_defaults(func=cmd_codex_catalog, timeout=330.0)
 
     p = sub.add_parser("logs", help="Atalho para ultimos usage logs sem campos sensiveis.")
     p.add_argument("--limit", type=int, default=20)

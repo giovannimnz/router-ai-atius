@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -751,7 +753,8 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 				},
 			},
 		},
-		"store": false,
+		"store":  false,
+		"stream": true,
 	}
 	body, err := common.Marshal(payload)
 	if err != nil {
@@ -768,7 +771,7 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 		req.Header.Set("OpenAI-Beta", "responses=experimental")
 		req.Header.Set("originator", "codex_cli_rs")
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Accept", "text/event-stream")
 
 		resp, doErr := client.Do(req)
 		if doErr != nil {
@@ -782,6 +785,10 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return strings.TrimSpace(string(respBody)), resp.StatusCode, fmt.Errorf("codex validation failed: status=%d", resp.StatusCode)
+		}
+		if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+			text, streamErr := extractCodexValidationStreamText(respBody)
+			return text, resp.StatusCode, streamErr
 		}
 
 		var response dto.OpenAIResponsesResponse
@@ -813,6 +820,45 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 	}
 	text, _, err = doRequest(updatedKey.AccessToken)
 	return text, err
+}
+
+func extractCodexValidationStreamText(body []byte) (string, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	var textBuilder strings.Builder
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var event struct {
+			Type  string `json:"type"`
+			Delta string `json:"delta"`
+			Text  string `json:"text"`
+		}
+		if err := common.Unmarshal([]byte(data), &event); err != nil {
+			return "", fmt.Errorf("codex validation returned invalid SSE JSON: %w", err)
+		}
+		switch event.Type {
+		case "response.output_text.delta":
+			textBuilder.WriteString(event.Delta)
+		case "response.output_text.done":
+			if textBuilder.Len() == 0 {
+				textBuilder.WriteString(event.Text)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	text := strings.TrimSpace(textBuilder.String())
+	if text == "" {
+		return "", errors.New("codex validation stream returned no output text")
+	}
+	return text, nil
 }
 
 func syncCodexChannelModels(channel *model.Channel, promotedModels []string) error {

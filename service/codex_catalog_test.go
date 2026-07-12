@@ -17,13 +17,17 @@ import (
 func TestValidateCodexCandidateUsesListInput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
-			Input []map[string]any `json:"input"`
+			Input  []map[string]any `json:"input"`
+			Stream bool             `json:"stream"`
 		}
 		require.NoError(t, common.DecodeJson(r.Body, &payload))
 		require.Len(t, payload.Input, 1)
+		assert.True(t, payload.Stream)
 		assert.Equal(t, "message", payload.Input[0]["type"])
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"Ok"}]}]}`))
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"O\"}\n\n" +
+			"data: {\"type\":\"response.output_text.delta\",\"delta\":\"k\"}\n\n" +
+			"data: [DONE]\n\n"))
 	}))
 	defer server.Close()
 

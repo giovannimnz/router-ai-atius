@@ -3,6 +3,7 @@ package relay
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,4 +24,9 @@ func TestIsResponsesEventStreamContentType(t *testing.T) {
 			assert.Equal(t, tt.want, isResponsesEventStreamContentType(tt.contentType))
 		})
 	}
+}
+
+func TestIsResponsesEventStreamResponseTreatsCodexAsStreamWithoutHeader(t *testing.T) {
+	assert.True(t, isResponsesEventStreamResponse("", constant.ChannelTypeCodex))
+	assert.False(t, isResponsesEventStreamResponse("", constant.ChannelTypeOpenAI))
 }

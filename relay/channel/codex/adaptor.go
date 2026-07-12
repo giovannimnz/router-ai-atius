@@ -99,8 +99,28 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 	if isCompact {
 		return request, nil
 	}
+	if len(request.Input) > 0 {
+		var textInput string
+		if err := common.Unmarshal(request.Input, &textInput); err == nil {
+			normalizedInput, marshalErr := common.Marshal([]map[string]any{
+				{
+					"type": "message",
+					"role": "user",
+					"content": []map[string]any{
+						{"type": "input_text", "text": textInput},
+					},
+				},
+			})
+			if marshalErr != nil {
+				return nil, marshalErr
+			}
+			request.Input = normalizedInput
+		}
+	}
 	// codex: store must be false
 	request.Store = json.RawMessage("false")
+	stream := true
+	request.Stream = &stream
 	// rm max_output_tokens
 	request.MaxOutputTokens = nil
 	request.Temperature = nil
@@ -182,11 +202,7 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	// Clients may omit it or include parameters like `application/json; charset=utf-8`,
 	// which can be rejected by the upstream. Force the exact media type.
 	req.Set("Content-Type", "application/json")
-	if info.IsStream {
-		req.Set("Accept", "text/event-stream")
-	} else if req.Get("Accept") == "" {
-		req.Set("Accept", "application/json")
-	}
+	req.Set("Accept", "text/event-stream")
 
 	return nil
 }

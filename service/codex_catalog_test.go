@@ -43,6 +43,27 @@ func TestValidateCodexCandidateUsesListInput(t *testing.T) {
 	assert.Equal(t, "Ok", output)
 }
 
+func TestValidateCodexCandidateDetectsStreamWithoutContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("event: response.output_text.delta\n" +
+			"data: {\"type\":\"response.output_text.delta\",\"delta\":\"Ok\"}\n\n" +
+			"event: response.output_text.done\n" +
+			"data: {\"type\":\"response.output_text.done\",\"text\":\"Ok\"}\n\n"))
+	}))
+	defer server.Close()
+
+	channel := &model.Channel{
+		Id:   5,
+		Type: constant.ChannelTypeCodex,
+		Key:  `{"access_token":"access-test","account_id":"acct-test"}`,
+	}
+	channel.BaseURL = common.GetPointer(server.URL)
+
+	output, err := validateCodexCandidate(context.Background(), channel, "gpt-5.4")
+	require.NoError(t, err)
+	assert.Equal(t, "Ok", output)
+}
+
 func TestSyncCodexChannelModelsRejectsEmptyPromotion(t *testing.T) {
 	channel := &model.Channel{Id: 5, Models: "gpt-5.4,gpt-5.4-mini"}
 

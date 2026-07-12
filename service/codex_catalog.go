@@ -786,7 +786,8 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return strings.TrimSpace(string(respBody)), resp.StatusCode, fmt.Errorf("codex validation failed: status=%d", resp.StatusCode)
 		}
-		if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+		if strings.Contains(contentType, "text/event-stream") || looksLikeCodexValidationStream(respBody) {
 			text, streamErr := extractCodexValidationStreamText(respBody)
 			return text, resp.StatusCode, streamErr
 		}
@@ -820,6 +821,11 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 	}
 	text, _, err = doRequest(updatedKey.AccessToken)
 	return text, err
+}
+
+func looksLikeCodexValidationStream(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	return bytes.HasPrefix(trimmed, []byte("event:")) || bytes.HasPrefix(trimmed, []byte("data:"))
 }
 
 func extractCodexValidationStreamText(body []byte) (string, error) {

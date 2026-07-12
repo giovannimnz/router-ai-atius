@@ -134,6 +134,7 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 	return codexCatalogPolicy{
 		DefaultModel: "gpt-5.4",
 		Denylist: []string{
+			"codex-auto-review",
 			"gpt-5.4-1m",
 			"gpt-5.5-1m",
 		},
@@ -204,6 +205,12 @@ func fallbackCodexModelIDs() []string {
 		"gpt-5.4-mini",
 		"gpt-5.3-codex-spark",
 	}
+}
+
+func codexCatalogCandidateModelIDs(discovered []string) []string {
+	candidates := append([]string(nil), discovered...)
+	candidates = append(candidates, fallbackCodexModelIDs()...)
+	return normalizeCodexCatalogModelNames(candidates)
 }
 
 func readOptionMapValue(key string) string {
@@ -935,6 +942,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 	if err != nil {
 		return nil, err
 	}
+	discoveredModels = codexCatalogCandidateModelIDs(discoveredModels)
 
 	policy := loadCodexCatalogPolicy()
 	signature, err := codexCatalogSignature(discoveredModels, policy)

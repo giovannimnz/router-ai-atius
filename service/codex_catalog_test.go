@@ -126,6 +126,33 @@ func TestFallbackCodexModelIDsIncludesOfficialGPT56Models(t *testing.T) {
 	assert.Contains(t, fallback, "gpt-5.6-luna")
 }
 
+func TestCodexCatalogCandidateModelIDsCombinesDiscoveryAndCuratedFallback(t *testing.T) {
+	candidates := codexCatalogCandidateModelIDs([]string{"gpt-5.4", "codex-auto-review"})
+
+	assert.Equal(t, 1, countModelName(candidates, "gpt-5.4"))
+	assert.Contains(t, candidates, "codex-auto-review")
+	assert.Contains(t, candidates, "gpt-5.5")
+	assert.Contains(t, candidates, "gpt-5.6-sol")
+	assert.Contains(t, candidates, "gpt-5.6-terra")
+	assert.Contains(t, candidates, "gpt-5.6-luna")
+}
+
+func TestDefaultCodexCatalogPolicyDeniesInternalAutoReviewModel(t *testing.T) {
+	policy := defaultCodexCatalogPolicy()
+
+	assert.True(t, isDeniedCodexModel("codex-auto-review", policy))
+}
+
+func countModelName(models []string, target string) int {
+	count := 0
+	for _, modelName := range models {
+		if modelName == target {
+			count++
+		}
+	}
+	return count
+}
+
 func TestCodexCatalogSignatureChangesWithPolicy(t *testing.T) {
 	models := []string{"gpt-5.6-sol", "gpt-5.4"}
 	basePolicy := defaultCodexCatalogPolicy()

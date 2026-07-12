@@ -18,11 +18,10 @@ Keep the router operational and upstream-compatible while making every change tr
 
 ### Active
 
-- [ ] Phase 28: create a safety-first branch/worktree hygiene pass before any destructive local cleanup.
-- [ ] Phase 28: promote a single canonical PT-native upstream handoff branch and retire ambiguous local PT lanes.
+- [ ] Phase 29: executar restore rehearsal e shadow deployment k3s com decisão formal de go/no-go.
+- [ ] Phase 30: realizar cutover público somente após go da Phase 29, com rollback e soak explícitos.
 - [ ] Phase 21: hand off the already-implemented PT-BR native lane through one clean upstream PR branch.
 - [ ] Phase 21: keep the upstream PR candidate free of `.planning`, Graphify, Obsidian, runtime, DB/catalog, Podman, provider-routing, or Atius-only content.
-- [ ] Phase 24 follow-up state: preserve the canonical router DB/catalog recovery decisions already recorded in `STATE.md`.
 
 ### Out of Scope
 
@@ -32,7 +31,7 @@ Keep the router operational and upstream-compatible while making every change tr
 
 ## Context
 
-The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Phase 21 is intentionally narrow: local first PT-BR native language implementation, then optional clean upstream handoff.
+The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Production currently uses rootless Podman and the canonical host PostgreSQL/PgBouncer path. Phase 32 shipped the durable Codex OAuth lifecycle; the next runtime track is the k3s shadow/restore gate in Phase 29.
 
 The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implementation must start from a clean worktree or branch based on current `upstream/main`.
 
@@ -51,9 +50,9 @@ The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implem
 | Phase 21 uses current `QuantumNous/new-api` `upstream/main` as baseline | Prevents stale or contaminated PT-BR work from becoming the implementation contract | Implemented locally; pending handoff |
 | Phase 21 adds `pt` through existing backend/default/classic i18n surfaces | Matches upstream-native architecture and avoids fork-only translation layers | Implemented locally; pending handoff |
 | Phase 21 planning artifacts stay outside any upstream PR branch | Keeps the potential upstream contribution reviewable and narrow | Implemented locally; pending handoff |
-| Codex is the active GSD runtime in this checkout | Local skills and agents are installed under `~/.codex` | Pending execution |
-| PT-native upstream handoff must converge on a single canonical remote branch | Prevents branch drift and accidental PR creation from polluted local integration branches | Planned |
-| `origin/main` is the only trustworthy fork mainline | Local `main` worktrees may drift and must be recreated from remote truth when hygiene is required | Planned |
+| Codex is the active GSD runtime in this checkout | Local skills and agents are installed under `~/.codex` | Validated operationally |
+| PT-native upstream handoff must converge on a single canonical remote branch | Prevents branch drift and accidental PR creation from polluted local integration branches | Implemented as `origin/feat/phase21-pt-native-upstream` |
+| `origin/main` is the only trustworthy fork mainline | Local `main` worktrees may drift and must be recreated from remote truth when hygiene is required | Validated in Phase 28 |
 | Codex type `57` nao expoe Base URL/API Key genericos | Existe um unico endpoint Codex e material OAuth nao deve aparecer na UI | Validated in Phase 32 |
 | Credencial Codex valida exige probe e capacidade de renovacao | Expiracao local futura nao prova autenticidade upstream nem autorrenovacao | Validated in Phase 32 |
 | Access token do Codex CLI e somente break-glass | Copiar o refresh token compartilharia rotacao e poderia quebrar o CLI | Replaced by Router-owned OAuth in Phase 32 |

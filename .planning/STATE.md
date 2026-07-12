@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.17
 milestone_name: — Codex OAuth lifecycle and upstream auth diagnostics
-current_phase: 32
-status: completed
+current_phase: null
+status: Awaiting next milestone
 stopped_at: Phase 32 complete
-last_updated: "2026-07-12T15:52:14.034Z"
+last_updated: "2026-07-12T17:25:58.448Z"
 last_activity: 2026-07-12
+last_activity_desc: Milestone v2.17 completed and archived
 progress:
   total_phases: 1
   completed_phases: 1
@@ -19,12 +20,10 @@ progress:
 
 ## Current Position
 
-Phase: 32 (codex-oauth-lifecycle-and-upstream-auth-diagnostics) — COMPLETE
-Plan: 4 of 4 complete
-**Milestone:** v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
-**Phase:** 32
-**Status:** Milestone complete
-**Last activity:** 2026-07-12
+Phase: Milestone v2.17 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-12 — Milestone v2.17 completed and archived
 
 ## What Was Done
 
@@ -254,3 +253,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-12)
 
 **Core value:** Keep the router operational and upstream-compatible while making every change traceable to a narrow, validated plan.
 **Current focus:** Milestone v2.17 complete; next operational track remains Phase 29 k3s shadow/restore/go-no-go.
+
+## Operator Next Steps
+
+- Start the next milestone with $gsd-new-milestone

@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v2.17
 milestone_name: Codex OAuth lifecycle and upstream auth diagnostics
 current_phase: 32
-status: v2.17 planned after 2026-07-10 Codex token_invalidated hotfix; v2.16 k3s Phase 29/30 remain pending but deferred
-stopped_at: Phase 32 context created from Codex upstream OAuth invalidation incident
-last_updated: "2026-07-10T07:45:00-03:00"
-last_activity: 2026-07-10
-last_activity_desc: Planned Codex OAuth lifecycle hardening after channel 5 upstream token_invalidated hotfix
+status: v2.17 implementation and live API validation complete; blocked on authenticated browser callback for Router-owned refresh token
+stopped_at: Phase 32 plan 32-04 OAuth callback gate
+last_updated: "2026-07-12T06:10:00-03:00"
+last_activity: 2026-07-12
+last_activity_desc: Phase 32 deployed and validated; 401 token_invalidated cleared, GPT-5.6 Sol/Terra live, OAuth regeneration awaits authenticated browser
 progress:
   total_phases: 32
   completed_phases: 8
   total_plans: 34
-  completed_plans: 23
-  percent: 68
+  completed_plans: 26
+  percent: 76
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 32 (codex-oauth-lifecycle-and-upstream-auth-diagnostics) — PLANNED
-Plan: 0 of 4
+Phase: 32 (codex-oauth-lifecycle-and-upstream-auth-diagnostics) — BLOCKED
+Plan: 3 of 4 complete; 32-04 blocked only on live OAuth callback
 **Milestone:** v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
 **Phase:** 32
-**Status:** Planned from the 2026-07-10 Codex upstream OAuth invalidation incident
-**Last activity:** 2026-07-10 — channel 5 hotfix expires 2026-07-17T11:04:04Z; definitive Router-owned OAuth regeneration and upstream-auth diagnostics are now planned
+**Status:** API/UI/runtime complete; Router-owned OAuth callback pending
+**Last activity:** 2026-07-12 — live smokes 200, Sol/Terra promoted, credential probe OK; access-token fallback still expires 2026-07-17T11:04:04Z
 
 ## What Was Done
 

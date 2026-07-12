@@ -433,36 +433,37 @@ Plans:
 
 ---
 
-## v2.17 — Codex OAuth lifecycle and upstream auth diagnostics [PLANNED]
+## v2.17 — Codex OAuth lifecycle and upstream auth diagnostics [BLOCKED]
 
-**Status:** Planned
+**Status:** Blocked only on authenticated browser callback for Router-owned refresh token; implementation and live API validation complete
 
 ### Phase 32: codex-oauth-lifecycle-and-upstream-auth-diagnostics
 
 **Goal:** Transformar o hotfix de `token_invalidated` do channel 5 `OpenAI - Codex` em um fluxo definitivo: remover superficies genericas incorretas do editor Codex, separar `Atualizar credencial` de `Regenerar credencial`, gerar credencial OAuth propria do Router com `refresh_token`, validar autenticidade contra upstream em vez de confiar apenas em expiracao local, expor erro especifico para auth upstream invalida, proteger tudo no fork-sync e documentar a operacao em PT-BR.
-**Status:** Planned
+**Status:** Blocked on OAuth callback; 5/6 requirements verified
 **Milestone:** v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
 **Requirements:** PHASE-32-CODEX-UI-SINGLE-ENDPOINT, PHASE-32-CODEX-OAUTH-REGENERATE, PHASE-32-CODEX-CREDENTIAL-HEALTH, PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS, PHASE-32-FORK-SYNC-GUARD, PHASE-32-VALIDATION-DOCS-SHIP
-**Depends on:** Phase 24 runtime/catalog recovery, Phase 26 Codex dynamic discovery, Phase 27 official Codex auth guidance, and hotfix evidence from Obsidian note `2026-07-10-router-ai-atius-codex-token-invalidated-hotfix.md`.
+**Prerequisites completed:** Phase 24 runtime/catalog recovery, Phase 26 Codex dynamic discovery, and Phase 27 official Codex auth guidance.
+**Evidence:** Obsidian note `2026-07-10-router-ai-atius-codex-token-invalidated-hotfix.md`.
 **Plans:** 4 plans (4 waves)
 
 Plans:
 
 **Wave 1**
 
-- [ ] 32-01-PLAN.md - Backend Codex OAuth lifecycle and upstream-auth errors
+- [x] 32-01-PLAN.md - Backend Codex OAuth lifecycle and upstream-auth errors
 
 **Wave 2** *(blocked on Wave 1 backend API contract)*
 
-- [ ] 32-02-PLAN.md - UI Codex-specific credential panel
+- [x] 32-02-PLAN.md - UI Codex-specific credential panel
 
 **Wave 3** *(can run after backend/UI contracts are stable)*
 
-- [ ] 32-03-PLAN.md - Browser-assisted operator flow, docs and fork-sync guards
+- [x] 32-03-PLAN.md - Browser-assisted operator flow, docs and fork-sync guards
 
 **Wave 4** *(blocked on Waves 1-3)*
 
-- [ ] 32-04-PLAN.md - Live validation, deploy, commit, push and learnings
+- [ ] 32-04-PLAN.md - Live validation complete; blocked only on Router-owned OAuth callback/refresh token
 
 ---
 

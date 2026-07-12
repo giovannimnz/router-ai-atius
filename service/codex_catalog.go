@@ -28,6 +28,7 @@ const (
 	codexCatalogDefaultChannelID           = 5
 	codexCatalogDefaultClientVersion       = "0.111.0"
 	codexCatalogDefaultReply               = "Ok"
+	codexCatalogValidationContractVersion  = "2"
 	codexCatalogDefaultDiscoveryTimeout    = 20 * time.Second
 	codexCatalogDefaultValidationTimeout   = 30 * time.Second
 	codexCatalogDefaultModelOptionKey      = "CodexCatalogDefaultModel"
@@ -571,7 +572,9 @@ func codexCatalogSignature(models []string, policy codexCatalogPolicy) (string, 
 	if err != nil {
 		return "", err
 	}
-	payload := strings.Join(normalized, "\n") + "\n--policy--\n" + string(policyPayload)
+	payload := strings.Join(normalized, "\n") +
+		"\n--validation-contract--\n" + codexCatalogValidationContractVersion +
+		"\n--policy--\n" + string(policyPayload)
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(payload))), nil
 }
 

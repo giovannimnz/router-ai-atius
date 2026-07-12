@@ -433,19 +433,19 @@ Plans:
 
 ---
 
-## v2.17 — Codex OAuth lifecycle and upstream auth diagnostics [BLOCKED]
+## v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
 
-**Status:** Blocked only on authenticated browser callback for Router-owned refresh token; implementation and live API validation complete
+**Status:** Complete (2026-07-12)
 
 ### Phase 32: codex-oauth-lifecycle-and-upstream-auth-diagnostics
 
 **Goal:** Transformar o hotfix de `token_invalidated` do channel 5 `OpenAI - Codex` em um fluxo definitivo: remover superficies genericas incorretas do editor Codex, separar `Atualizar credencial` de `Regenerar credencial`, gerar credencial OAuth propria do Router com `refresh_token`, validar autenticidade contra upstream em vez de confiar apenas em expiracao local, expor erro especifico para auth upstream invalida, proteger tudo no fork-sync e documentar a operacao em PT-BR.
-**Status:** Blocked on OAuth callback; 5/6 requirements verified
+**Status:** Complete; 6/6 requirements verified
 **Milestone:** v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
 **Requirements:** PHASE-32-CODEX-UI-SINGLE-ENDPOINT, PHASE-32-CODEX-OAUTH-REGENERATE, PHASE-32-CODEX-CREDENTIAL-HEALTH, PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS, PHASE-32-FORK-SYNC-GUARD, PHASE-32-VALIDATION-DOCS-SHIP
 **Prerequisites completed:** Phase 24 runtime/catalog recovery, Phase 26 Codex dynamic discovery, and Phase 27 official Codex auth guidance.
 **Evidence:** Obsidian note `2026-07-10-router-ai-atius-codex-token-invalidated-hotfix.md`.
-**Plans:** 4 plans (4 waves)
+**Plans:** 4/4 plans complete
 
 Plans:
 
@@ -463,7 +463,7 @@ Plans:
 
 **Wave 4** *(blocked on Waves 1-3)*
 
-- [ ] 32-04-PLAN.md - Live validation complete; blocked only on Router-owned OAuth callback/refresh token
+- [x] 32-04-PLAN.md - Live OAuth regeneration, probe, refresh and local/public validation complete
 
 ---
 

@@ -24,6 +24,7 @@ import type { CodexCredentialMetadata } from '../../types'
 import {
   CodexCredentialPanel,
   isCodexChannelType,
+  shouldWarnAboutBaseUrl,
 } from './codex-credential-panel'
 
 const translations: Record<string, string> = {
@@ -92,6 +93,9 @@ describe('CodexCredentialPanel', () => {
   test('uses the type 57 boundary that gates generic credential fields', () => {
     assert.equal(isCodexChannelType(57), true)
     assert.equal(isCodexChannelType(1), false)
+    assert.equal(shouldWarnAboutBaseUrl(57, 'https://example.com/v1'), false)
+    assert.equal(shouldWarnAboutBaseUrl(1, 'https://example.com/v1'), true)
+    assert.equal(shouldWarnAboutBaseUrl(1, 'https://example.com'), false)
   })
 
   test('renders healthy sanitized metadata and distinct lifecycle actions', () => {

@@ -9,8 +9,7 @@ counts:
   patterns: 4
   surprises: 4
 missing_artifacts:
-  - "32-UAT.md"
-  - "32-04-SUMMARY.md (plan blocked; 32-04-PARTIAL.md used)"
+  - "32-UAT.md (validacao live registrada em 32-VERIFICATION.md e 32-04-SUMMARY.md)"
 ---
 
 # Phase 32 Learnings: codex-oauth-lifecycle-and-upstream-auth-diagnostics
@@ -36,10 +35,10 @@ O catalogo avalia tanto os slugs dinamicos quanto a lista oficial curada e promo
 **Source:** 32-04-PARTIAL.md
 
 ### Nao fechar sem refresh token Router-owned
-A fase permanece bloqueada mesmo com API saudavel enquanto a credencial live for access-token-only.
+A fase so foi fechada depois que a credencial live deixou de ser access-token-only e o refresh manual passou.
 
 **Rationale:** Expiracao futura nao substitui renovacao automatica nem prova a conclusao do fluxo OAuth definitivo.
-**Source:** 32-VERIFICATION.md
+**Source:** 32-04-SUMMARY.md
 
 ## Lessons
 
@@ -62,10 +61,10 @@ Assinar apenas modelos e policy reutiliza rejeicoes antigas quando a semantica d
 **Source:** 32-VERIFICATION.md
 
 ### Expiracao local futura pode coexistir com regeneracao obrigatoria
-O channel 5 esta autenticado e com probe OK, mas continua corretamente marcado para regeneracao por falta de refresh token.
+O hotfix tinha expiracao futura e probe OK, mas continuava corretamente marcado para regeneracao por falta de refresh token.
 
 **Context:** Health deve combinar campos locais com capacidade real de renovacao e probe upstream.
-**Source:** 32-04-PARTIAL.md
+**Source:** 32-04-SUMMARY.md
 
 ## Patterns
 
@@ -79,19 +78,19 @@ Force streaming apenas no request upstream e escolha forwarding ou buffering con
 Una discovery e candidatos oficiais, aplique denylist local e use probe deterministico antes de criar abilities.
 
 **When to use:** Rollouts de modelos onde discovery e disponibilidade efetiva divergem por tenant.
-**Source:** 32-04-PARTIAL.md
+**Source:** 32-04-SUMMARY.md
 
 ### Build limitado com caches persistentes
 Use wrapper `cpus=0.8`, compilador serial e mounts persistentes de `GOMODCACHE`/`GOCACHE`.
 
 **When to use:** Builds Go em host de 4 vCPU com teto total de 20% e camadas Podman que nao preservam cache suficiente.
-**Source:** 32-04-PARTIAL.md
+**Source:** 32-04-SUMMARY.md
 
 ### Credencial administrativa efemera com cleanup garantido
 Crie token aleatorio apenas para a chamada administrativa, execute em `try/finally` e valide no banco que foi apagado.
 
 **When to use:** Probes live administrativos quando a sessao de navegador nao esta disponivel.
-**Source:** 32-04-PARTIAL.md
+**Source:** 32-04-SUMMARY.md
 
 ## Surprises
 
@@ -113,8 +112,24 @@ Sol respondeu `Ok.` quando o gate esperava `Ok`.
 **Impact:** Comparacao textual estrita gerou falso negativo e exigiu normalizacao terminal minima.
 **Source:** 32-VERIFICATION.md
 
-### O blocker final e humano, nao tecnico
-Codigo, UI, build, catalogo e APIs ficaram verdes, mas o perfil Brave nao estava logado e o Vault estava selado.
+### O ultimo gate exigiu handoff humano, mas tornou-se verificavel pela API
+O callback precisou do browser autenticado; depois do handoff, metadata, probe e refresh comprovaram a credencial Router-owned sem expor segredos.
 
-**Impact:** A credencial renovavel nao pode ser fabricada nem copiada do Codex CLI sem violar o isolamento OAuth planejado.
-**Source:** 32-04-PARTIAL.md
+**Impact:** O fechamento deve esperar o callback real, mas toda a verificacao posterior pode ser automatizada com metadata sanitizada.
+**Source:** 32-04-SUMMARY.md
+
+### CLI local e runtime podem apontar para bancos homonimos diferentes
+O `clianything` host default consultou um PostgreSQL local, enquanto o runtime
+usava `10.11.1.11:6432/DBRouterAiAtius`.
+
+**Impact:** Validacao operacional precisa conferir host, porta e database do
+`SQL_DSN` live antes de qualquer leitura ou escrita administrativa.
+**Source:** 32-04-SUMMARY.md
+
+### Campos ocultos nao bastam se efeitos globais continuam ativos
+O type 57 ocultava Base URL, mas o efeito global de warning ainda observava um
+valor legado terminado em `/v1`.
+
+**Impact:** Boundaries de UI especificas por provider devem governar tambem
+efeitos, validacoes e toasts, nao apenas markup visivel.
+**Source:** 32-04-SUMMARY.md

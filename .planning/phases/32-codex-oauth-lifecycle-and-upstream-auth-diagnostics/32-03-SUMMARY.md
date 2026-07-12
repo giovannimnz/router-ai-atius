@@ -3,6 +3,8 @@ phase: 32-codex-oauth-lifecycle-and-upstream-auth-diagnostics
 plan: 32-03
 status: complete
 completed: 2026-07-12
+requirements_completed:
+  - PHASE-32-FORK-SYNC-GUARD
 ---
 
 # 32-03 Summary - Operacao e fork-sync

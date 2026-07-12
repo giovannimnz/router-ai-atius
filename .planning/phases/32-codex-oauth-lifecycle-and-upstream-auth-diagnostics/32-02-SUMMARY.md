@@ -3,6 +3,8 @@ phase: 32-codex-oauth-lifecycle-and-upstream-auth-diagnostics
 plan: 32-02
 status: complete
 completed: 2026-07-12
+requirements_completed:
+  - PHASE-32-CODEX-UI-SINGLE-ENDPOINT
 ---
 
 # 32-02 Summary - UI OAuth Codex

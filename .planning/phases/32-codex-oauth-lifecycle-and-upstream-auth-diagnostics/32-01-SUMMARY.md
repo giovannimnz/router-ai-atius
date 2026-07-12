@@ -3,6 +3,10 @@ phase: 32-codex-oauth-lifecycle-and-upstream-auth-diagnostics
 plan: 32-01
 status: complete
 completed: 2026-07-12
+requirements_completed:
+  - PHASE-32-CODEX-OAUTH-REGENERATE
+  - PHASE-32-CODEX-CREDENTIAL-HEALTH
+  - PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS
 ---
 
 # 32-01 Summary - Backend OAuth e diagnosticos

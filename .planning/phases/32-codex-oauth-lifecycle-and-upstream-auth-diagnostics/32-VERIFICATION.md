@@ -1,8 +1,9 @@
 ---
 phase: 32-codex-oauth-lifecycle-and-upstream-auth-diagnostics
-status: blocked
+status: passed
 verified: 2026-07-12
-score: 5/6 requirements complete
+verified_at: 2026-07-12T13:03:00-03:00
+score: 6/6 requirements complete
 ---
 
 # Phase 32 Verification
@@ -10,8 +11,8 @@ score: 5/6 requirements complete
 | Requirement | Status | Evidence |
 |---|---|---|
 | UI Codex single endpoint | PASS | UI especifica type 57; smoke 4/4, typecheck e build verdes |
-| OAuth regenerate | BLOCKED | Fluxo implementado; live sem login ChatGPT e Vault selado; channel 5 ainda sem refresh token |
-| Credential health | PASS | Metadata e probe live 200; `authenticated=true`, `last_probe_status=ok`, `requires_regeneration=true` coerente |
+| OAuth regenerate | PASS | Callback PKCE concluido live; channel 5 `router_owned`, com `has_refresh_token=true` e renovacao propria do Router |
+| Credential health | PASS | Metadata, probe e refresh live 200; `authenticated=true`, `last_probe_status=ok`, `requires_regeneration=false` |
 | Upstream auth errors | PASS | Taxonomia e testes; negativo interno 401 sem marcador upstream |
 | Fork-sync guard | PASS | Checker verde; `omni-srv-admin` commit `9dd574597` |
 | Validation/docs/ship | PASS | Testes Go, UI, build 20%, deploy, smokes publicos, docs, commits e pushes concluidos |
@@ -26,7 +27,15 @@ score: 5/6 requirements complete
 - `gpt-5.6-terra` Responses stream: 200.
 - `clianything status --strict`: PASS.
 - Go: controller/service/relay/codex PASS.
+- Regeneracao concluida em `2026-07-12T12:38:03-03:00`.
+- Probe upstream concluido com `success=true` e `last_probe_status=ok`.
+- Refresh manual concluido em `2026-07-12T12:47:27-03:00`; nova expiracao `2026-07-22T12:47:27-03:00`.
+- Chat non-stream, chat stream e Responses stream repetidos local e publicamente: HTTP 200.
+- Token interno invalido repetido publicamente: HTTP 401 classificado como auth interna do Router.
+- Containers nao-infra continuam limitados a `0.800 CPU`.
+- Boundary do warning Base URL type 57: teste 4/4, typecheck PASS e build Rsbuild PASS sob wrapper de 20% CPU.
+- Integration checker: cinco fluxos E2E wired; nenhum export/route orfao. O negativo upstream destrutivo live foi substituido pela cobertura deterministica ja validada.
 
 ## Conclusao
 
-O incidente `401 token_invalidated` nao esta ativo e todos os contratos de API estao saudaveis. A fase permanece bloqueada somente no handoff OAuth humano necessario para substituir o fallback por credencial Router-owned renovavel.
+O incidente `401 token_invalidated` nao esta ativo, o fallback foi substituido por uma credencial OAuth Router-owned renovavel e todos os contratos de API permanecem saudaveis. A Phase 32 esta concluida.

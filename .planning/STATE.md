@@ -1,31 +1,30 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.17
-milestone_name: Codex OAuth lifecycle and upstream auth diagnostics
+milestone_name: — Codex OAuth lifecycle and upstream auth diagnostics
 current_phase: 32
-status: v2.17 implementation and live API validation complete; blocked on authenticated browser callback for Router-owned refresh token
-stopped_at: Phase 32 plan 32-04 OAuth callback gate
-last_updated: "2026-07-12T06:10:00-03:00"
+status: completed
+stopped_at: Phase 32 complete
+last_updated: "2026-07-12T15:52:14.034Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 32 learnings extracted after deploy validation; OAuth regeneration awaits authenticated browser
 progress:
-  total_phases: 32
-  completed_phases: 8
-  total_plans: 34
-  completed_plans: 26
-  percent: 76
+  total_phases: 1
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 4
+  percent: 100
 ---
 
 # STATE.md — atius-ai-router
 
 ## Current Position
 
-Phase: 32 (codex-oauth-lifecycle-and-upstream-auth-diagnostics) — BLOCKED
-Plan: 3 of 4 complete; 32-04 blocked only on live OAuth callback
+Phase: 32 (codex-oauth-lifecycle-and-upstream-auth-diagnostics) — COMPLETE
+Plan: 4 of 4 complete
 **Milestone:** v2.17 — Codex OAuth lifecycle and upstream auth diagnostics
 **Phase:** 32
-**Status:** API/UI/runtime complete; Router-owned OAuth callback pending
-**Last activity:** 2026-07-12 — live smokes 200, Sol/Terra promoted, credential probe OK; access-token fallback still expires 2026-07-17T11:04:04Z
+**Status:** Milestone complete
+**Last activity:** 2026-07-12
 
 ## What Was Done
 
@@ -146,35 +145,29 @@ Runbook: docs/PODMAN.md
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
 | v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (preparation package only; no public cutover) |
 | v2.16 | K3s shadow, cutover, and planning hygiene | 🚧 in progress — Phase 31 done; 29/30 pending |
-| v2.17 | Codex OAuth lifecycle and upstream auth diagnostics | 📋 planned — Phase 32 context created after channel 5 upstream token invalidation |
+| v2.17 | Codex OAuth lifecycle and upstream auth diagnostics | ✅ done 2026-07-12 — Router-owned OAuth, probe, refresh e smokes completos |
 
 ## Next actions
 
-1. **Phase 32 — Codex OAuth lifecycle and upstream auth diagnostics**:
-   - remover UI generica de `Base URL`/`API Key` para channel type `57`
-   - separar `Atualizar credencial` de `Regenerar credencial`
-   - gerar credencial OAuth propria do Router com `refresh_token`
-   - classificar `token_invalidated` upstream separadamente de API key interna do Router
-   - validar build/smoke/docs/commit/push antes de fechar
+1. **Phase 29 — k3s shadow, restore, and go/no-go**:
+   - preencher secrets do namespace `router-ai-atius`
+   - executar restore rehearsal e shadow deploy real
+   - rodar smoke local/sombra e registrar go/no-go
 2. **Optional handoff v2.12 Phase 21 — feat-pt-native-pr**:
    - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
    - Validar o diff contra `upstream/main`
    - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
-3. **Phase 29 — k3s shadow, restore, and go/no-go**:
-   - preencher secrets do namespace `router-ai-atius`
-   - executar restore rehearsal e shadow deploy real
-   - rodar smoke local/sombra e registrar go/no-go
-4. **Phase 30 — public cutover and rollback soak**:
+3. **Phase 30 — public cutover and rollback soak**:
    - mover Apache apenas se a Phase 29 produzir go real
    - validar smoke publico completo
    - manter Podman como rollback durante soak
-5. **Podman runtime guardrail**:
+4. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
    - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
      phase explicitly removes or renames them.
 
-6. **Limpar backup tag** `backup/before-squash-20260604` (≥ 7 dias prod estável)
+5. **Limpar backup tag** `backup/before-squash-20260604` (>= 7 dias prod estavel)
 
 ## Cross-references (Obsidian)
 
@@ -247,10 +240,17 @@ Runbook: docs/PODMAN.md
 - Phase 24 execution finalized the live cutover on `2026-07-04`: runtime points only to `DBRouterAiAtius` via PgBouncer, the legacy `newapi` mapping was removed from PgBouncer, `embedding-gte-v1` validates at `768` dims, `gpt-5.4` validates via Codex after reloading channel 5 from `~/.codex/auth.json`, DeepSeek validates after key replacement, and MiniMax was disabled in channels/abilities and no longer appears in authenticated `/v1/models`. Phase 21 remains parked, not deleted.
 - Phase 26 execution finalized on `2026-07-08`: dynamic Codex discovery now reads the active account’s `/backend-api/codex/models`, persists snapshots/candidates locally, gates promotion on a live `Ok` probe, overlays promoted metadata into `/v1/models`, and schedules daily sync at `04:00` without making the public catalog depend on live upstream reads.
 - Phase 27 execution finalized on `2026-07-08`: CI/auth/release guidance is now explicitly pinned to official OpenAI/Codex docs, `sync.yml` uses the first-class `effort` input for `openai/codex-action`, PT-BR operator docs capture API-key default automation, and ChatGPT-managed auth remains restricted to trusted private runners.
-- Phase 32 planning started on `2026-07-10`: channel 5 `OpenAI - Codex` is live only through a temporary access-token hotfix that expires on `2026-07-17T11:04:04Z`; execution must create Router-owned regeneration, probe-backed health, upstream-auth-specific errors, fork-sync guards and PT-BR docs.
+- Phase 32 execution completed on `2026-07-12`: UI/API/runtime/docs/fork-sync were validated live, the `401 token_invalidated` incident is no longer active, and the temporary fallback was replaced by a Router-owned OAuth credential with refresh token; probe, refresh and local/public smokes passed.
 
 ## Session
 
-**Last session:** 2026-07-10T07:45:00-03:00
-**Stopped at:** Phase 32 Codex OAuth lifecycle planning context
-**Resume file:** .planning/phases/32-codex-oauth-lifecycle-and-upstream-auth-diagnostics/32-CONTEXT.md
+**Last session:** 2026-07-12T12:47:27-03:00
+**Stopped at:** Phase 32 complete
+**Resume file:** None
+
+## Project Reference
+
+See: `.planning/PROJECT.md` (updated 2026-07-12)
+
+**Core value:** Keep the router operational and upstream-compatible while making every change traceable to a narrow, validated plan.
+**Current focus:** Milestone v2.17 complete; next operational track remains Phase 29 k3s shadow/restore/go-no-go.

@@ -68,6 +68,13 @@ export function isCodexChannelType(channelType: number) {
   return channelType === 57;
 }
 
+export function shouldWarnAboutBaseUrl(
+  channelType: number,
+  baseUrl: string | undefined,
+) {
+  return !isCodexChannelType(channelType) && Boolean(baseUrl?.endsWith('/v1'));
+}
+
 export function CodexCredentialPanel({
   metadata,
   error,

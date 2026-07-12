@@ -173,6 +173,7 @@ import { useChannels } from '../channels-provider'
 import {
   CodexCredentialPanel,
   isCodexChannelType,
+  shouldWarnAboutBaseUrl,
 } from '../codex/codex-credential-panel'
 import { CodexRegenerateDialog } from '../codex/codex-regenerate-dialog'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
@@ -1242,7 +1243,7 @@ export function ChannelMutateDrawer({
 
   // Validate base_url - warn if it ends with /v1
   useEffect(() => {
-    if (!currentBaseUrl || !currentBaseUrl.endsWith('/v1')) return
+    if (!shouldWarnAboutBaseUrl(currentType, currentBaseUrl)) return
 
     // Show warning toast
     const timer = setTimeout(() => {
@@ -1256,7 +1257,7 @@ export function ChannelMutateDrawer({
 
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBaseUrl])
+  }, [currentBaseUrl, currentType, t])
 
   // Handle key deduplication
   const handleDeduplicateKeys = () => {

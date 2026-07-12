@@ -143,6 +143,12 @@ func TestDefaultCodexCatalogPolicyDeniesInternalAutoReviewModel(t *testing.T) {
 	assert.True(t, isDeniedCodexModel("codex-auto-review", policy))
 }
 
+func TestIsExpectedCodexValidationOutputAcceptsTerminalPeriod(t *testing.T) {
+	assert.True(t, isExpectedCodexValidationOutput("Ok"))
+	assert.True(t, isExpectedCodexValidationOutput(" Ok. "))
+	assert.False(t, isExpectedCodexValidationOutput("Okay"))
+}
+
 func countModelName(models []string, target string) int {
 	count := 0
 	for _, modelName := range models {

@@ -874,6 +874,12 @@ func extractCodexValidationStreamText(body []byte) (string, error) {
 	return text, nil
 }
 
+func isExpectedCodexValidationOutput(output string) bool {
+	normalized := strings.TrimSpace(output)
+	normalized = strings.TrimSuffix(normalized, ".")
+	return strings.EqualFold(strings.TrimSpace(normalized), codexCatalogDefaultReply)
+}
+
 func syncCodexChannelModels(channel *model.Channel, promotedModels []string) error {
 	if channel == nil {
 		return errors.New("codex catalog sync: nil channel")
@@ -1054,7 +1060,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 				candidate.Status = model.CodexCatalogStatusRejected
 				candidate.ValidationState = "failed"
 				candidate.ValidationError = validateErr.Error()
-			} else if !strings.EqualFold(strings.TrimSpace(output), codexCatalogDefaultReply) {
+			} else if !isExpectedCodexValidationOutput(output) {
 				candidate.Status = model.CodexCatalogStatusRejected
 				candidate.ValidationState = "unexpected_output"
 				candidate.ValidationError = fmt.Sprintf("expected %q, got %q", codexCatalogDefaultReply, output)

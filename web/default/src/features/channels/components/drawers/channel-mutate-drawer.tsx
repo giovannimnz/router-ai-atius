@@ -175,7 +175,10 @@ import {
   isCodexChannelType,
   shouldWarnAboutBaseUrl,
 } from '../codex/codex-credential-panel'
-import { CodexRegenerateDialog } from '../codex/codex-regenerate-dialog'
+import {
+  CodexRegenerateDialog,
+  openOAuthAuthorizationWindow,
+} from '../codex/codex-regenerate-dialog'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
@@ -618,6 +621,9 @@ export function ChannelMutateDrawer({
     useState(false)
   const [codexRegenerateDialogOpen, setCodexRegenerateDialogOpen] =
     useState(false)
+  const [codexCredentialActionError, setCodexCredentialActionError] = useState<
+    string | undefined
+  >()
   const initialModelsRef = useRef<string[]>([])
   const initialModelMappingRef = useRef<string>('')
   const initialStatusCodeMappingRef = useRef<string>('')
@@ -783,8 +789,13 @@ export function ChannelMutateDrawer({
   useEffect(() => {
     if (!open) {
       resetDoubaoApiUnlock()
+      setCodexCredentialActionError(undefined)
     }
   }, [open, resetDoubaoApiUnlock])
+
+  useEffect(() => {
+    setCodexCredentialActionError(undefined)
+  }, [channelId])
 
   // Helper computed values
   const isBatchMode =
@@ -1324,8 +1335,21 @@ export function ChannelMutateDrawer({
     }
   }, [channelId, withVerification, fetchChannelKey])
 
+  const invalidateCodexCredential = useCallback(async () => {
+    if (!channelId) return
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: channelsQueryKeys.detail(channelId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: codexCredentialQueryKey(channelId),
+      }),
+    ])
+  }, [channelId, queryClient])
+
   const handleRefreshCodexCredential = useCallback(async () => {
     if (!channelId) return
+    setCodexCredentialActionError(undefined)
     setIsCodexCredentialRefreshing(true)
     try {
       const res = await refreshCodexCredential(channelId)
@@ -1333,44 +1357,43 @@ export function ChannelMutateDrawer({
         throw new Error(res.message || t('Failed to refresh credential'))
       }
       toast.success(t('Credential refreshed'))
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: channelsQueryKeys.detail(channelId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: codexCredentialQueryKey(channelId),
-        }),
-      ])
+      await invalidateCodexCredential()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('Refresh failed'))
+      const message =
+        error instanceof Error ? error.message : t('Refresh failed')
+      setCodexCredentialActionError(message)
+      await invalidateCodexCredential()
+      toast.error(message)
     } finally {
       setIsCodexCredentialRefreshing(false)
     }
-  }, [channelId, queryClient, t])
+  }, [channelId, invalidateCodexCredential, t])
 
   const handleProbeCodexCredential = useCallback(async () => {
     if (!channelId) return
+    setCodexCredentialActionError(undefined)
     setIsCodexCredentialProbing(true)
     try {
       const res = await probeCodexCredential(channelId)
-      await queryClient.invalidateQueries({
-        queryKey: codexCredentialQueryKey(channelId),
-      })
+      await invalidateCodexCredential()
       if (!res.success) {
         throw new Error(res.message || t('Upstream authentication probe failed'))
       }
       toast.success(t('Upstream authentication probe succeeded'))
     } catch (error) {
-      toast.error(
+      const message =
         error instanceof Error ? error.message : t('Credential probe failed')
-      )
+      setCodexCredentialActionError(message)
+      await invalidateCodexCredential()
+      toast.error(message)
     } finally {
       setIsCodexCredentialProbing(false)
     }
-  }, [channelId, queryClient, t])
+  }, [channelId, invalidateCodexCredential, t])
 
   const handleStartCodexRegeneration = useCallback(async () => {
     if (!channelId) return
+    setCodexCredentialActionError(undefined)
     setIsCodexCredentialRegenerating(true)
     try {
       const res = await startCodexCredentialRegeneration(channelId)
@@ -1384,18 +1407,25 @@ export function ChannelMutateDrawer({
       if (authorizeUrl.protocol !== 'https:') {
         throw new Error(t('The authorization URL is not secure'))
       }
-      window.open(
+      const popupOpened = openOAuthAuthorizationWindow(
         authorizeUrl.toString(),
-        '_blank',
-        'noopener,noreferrer'
+        (url, target, features) => window.open(url, target, features)
       )
+      if (!popupOpened) {
+        throw new Error(
+          t(
+            'The browser blocked the authorization window. Allow popups for this site and click Regenerate credential again.'
+          )
+        )
+      }
       setCodexRegenerateDialogOpen(true)
     } catch (error) {
-      toast.error(
+      const message =
         error instanceof Error
           ? error.message
           : t('Credential regeneration could not be started')
-      )
+      setCodexCredentialActionError(message)
+      toast.error(message)
     } finally {
       setIsCodexCredentialRegenerating(false)
     }
@@ -1404,6 +1434,7 @@ export function ChannelMutateDrawer({
   const handleCompleteCodexRegeneration = useCallback(
     async (input: string) => {
       if (!channelId) return false
+      setCodexCredentialActionError(undefined)
       try {
         const res = await completeCodexCredentialRegeneration(channelId, input)
         if (!res.success) {
@@ -1411,26 +1442,21 @@ export function ChannelMutateDrawer({
             res.message || t('Failed to complete credential regeneration')
           )
         }
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: channelsQueryKeys.detail(channelId),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: codexCredentialQueryKey(channelId),
-          }),
-        ])
+        await invalidateCodexCredential()
         toast.success(t('Credential regenerated'))
         return true
       } catch (error) {
-        toast.error(
+        const message =
           error instanceof Error
             ? error.message
             : t('Credential regeneration failed')
-        )
+        setCodexCredentialActionError(message)
+        await invalidateCodexCredential()
+        toast.error(message)
         return false
       }
     },
-    [channelId, queryClient, t]
+    [channelId, invalidateCodexCredential, t]
   )
 
   // Unified function to update models
@@ -3053,11 +3079,12 @@ export function ChannelMutateDrawer({
                                 <CodexCredentialPanel
                                   metadata={codexCredentialResponse?.data}
                                   error={
-                                    codexCredentialResponse?.success === false
+                                    codexCredentialActionError ||
+                                    (codexCredentialResponse?.success === false
                                       ? codexCredentialResponse.message
                                       : codexCredentialQueryError instanceof Error
                                         ? codexCredentialQueryError.message
-                                        : undefined
+                                        : undefined)
                                   }
                                   hasSavedChannel={Boolean(
                                     isEditing && channelId

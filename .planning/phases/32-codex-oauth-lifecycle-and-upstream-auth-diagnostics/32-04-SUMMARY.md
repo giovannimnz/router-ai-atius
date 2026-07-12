@@ -32,6 +32,10 @@ live deixou de ser `codex-cli-hotfix` e passou a ser `router_owned`, com
 - warning generico de Base URL no type 57 legado removido por boundary testavel;
 - teste do painel/boundary: 4/4; typecheck: PASS; build Rsbuild: PASS, todos
   executados pelo wrapper de 20% CPU.
+- remediacao do UI audit: locale PT-BR real (`Autenticado`), erro lifecycle
+  inline com refetch, deteccao de popup OAuth bloqueado e teste ampliado 5/5;
+- Nyquist: compliant 6/6; security: 14/14 closed, `threats_open=0`; UI
+  review: 19/24 com as tres prioridades resolvidas.
 
 ## Seguranca operacional
 

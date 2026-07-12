@@ -38,6 +38,19 @@ interface CodexRegenerateDialogProps {
   onComplete: (input: string) => Promise<boolean>
 }
 
+type OpenAuthorizationWindow = (
+  url: string,
+  target: string,
+  features: string
+) => Window | null
+
+export function openOAuthAuthorizationWindow(
+  authorizeUrl: string,
+  openWindow: OpenAuthorizationWindow
+) {
+  return openWindow(authorizeUrl, '_blank', 'noopener,noreferrer') !== null
+}
+
 export function CodexRegenerateDialog({
   open,
   channelName,

@@ -104,6 +104,10 @@ export const STATIC_I18N_KEYS = [
   'Successfully deleted {{count}} API key(s)',
   'Enter API key for this channel',
 
+  // Codex OAuth lifecycle
+  'Authenticated',
+  'The browser blocked the authorization window. Allow popups for this site and click Regenerate credential again.',
+
   // Users
   'Root',
   'Deleted',

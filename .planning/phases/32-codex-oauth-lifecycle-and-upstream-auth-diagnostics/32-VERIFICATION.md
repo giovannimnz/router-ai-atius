@@ -2,7 +2,7 @@
 phase: 32-codex-oauth-lifecycle-and-upstream-auth-diagnostics
 status: passed
 verified: 2026-07-12
-verified_at: 2026-07-12T13:03:00-03:00
+verified_at: 2026-07-12T14:08:00-03:00
 score: 6/6 requirements complete
 ---
 
@@ -35,6 +35,9 @@ score: 6/6 requirements complete
 - Containers nao-infra continuam limitados a `0.800 CPU`.
 - Boundary do warning Base URL type 57: teste 4/4, typecheck PASS e build Rsbuild PASS sob wrapper de 20% CPU.
 - Integration checker: cinco fluxos E2E wired; nenhum export/route orfao. O negativo upstream destrutivo live foi substituido pela cobertura deterministica ja validada.
+- Nyquist: `32-VALIDATION.md` compliant, 6/6 requisitos com cobertura automatizada; suite Go controller/service/relay/codex PASS com cache isolado.
+- Security: `32-SECURITY.md`, 14/14 threats closed, `threats_open=0`.
+- UI review: 19/24 code-only; as tres prioridades foram corrigidas; teste 5/5, typecheck e build PASS.
 
 ## Conclusao
 

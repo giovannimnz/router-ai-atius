@@ -20,25 +20,17 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+import ptTranslations from '@/i18n/locales/pt.json'
+
 import type { CodexCredentialMetadata } from '../../types'
 import {
   CodexCredentialPanel,
   isCodexChannelType,
   shouldWarnAboutBaseUrl,
 } from './codex-credential-panel'
+import { openOAuthAuthorizationWindow } from './codex-regenerate-dialog'
 
-const translations: Record<string, string> = {
-  'Codex OAuth credential': 'Credencial OAuth Codex',
-  'Refresh credential': 'Atualizar credencial',
-  'Regenerate credential': 'Regenerar credencial',
-  'Requires regeneration': 'Precisa regenerar',
-  'No refresh_token': 'Sem refresh_token',
-  'Upstream error': 'Erro upstream',
-  'This credential has no refresh_token and cannot be renewed automatically. Regeneration is the definitive fix.':
-    'Esta credencial não possui refresh_token e não pode ser renovada automaticamente. Regenerar é a correção definitiva.',
-  'Local expiration is still in the future, but the latest upstream probe failed. Regenerate the credential.':
-    'A expiração local ainda está no futuro, mas o último probe upstream falhou. Regenere a credencial.',
-}
+const translations = ptTranslations.translation as Record<string, string>
 
 const t = (key: string) => translations[key] ?? key
 
@@ -102,11 +94,28 @@ describe('CodexCredentialPanel', () => {
     const markup = renderPanel(baseMetadata)
 
     assert.match(markup, /Credencial OAuth Codex/)
+    assert.match(markup, /Autenticado/)
     assert.match(markup, /Atualizar credencial/)
     assert.match(markup, /Regenerar credencial/)
     assert.match(markup, /operator@example\.com/)
     assert.match(markup, /Probe OK/)
     assertGenericCredentialControlsAbsent(markup)
+  })
+
+  test('reports whether the OAuth authorization popup was opened', () => {
+    assert.equal(
+      openOAuthAuthorizationWindow('https://auth.openai.com/authorize', () =>
+        null
+      ),
+      false
+    )
+    assert.equal(
+      openOAuthAuthorizationWindow(
+        'https://auth.openai.com/authorize',
+        () => ({}) as Window
+      ),
+      true
+    )
   })
 
   test('represents a missing refresh token as regeneration-required', () => {

@@ -437,6 +437,10 @@ Plans:
 
 Shipped 2026-07-12: Phase 32 completa, 4/4 plans e 6/6 requisitos. Histórico: [ROADMAP](milestones/v2.17-ROADMAP.md) · [REQUIREMENTS](milestones/v2.17-REQUIREMENTS.md) · [AUDIT](milestones/v2.17-MILESTONE-AUDIT.md).
 
+### Phase 32: codex-oauth-lifecycle-and-upstream-auth-diagnostics ✓
+
+Arquivada em [`milestones/v2.17-phases/`](milestones/v2.17-phases/); execução e validação completas.
+
 ---
 
 ## v1.6 — Future

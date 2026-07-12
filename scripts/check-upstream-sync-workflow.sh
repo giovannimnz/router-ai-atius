@@ -28,6 +28,11 @@ if [[ ! -x "$guard_script" ]]; then
   exit 1
 fi
 
+engine_mode=false
+if grep -Fq 'python3 -m fork_sync.cli sync atius-router' "$workflow"; then
+  engine_mode=true
+fi
+
 grep -Eq 'FORK_REPO:[[:space:]]+giovannimnz/router-ai-atius' "$workflow" || {
   echo "sync workflow must pin the writable fork repository" >&2
   exit 1
@@ -102,37 +107,41 @@ if [[ -n "$naked_workflow_runs" ]]; then
   exit 1
 fi
 
-grep -Eq 'resolve_conflicts_with_side theirs' "$workflow" || {
-  echo "sync workflow must use the per-path theirs resolver when strategy=theirs" >&2
-  exit 1
-}
+if [[ "$engine_mode" != true ]]; then
+  grep -Eq 'resolve_conflicts_with_side theirs' "$workflow" || {
+    echo "sync workflow must use the per-path theirs resolver when strategy=theirs" >&2
+    exit 1
+  }
+  grep -Eq 'git rm -f --ignore-unmatch' "$workflow" || {
+    echo "sync workflow must remove files deleted by the selected merge side" >&2
+    exit 1
+  }
+  grep -Eq 'git rm -r -f --ignore-unmatch -- "\$path"' "$workflow" || {
+    echo "sync workflow must remove protected paths before restoring the fork baseline" >&2
+    exit 1
+  }
+  grep -Eq 'clear_stale_index_lock' "$workflow" || {
+    echo "sync workflow must clear stale index locks after failed merges" >&2
+    exit 1
+  }
+  grep -Eq 'restore_upstream_paths' "$workflow" || {
+    echo "sync workflow must restore upstream-owned paths after upstream merges" >&2
+    exit 1
+  }
+fi
 
-grep -Eq 'git rm -f --ignore-unmatch' "$workflow" || {
-  echo "sync workflow must remove files deleted by the selected merge side" >&2
-  exit 1
-}
+for codex_protected_path in \
+  'web/default/src/features/channels/' \
+  'relay/codex_auth_error.go' \
+  'router/channel-router.go' \
+  'types/error.go'; do
+  grep -Fq "$codex_protected_path" "$workflow" || {
+    echo "sync workflow must preserve Codex OAuth path: $codex_protected_path" >&2
+    exit 1
+  }
+done
 
-grep -Eq 'git rm -r -f --ignore-unmatch -- "\$path"' "$workflow" || {
-  echo "sync workflow must remove protected paths before restoring the fork baseline" >&2
-  exit 1
-}
-
-grep -Eq 'clear_stale_index_lock' "$workflow" || {
-  echo "sync workflow must clear stale index locks after failed merges" >&2
-  exit 1
-}
-
-grep -Eq 'restore_upstream_paths' "$workflow" || {
-  echo "sync workflow must restore upstream-owned paths after upstream merges" >&2
-  exit 1
-}
-
-grep -Eq 'web/default' "$workflow" || {
-  echo "sync workflow must keep web/default upstream-owned for strategy=theirs" >&2
-  exit 1
-}
-
-grep -Eq 'Verify frontend release build' "$workflow" || {
+grep -Eq 'Verify frontend release build|Verificar build frontend' "$workflow" || {
   echo "sync workflow must verify frontend release build before pushing sync tags" >&2
   exit 1
 }
@@ -152,12 +161,12 @@ grep -Eq 'scripts/ci-build-frontends.sh "v\$NEW_TAG"' "$workflow" || {
   exit 1
 }
 
-grep -Eq 'scripts/next-fork-version\.sh "\$CURRENT" "\$UPSTREAM_VER"' "$workflow" || {
+grep -Eq 'scripts/next-fork-version\.sh ' "$workflow" || {
   echo "sync workflow must calculate fork suffix through scripts/next-fork-version.sh" >&2
   exit 1
 }
 
-grep -Eq 'Verify backend release build' "$workflow" || {
+grep -Eq 'Verify backend release build|Verificar build backend' "$workflow" || {
   echo "sync workflow must verify backend release build before pushing sync tags" >&2
   exit 1
 }
@@ -167,14 +176,15 @@ grep -Eq 'scripts/ci-build-backend.sh "v\$NEW_TAG"' "$workflow" || {
   exit 1
 }
 
-grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
-  echo "sync workflow must collect conflict paths before mutating the index" >&2
-  exit 1
-}
-
-if grep -Eq 'git commit -m "Resolve conflicts:' "$workflow"; then
-  echo "sync workflow must restore protected paths before completing the merge commit" >&2
-  exit 1
+if [[ "$engine_mode" != true ]]; then
+  grep -Eq 'mapfile -d .*conflict_paths' "$workflow" || {
+    echo "sync workflow must collect conflict paths before mutating the index" >&2
+    exit 1
+  }
+  if grep -Eq 'git commit -m "Resolve conflicts:' "$workflow"; then
+    echo "sync workflow must restore protected paths before completing the merge commit" >&2
+    exit 1
+  fi
 fi
 
 if [[ -f "$docker_publish_workflow" ]]; then

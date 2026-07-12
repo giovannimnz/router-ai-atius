@@ -41,10 +41,13 @@ into local `refs/tags/*`.
 - Protected paths are removed from the index/worktree and restored from the
   fork baseline before the merge commit is completed. This avoids pushing an
   intermediate commit or newly-added upstream workflow file that GitHub rejects.
-- With `strategy=theirs`, `web/default` is treated as upstream-owned and is
-  restored wholesale from `upstream/main` after a merge. This prevents hidden
-  non-conflicting fork leftovers from compiling against newer upstream
-  frontend contracts.
+- With `strategy=theirs`, upstream owns `web/default` except the explicit
+  `protected_paths` restored by fork-sync. The type `57` contract protects
+  `web/default/src/features/channels/` and i18n locales after the upstream
+  baseline is applied.
+- Codex OAuth diagnostics also protect the general relay/controller/router
+  files that carry `codex_upstream_*` errors; a `codex_*.go` glob alone is not
+  sufficient.
 - After any upstream merge, restore protected fork paths before committing the
   fork version bump.
 - `.github/workflows/` is protected as fork-owned. The scheduled workflow runs
@@ -102,5 +105,5 @@ The guard fails if the workflow regresses to fetching upstream tags, loses the
 post-tag guarded dispatch calls, points image workflows at upstream/DockerHub
 targets, points the GHCR workflow at the wrong sync workflow name, omits the Bun
 setup/pre-tag frontend/backend builds, omits upstream-owned `web/default`
-restoration, resets same-base fork suffixes to `.1`, reintroduces direct local
+restoration or the protected type `57` exceptions, resets same-base fork suffixes to `.1`, reintroduces direct local
 sync/build/deploy scripts, or inverts the merge-strategy mapping again.

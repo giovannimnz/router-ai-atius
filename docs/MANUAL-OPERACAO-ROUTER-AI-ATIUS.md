@@ -24,7 +24,7 @@ Trilha de migração para k3s, ainda sem produção movida: `docs/K3S-MIGRATION.
 - Podman pod: `atius-ai-router`
 - Containers em runtime atual: `router-ai-atius`, `redis`, infra pause. O antigo `model-detailed-hotfix` foi parado em 2026-06-18 apos cutover full-Go.
 - Backend local: `http://127.0.0.1:3000`
-- Caminho canônico de banco do runtime live: PgBouncer `10.1.1.1:6432` -> database `DBRouterAiAtius`
+- Caminho canônico de banco do runtime live: PgBouncer `10.11.1.11:6432` -> database `DBRouterAiAtius`
 - Nao ha model proxy Python ativo no caminho `/v1/`.
 - Alias Apache para `/v1/`: `http://127.0.0.1:3000`
 - `data/postgres_data` é cluster PostgreSQL legado/desanexado; não é a fonte de verdade do runtime live
@@ -164,7 +164,7 @@ Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
 - Para clientes Anthropic-Compatible, usar `/v1/messages` com `base_url=https://router.atius.com.br` ou `https://router.atius.com.br/v1` conforme SDK/cliente.
-- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. No runtime atual, o provider ativo e `Local TEI - GTE Embeddings` com o alias publico `embedding-gte-v1`, dimensao `768`, apontando para `http://10.1.1.4:3000`.
+- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. No runtime atual, o provider ativo e `Local TEI - GTE Embeddings` com o alias publico `embedding-gte-v1`, dimensao `768`, apontando para `http://10.100.100.4:3115`.
 - Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
 - Provider de embeddings Codex: `OpenAI - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
@@ -444,6 +444,30 @@ Nao inventar refresh custom de token em jobs arbitrários quando o tema for
 ChatGPT-managed auth. O padrão suportado é deixar o próprio Codex refrescar o
 `auth.json` e persistir o arquivo atualizado somente em infraestrutura privada.
 
+### Credencial OAuth do channel 5
+
+O channel `5`, tipo `57`, usa uma credencial OAuth própria do Router. A interface
+não exibe `Base URL`, `API Key`, reveal/copy ou o JSON secreto desse canal.
+
+- `Atualizar credencial` usa o `refresh_token` já salvo. Se ele estiver ausente
+  ou invalidado, a ação correta é `Regenerar credencial`.
+- `Regenerar credencial` inicia Authorization Code + PKCE. Abra a URL somente no
+  Brave/Chrome já autenticado, conclua o consentimento e cole no diálogo a URL
+  final de callback ou o par `code#state`.
+- `Probe upstream authentication` valida explicitamente a credencial no
+  upstream. Ler metadata não executa probe.
+- `codex_upstream_token_invalidated` significa que o upstream rejeitou o token
+  do channel Codex. Não é falha da API key interna usada pelo cliente do Router.
+- `codex_upstream_refresh_token_invalidated` ou `refresh_token_missing` exigem
+  regeneração. Uma expiração local futura não prevalece sobre a falha upstream.
+- Break-glass: pode-se usar temporariamente apenas o `access_token` do Codex CLI,
+  sem copiar `refresh_token`; esse fallback não tem renovação automática e deve
+  ser substituído pela regeneração própria do Router.
+
+Nunca colar callback, authorization code, access token ou refresh token em logs,
+docs, Obsidian, GBrain ou tickets. A interface mantém o callback somente no
+estado transitório do diálogo.
+
 ## Protecao contra sync upstream
 
 O fork-sync do `omni-srv-admin` usa merge strategy `theirs`. Por isso, toda customizacao abaixo precisa ficar em `protected_paths` e ser conferida em dry-run antes de merge upstream:
@@ -459,6 +483,11 @@ O fork-sync do `omni-srv-admin` usa merge strategy `theirs`. Por isso, toda cust
 - `tools/clianything.py` e `tests/test_clianything.py`: `phase19-apply` deve consolidar canais e nunca recriar providers duplicados como rota ativa.
 - `relay/channel/codex/`: adaptador Codex OAuth com suporte a embeddings.
 - `service/codex_*.go`: refresh OAuth e protecao de referencias `shared:codex`.
+- `controller/channel.go`, `controller/codex_*.go`, `router/channel-router.go`,
+  `types/error.go`, `dto/channel_settings.go` e handlers gerais em `relay/`:
+  lifecycle OAuth, health sanitizado e taxonomia de auth upstream.
+- `web/default/src/features/channels/`: UI type `57` sem campos genéricos e com
+  atualizar, probe e regenerar credencial.
 - `docs/` e `.planning/`: requisitos e manual operacional do fork.
 
 Depois de qualquer sync upstream, validar pelo menos:
@@ -478,7 +507,7 @@ Estado atualizado em 2026-06-26 apos a instalacao do TEI local:
 - Wrapper ativo: `/home/ubuntu/.local/bin/gbrain`.
 - O wrapper define `GBRAIN_STATEMENT_TIMEOUT=0`, `GBRAIN_IDLE_TX_TIMEOUT=0`, `OPENAI_BASE_URL=http://127.0.0.1:3000/v1` e `OPENAI_API_KEY` a partir de `~/.gbrain/config.json`.
 - `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-gte-v1` e `embedding_dimensions: 768`.
-- O GBrain deve chegar direto ao Go router; o endpoint ativo de embeddings e o canal `Local TEI - GTE Embeddings`, alias `embedding-gte-v1`, upstream `http://10.1.1.4:3000`.
+- O GBrain deve chegar direto ao Go router; o endpoint ativo de embeddings e o canal `Local TEI - GTE Embeddings`, alias `embedding-gte-v1`, upstream `http://10.100.100.4:3115`.
 - O governor Go-native protege esse caminho antes de despachar a chamada ao TEI.
 - `embo-01` e `text-embedding-3-*` ficam como historico/desativados ate MiniMax/Codex aceitarem chamadas reais sem `429`.
 - Backup antes da mudanca: `/home/ubuntu/.gbrain/config.json.bak-router-embeddings-20260615_030827`.

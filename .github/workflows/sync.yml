@@ -83,7 +83,16 @@ jobs:
               "service/relayconvert/policy.go",
               "service/openai_chat_responses_mode_test.go",
               "controller/channel-test.go",
+              "controller/channel.go",
+              "relay/codex_auth_error.go",
+              "relay/responses_handler.go",
+              "relay/compatible_handler.go",
+              "relay/chat_completions_via_responses.go",
+              "router/channel-router.go",
+              "types/error.go",
+              "dto/channel_settings.go",
               "setting/console_setting/",
+              "web/default/src/features/channels/",
               "web/default/src/features/pricing/components/model-details-api.tsx",
               "web/default/src/features/system-settings/content/default-api-info.ts",
               "web/default/src/features/system-settings/content/index.tsx",
@@ -104,11 +113,17 @@ jobs:
           git config merge.conflictstyle merge
           git config push.default simple
 
+      - name: Proteger repositorio e configurar remotes
+        run: |
+          scripts/fork-sync-guard.sh ensure-actions-repo
+          scripts/fork-sync-guard.sh configure-remotes
+          git fetch --no-tags --prune upstream
+
       - name: Detectar versao upstream
         id: upstream
         run: |
           set -euo pipefail
-          upstream_tag="$(git ls-remote --tags --refs https://github.com/${UPSTREAM_REPO} 'refs/tags/v*' | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '^$' | sort -V | tail -1 | sed 's/^v//')"
+          upstream_tag="$(git ls-remote --tags --refs upstream 'refs/tags/v*' | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '^$' | sort -V | tail -1 | sed 's/^v//')"
           if [[ -z "$upstream_tag" ]]; then
             echo "::error::Nao foi possivel detectar a tag mais recente do upstream"
             exit 1
@@ -220,13 +235,17 @@ jobs:
 
       - name: Push para main
         if: steps.sync_dry_run.outputs.needs_sync == 'true'
-        run: git push origin main
+        run: scripts/fork-sync-guard.sh push origin main
 
       - name: Criar e publicar tag
         if: steps.sync_dry_run.outputs.needs_sync == 'true'
         run: |
-          git tag "v${{ steps.version.outputs.new_tag }}"
-          git push origin "v${{ steps.version.outputs.new_tag }}"
+          NEW_TAG="${{ steps.version.outputs.new_tag }}"
+          git tag "v$NEW_TAG"
+          scripts/fork-sync-guard.sh push origin "v$NEW_TAG"
+          scripts/fork-sync-guard.sh workflow-run release.yml --ref "v$NEW_TAG"
+          scripts/fork-sync-guard.sh workflow-run docker-build.yml --ref "v$NEW_TAG"
+          scripts/fork-sync-guard.sh workflow-run electron-build.yml --ref "v$NEW_TAG"
 
       - name: Analise de falha com Codex
         if: ${{ failure() && github.event.inputs.codex_conflict_helper != 'false' }}

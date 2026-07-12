@@ -22,7 +22,6 @@ RUN cd classic && VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
 
 FROM golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039 AS builder2
 ENV GO111MODULE=on CGO_ENABLED=0
-ENV GOMAXPROCS=1 GOFLAGS=-p=1
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -33,6 +32,8 @@ WORKDIR /build
 
 ADD go.mod go.sum ./
 RUN go mod download
+
+ENV GOMAXPROCS=1 GOFLAGS=-p=1
 
 COPY . .
 COPY --from=builder /build/web/default/dist ./web/default/dist

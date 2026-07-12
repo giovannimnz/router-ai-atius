@@ -121,13 +121,17 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
+  completeCodexCredentialRegeneration,
   fetchModels,
   getAllModels,
   getChannel,
   getChannelKey,
+  getCodexCredential,
   getGroups,
   getPrefillGroups,
+  probeCodexCredential,
   refreshCodexCredential,
+  startCodexCredentialRegeneration,
 } from '../../api'
 import {
   ADD_MODE_OPTIONS,
@@ -166,6 +170,11 @@ import {
 } from '../../lib/status-code-risk-guard'
 import type { Channel } from '../../types'
 import { useChannels } from '../channels-provider'
+import {
+  CodexCredentialPanel,
+  isCodexChannelType,
+} from '../codex/codex-credential-panel'
+import { CodexRegenerateDialog } from '../codex/codex-regenerate-dialog'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
@@ -226,6 +235,9 @@ const createEmptyModelMappingGuardrail = (): ModelMappingGuardrail => ({
 
 const formatModelNames = (models: string[]): string =>
   models.map((model) => `"${model}"`).join(', ')
+
+const codexCredentialQueryKey = (channelId: number) =>
+  ['channels', 'codex-credential', channelId] as const
 
 const MODEL_MAPPING_PREVIEW_FALLBACK: Array<{
   source: string
@@ -599,6 +611,12 @@ export function ChannelMutateDrawer({
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
     useState(false)
+  const [isCodexCredentialProbing, setIsCodexCredentialProbing] =
+    useState(false)
+  const [isCodexCredentialRegenerating, setIsCodexCredentialRegenerating] =
+    useState(false)
+  const [codexRegenerateDialogOpen, setCodexRegenerateDialogOpen] =
+    useState(false)
   const initialModelsRef = useRef<string[]>([])
   const initialModelMappingRef = useRef<string>('')
   const initialStatusCodeMappingRef = useRef<string>('')
@@ -739,6 +757,16 @@ export function ChannelMutateDrawer({
   const currentUpstreamModelUpdateIgnoredModels = form.watch(
     'upstream_model_update_ignored_models'
   )
+  const isCodexChannel = isCodexChannelType(currentType)
+  const {
+    data: codexCredentialResponse,
+    error: codexCredentialQueryError,
+    isLoading: isCodexCredentialLoading,
+  } = useQuery({
+    queryKey: codexCredentialQueryKey(channelId || 0),
+    queryFn: () => getCodexCredential(channelId || 0),
+    enabled: open && isEditing && isCodexChannel && Boolean(channelId),
+  })
   const {
     unlocked: doubaoApiEditUnlocked,
     handleClick: handleApiConfigSecretClick,
@@ -1304,15 +1332,105 @@ export function ChannelMutateDrawer({
         throw new Error(res.message || t('Failed to refresh credential'))
       }
       toast.success(t('Credential refreshed'))
-      queryClient.invalidateQueries({
-        queryKey: channelsQueryKeys.detail(channelId),
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: channelsQueryKeys.detail(channelId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: codexCredentialQueryKey(channelId),
+        }),
+      ])
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('Refresh failed'))
     } finally {
       setIsCodexCredentialRefreshing(false)
     }
   }, [channelId, queryClient, t])
+
+  const handleProbeCodexCredential = useCallback(async () => {
+    if (!channelId) return
+    setIsCodexCredentialProbing(true)
+    try {
+      const res = await probeCodexCredential(channelId)
+      await queryClient.invalidateQueries({
+        queryKey: codexCredentialQueryKey(channelId),
+      })
+      if (!res.success) {
+        throw new Error(res.message || t('Upstream authentication probe failed'))
+      }
+      toast.success(t('Upstream authentication probe succeeded'))
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('Credential probe failed')
+      )
+    } finally {
+      setIsCodexCredentialProbing(false)
+    }
+  }, [channelId, queryClient, t])
+
+  const handleStartCodexRegeneration = useCallback(async () => {
+    if (!channelId) return
+    setIsCodexCredentialRegenerating(true)
+    try {
+      const res = await startCodexCredentialRegeneration(channelId)
+      if (!res.success || !res.data?.authorize_url) {
+        throw new Error(
+          res.message || t('Failed to start credential regeneration')
+        )
+      }
+
+      const authorizeUrl = new URL(res.data.authorize_url)
+      if (authorizeUrl.protocol !== 'https:') {
+        throw new Error(t('The authorization URL is not secure'))
+      }
+      window.open(
+        authorizeUrl.toString(),
+        '_blank',
+        'noopener,noreferrer'
+      )
+      setCodexRegenerateDialogOpen(true)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('Credential regeneration could not be started')
+      )
+    } finally {
+      setIsCodexCredentialRegenerating(false)
+    }
+  }, [channelId, t])
+
+  const handleCompleteCodexRegeneration = useCallback(
+    async (input: string) => {
+      if (!channelId) return false
+      try {
+        const res = await completeCodexCredentialRegeneration(channelId, input)
+        if (!res.success) {
+          throw new Error(
+            res.message || t('Failed to complete credential regeneration')
+          )
+        }
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: channelsQueryKeys.detail(channelId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: codexCredentialQueryKey(channelId),
+          }),
+        ])
+        toast.success(t('Credential regenerated'))
+        return true
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t('Credential regeneration failed')
+        )
+        return false
+      }
+    },
+    [channelId, queryClient, t]
+  )
 
   // Unified function to update models
   const updateModels = useCallback(
@@ -1514,8 +1632,8 @@ export function ChannelMutateDrawer({
   // Submit handler
   const onSubmit = useCallback(
     async (data: ChannelFormValues) => {
-      // Validate key is required when creating
-      if (!isEditing && !data.key?.trim()) {
+      // Codex credentials are generated after the canonical channel is saved.
+      if (!isEditing && !isCodexChannel && !data.key?.trim()) {
         form.setError('key', {
           type: 'manual',
           message: ERROR_MESSAGES.REQUIRED_KEY,
@@ -1614,6 +1732,7 @@ export function ChannelMutateDrawer({
     },
     [
       isEditing,
+      isCodexChannel,
       sensitiveLocked,
       form,
       confirmMissingModelMappings,
@@ -2616,7 +2735,8 @@ export function ChannelMutateDrawer({
                             )}
 
                             {/* General base_url for other types */}
-                            {![3, 8, 22, 36, 45].includes(currentType) && (
+                            {!isCodexChannel &&
+                              ![3, 8, 22, 36, 45].includes(currentType) && (
                               <FormField
                                 control={form.control}
                                 name='base_url'
@@ -2715,7 +2835,7 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
-                              {!isEditing && (
+                              {!isEditing && !isCodexChannel && (
                                 <FormField
                                   control={form.control}
                                   name='multi_key_mode'
@@ -2761,10 +2881,11 @@ export function ChannelMutateDrawer({
                                 />
                               )}
 
-                              <FormField
-                                control={form.control}
-                                name='key'
-                                render={({ field }) => {
+                              {!isCodexChannel && (
+                                <FormField
+                                  control={form.control}
+                                  name='key'
+                                  render={({ field }) => {
                                   let keyPlaceholder = t(
                                     getKeyPromptForType(currentType)
                                   )
@@ -2923,49 +3044,35 @@ export function ChannelMutateDrawer({
                                       <FormMessage />
                                     </FormItem>
                                   )
-                                }}
-                              />
+                                  }}
+                                />
+                              )}
 
-                              {currentType === 57 && (
-                                <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
-                                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                    <div className='text-muted-foreground text-xs'>
-                                      {t(
-                                        'Codex channels use an OAuth JSON credential as the key.'
-                                      )}
-                                    </div>
-                                    <div className='flex flex-wrap items-center gap-2'>
-                                      {isEditing && channelId && (
-                                        <Button
-                                          type='button'
-                                          variant='outline'
-                                          size='sm'
-                                          onClick={handleRefreshCodexCredential}
-                                          disabled={
-                                            sensitiveLocked ||
-                                            isCodexCredentialRefreshing
-                                          }
-                                        >
-                                          {isCodexCredentialRefreshing ? (
-                                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                          ) : (
-                                            <RefreshCw className='mr-2 h-4 w-4' />
-                                          )}
-                                          {isCodexCredentialRefreshing
-                                            ? t('Refreshing...')
-                                            : t('Refresh credential')}
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>
-                                    <AlertDescription>
-                                      {t(
-                                        "Disclaimer: Personal use only. Do not distribute or share any credentials. This channel has prerequisites and requires prior setup; use it only if you understand the flow and risks, and comply with OpenAI's terms and policies. Credentials and configuration are for Codex CLI integration only, and are not intended for any other client, platform, or channel."
-                                      )}
-                                    </AlertDescription>
-                                  </Alert>
-                                </div>
+                              {isCodexChannel && (
+                                <CodexCredentialPanel
+                                  metadata={codexCredentialResponse?.data}
+                                  error={
+                                    codexCredentialResponse?.success === false
+                                      ? codexCredentialResponse.message
+                                      : codexCredentialQueryError instanceof Error
+                                        ? codexCredentialQueryError.message
+                                        : undefined
+                                  }
+                                  hasSavedChannel={Boolean(
+                                    isEditing && channelId
+                                  )}
+                                  canManage={canEditSensitive}
+                                  isLoading={isCodexCredentialLoading}
+                                  isRefreshing={isCodexCredentialRefreshing}
+                                  isProbing={isCodexCredentialProbing}
+                                  isRegenerating={
+                                    isCodexCredentialRegenerating
+                                  }
+                                  onRefresh={handleRefreshCodexCredential}
+                                  onProbe={handleProbeCodexCredential}
+                                  onRegenerate={handleStartCodexRegeneration}
+                                  t={(key) => t(key)}
+                                />
                               )}
 
                               {isEditing && isMultiKeyChannel && (
@@ -4593,6 +4700,17 @@ export function ChannelMutateDrawer({
         }}
         detailItems={statusCodeRiskDetailItems}
         onConfirm={() => handleStatusCodeRiskAction(true)}
+      />
+
+      <CodexRegenerateDialog
+        open={codexRegenerateDialogOpen}
+        channelName={
+          codexCredentialResponse?.data?.channel_name ||
+          currentName ||
+          'OpenAI - Codex'
+        }
+        onOpenChange={setCodexRegenerateDialogOpen}
+        onComplete={handleCompleteCodexRegeneration}
       />
     </>
   )

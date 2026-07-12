@@ -25,6 +25,11 @@ import type {
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
+  CodexCredentialProbeResponse,
+  CodexCredentialRefreshResponse,
+  CodexCredentialRegenerationCompleteResponse,
+  CodexCredentialRegenerationStartResponse,
+  CodexCredentialResponse,
   ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
@@ -58,20 +63,6 @@ export type CodexUsageResponse = {
 export type CodexResetCreditsResponse = CodexUsageResponse
 
 export type CodexUsageResetResponse = CodexUsageResponse
-
-export type CodexCredentialRefreshResponse = {
-  success: boolean
-  message?: string
-  data?: {
-    expires_at?: string
-    last_refresh?: string
-    account_id?: string
-    email?: string
-    channel_id?: number
-    channel_type?: number
-    channel_name?: string
-  }
-}
 
 // ============================================================================
 // Base Channel CRUD Operations
@@ -310,12 +301,56 @@ export async function getChannelKey(
 // Codex Channel Operations
 // ============================================================================
 
+export async function getCodexCredential(
+  channelId: number
+): Promise<CodexCredentialResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/codex/credential`,
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
 export async function refreshCodexCredential(
   channelId: number
 ): Promise<CodexCredentialRefreshResponse> {
   const res = await api.post(
     `/api/channel/${channelId}/codex/refresh`,
     {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function probeCodexCredential(
+  channelId: number
+): Promise<CodexCredentialProbeResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/probe`,
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function startCodexCredentialRegeneration(
+  channelId: number
+): Promise<CodexCredentialRegenerationStartResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/regenerate/start`,
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function completeCodexCredentialRegeneration(
+  channelId: number,
+  input: string
+): Promise<CodexCredentialRegenerationCompleteResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/regenerate/complete`,
+    { input },
     channelActionConfig()
   )
   return res.data

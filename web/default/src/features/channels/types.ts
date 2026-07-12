@@ -210,6 +210,49 @@ export interface CopyChannelResponse {
 }
 
 // ============================================================================
+// Codex Credential Operations
+// ============================================================================
+export interface CodexCredentialMetadata {
+  channel_id: number
+  channel_type: number
+  channel_name: string
+  authenticated: boolean
+  has_refresh_token: boolean
+  expires_at?: string
+  last_refresh?: string
+  account_id?: string
+  email?: string
+  last_probe_at?: string
+  last_probe_status?: string
+  last_upstream_auth_at?: string
+  last_upstream_status?: number
+  last_upstream_auth_error?: string
+  requires_regeneration: boolean
+  regeneration_reason?: string
+}
+
+export interface CodexCredentialResponse {
+  success: boolean
+  message?: string
+  code?: string
+  requires_regeneration?: boolean
+  upstream_status?: number
+  data?: CodexCredentialMetadata
+}
+
+export type CodexCredentialRefreshResponse = CodexCredentialResponse
+export type CodexCredentialProbeResponse = CodexCredentialResponse
+export type CodexCredentialRegenerationCompleteResponse =
+  CodexCredentialResponse
+
+export interface CodexCredentialRegenerationStartResponse {
+  success: boolean
+  message?: string
+  data?: {
+    authorize_url: string
+  }
+}
+
 // Multi-Key Management Types
 // ============================================================================
 

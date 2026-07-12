@@ -22,6 +22,7 @@ type ChannelSettings struct {
 type CodexCredentialHealth struct {
 	LastProbeAt          string `json:"last_probe_at,omitempty"`
 	LastProbeStatus      string `json:"last_probe_status,omitempty"`
+	LastUpstreamAuthAt   string `json:"last_upstream_auth_at,omitempty"`
 	LastUpstreamStatus   int    `json:"last_upstream_status,omitempty"`
 	LastUpstreamAuthCode string `json:"last_upstream_auth_error,omitempty"`
 	RequiresRegeneration bool   `json:"requires_regeneration,omitempty"`

@@ -43,7 +43,7 @@ func TestGetCodexChannelCredentialReturnsSanitizedMetadata(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 	require.True(t, response.Success)
-	assert.True(t, response.Data.Authenticated)
+	assert.False(t, response.Data.Authenticated)
 	assert.True(t, response.Data.HasRefreshToken)
 	assert.Equal(t, "acct-test", response.Data.AccountID)
 	assert.Equal(t, "token_invalidated", response.Data.LastUpstreamAuthError)

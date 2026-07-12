@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/constant"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/stretchr/testify/assert"
@@ -28,4 +30,20 @@ func TestCodexResponsesUpstreamAuthErrorNormalizesTokenInvalidated(t *testing.T)
 	assert.Equal(t, http.StatusUnauthorized, normalized.StatusCode)
 	assert.Equal(t, types.ErrorCodeCodexUpstreamTokenInvalidated, normalized.GetErrorCode())
 	assert.Equal(t, "codex_upstream_auth_error", normalized.ToOpenAIError().Type)
+}
+
+func TestNormalizeCodexRelayAuthErrorCoversChatAndPreservesNonCodex(t *testing.T) {
+	upstream := types.WithOpenAIError(types.OpenAIError{
+		Message: "token invalidated",
+		Code:    "token_invalidated",
+	}, http.StatusUnauthorized)
+
+	codexInfo := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 0, ChannelType: constant.ChannelTypeCodex}}
+	normalized := normalizeCodexRelayAuthError(codexInfo, upstream, http.StatusUnauthorized)
+	require.NotNil(t, normalized)
+	assert.Equal(t, types.ErrorCodeCodexUpstreamTokenInvalidated, normalized.GetErrorCode())
+
+	nonCodexInfo := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 0, ChannelType: constant.ChannelTypeOpenAI}}
+	preserved := normalizeCodexRelayAuthError(nonCodexInfo, upstream, http.StatusUnauthorized)
+	assert.Same(t, upstream, preserved)
 }

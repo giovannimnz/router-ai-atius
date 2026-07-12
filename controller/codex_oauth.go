@@ -274,7 +274,19 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 			return
 		}
 		if refreshedCh, getErr := model.GetChannelById(channelID, true); getErr == nil && refreshedCh != nil {
-			_ = service.ClearCodexCredentialAuthIssue(refreshedCh)
+			if clearErr := service.ClearCodexCredentialAuthIssue(refreshedCh); clearErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "credential saved but failed to clear prior Codex auth health; retry the operation",
+				})
+				return
+			}
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "credential saved but failed to reload the Codex channel; retry the operation",
+			})
+			return
 		}
 		model.InitChannelCache()
 		service.ResetProxyClientCache()

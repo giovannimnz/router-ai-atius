@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -81,7 +82,7 @@ func TestBuildCodexCredentialMetadataSanitizesTokensAndRequiresRegeneration(t *t
 	meta, err := BuildCodexCredentialMetadata(channel)
 	require.NoError(t, err)
 
-	assert.True(t, meta.Authenticated)
+	assert.False(t, meta.Authenticated)
 	assert.False(t, meta.HasRefreshToken)
 	assert.True(t, meta.RequiresRegeneration)
 	assert.Equal(t, "refresh_token_missing", meta.RegenerationReason)
@@ -112,6 +113,29 @@ func TestBuildCodexCredentialMetadataDoesNotTrustExpiredAccessToken(t *testing.T
 	assert.False(t, meta.RequiresRegeneration)
 }
 
+func TestBuildCodexCredentialMetadataKeepsProbeHistoryAfterAuthIssueClears(t *testing.T) {
+	keyBytes, err := common.Marshal(CodexOAuthKey{
+		AccessToken:  "access-secret",
+		RefreshToken: "refresh-secret",
+		AccountID:    "acct-test",
+		Expired:      time.Now().Add(time.Hour).Format(time.RFC3339),
+	})
+	require.NoError(t, err)
+	setting := `{"codex_credential_health":{"last_probe_at":"2026-07-10T10:00:00Z","last_probe_status":"auth_failed"}}`
+	channel := &model.Channel{
+		Id:      5,
+		Type:    constant.ChannelTypeCodex,
+		Name:    "OpenAI - Codex",
+		Key:     string(keyBytes),
+		Setting: &setting,
+	}
+
+	meta, err := BuildCodexCredentialMetadata(channel)
+	require.NoError(t, err)
+	assert.True(t, meta.Authenticated)
+	assert.Equal(t, codexCredentialProbeStatusAuthFailed, meta.LastProbeStatus)
+}
+
 func TestRecordCodexCredentialIssueByChannelIDPersistsRelayAuthFailure(t *testing.T) {
 	originalDB := model.DB
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -125,7 +149,7 @@ func TestRecordCodexCredentialIssueByChannelIDPersistsRelayAuthFailure(t *testin
 		Type:    constant.ChannelTypeCodex,
 		Name:    "OpenAI - Codex",
 		Key:     `{"access_token":"access-secret","account_id":"acct-test"}`,
-		Setting: common.GetPointer(`{"proxy":"http://proxy.example","system_prompt":"keep-me"}`),
+		Setting: common.GetPointer(`{"proxy":"http://proxy.example","system_prompt":"keep-me","codex_credential_health":{"last_probe_at":"2026-07-10T10:00:00Z","last_probe_status":"ok"}}`),
 	}
 	require.NoError(t, db.Create(channel).Error)
 
@@ -146,7 +170,9 @@ func TestRecordCodexCredentialIssueByChannelIDPersistsRelayAuthFailure(t *testin
 	require.NotNil(t, health)
 	assert.Equal(t, "http://proxy.example", persisted.GetSetting().Proxy)
 	assert.Equal(t, "keep-me", persisted.GetSetting().SystemPrompt)
-	assert.Equal(t, codexCredentialProbeStatusAuthFailed, health.LastProbeStatus)
+	assert.Equal(t, codexCredentialProbeStatusOK, health.LastProbeStatus)
+	assert.Equal(t, "2026-07-10T10:00:00Z", health.LastProbeAt)
+	assert.NotEmpty(t, health.LastUpstreamAuthAt)
 	assert.Equal(t, http.StatusUnauthorized, health.LastUpstreamStatus)
 	assert.Equal(t, codexCredentialReasonTokenInvalid, health.LastUpstreamAuthCode)
 	assert.True(t, health.RequiresRegeneration)

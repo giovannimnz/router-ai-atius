@@ -796,7 +796,9 @@ func validateCodexCandidate(ctx context.Context, channel *model.Channel, modelNa
 	updatedKey, _, refreshErr := RefreshCodexChannelCredential(refreshCtx, channel.Id, CodexCredentialRefreshOptions{ResetCaches: false})
 	if refreshErr != nil {
 		if issue := ClassifyCodexCredentialIssue(refreshErr, 0); issue.IsAuth {
-			_ = RecordCodexCredentialIssue(channel, issue)
+			if healthErr := RecordCodexCredentialIssue(channel, issue); healthErr != nil {
+				return text, errors.Join(refreshErr, fmt.Errorf("failed to persist Codex auth health: %w", healthErr))
+			}
 			return text, refreshErr
 		}
 		return text, err

@@ -45,6 +45,7 @@ type CodexCredentialMetadata struct {
 	Email                 string `json:"email,omitempty"`
 	LastProbeAt           string `json:"last_probe_at,omitempty"`
 	LastProbeStatus       string `json:"last_probe_status,omitempty"`
+	LastUpstreamAuthAt    string `json:"last_upstream_auth_at,omitempty"`
 	LastUpstreamStatus    int    `json:"last_upstream_status,omitempty"`
 	LastUpstreamAuthError string `json:"last_upstream_auth_error,omitempty"`
 }
@@ -106,16 +107,21 @@ func BuildCodexCredentialMetadata(ch *model.Channel) (*CodexCredentialMetadata, 
 		AccountID:       strings.TrimSpace(oauthKey.AccountID),
 		Email:           strings.TrimSpace(oauthKey.Email),
 	}
-	if expiresAt, parseErr := time.Parse(time.RFC3339, meta.ExpiresAt); parseErr == nil && !expiresAt.After(time.Now()) {
+	expiresAt, parseErr := time.Parse(time.RFC3339, meta.ExpiresAt)
+	if parseErr != nil || !expiresAt.After(time.Now()) {
 		meta.Authenticated = false
 	}
 	if health != nil {
 		meta.LastProbeAt = strings.TrimSpace(health.LastProbeAt)
 		meta.LastProbeStatus = strings.TrimSpace(health.LastProbeStatus)
+		meta.LastUpstreamAuthAt = strings.TrimSpace(health.LastUpstreamAuthAt)
 		meta.LastUpstreamStatus = health.LastUpstreamStatus
 		meta.LastUpstreamAuthError = strings.TrimSpace(health.LastUpstreamAuthCode)
 		meta.RequiresRegeneration = health.RequiresRegeneration
 		meta.RegenerationReason = strings.TrimSpace(health.RegenerationReason)
+		if health.RequiresRegeneration || health.LastUpstreamAuthCode != "" {
+			meta.Authenticated = false
+		}
 	}
 	if !hasAccessIdentity {
 		meta.RequiresRegeneration = true
@@ -156,12 +162,15 @@ func ProbeCodexChannelCredential(ctx context.Context, channelID int) (*CodexCred
 		}
 		if issue.IsAuth {
 			health.LastProbeStatus = codexCredentialProbeStatusAuthFailed
+			health.LastUpstreamAuthAt = time.Now().Format(time.RFC3339)
 			health.LastUpstreamAuthCode = issue.UpstreamError
 			health.LastUpstreamStatus = issue.UpstreamStatus
 			health.RequiresRegeneration = issue.RequiresRegeneration
 			health.RegenerationReason = issue.Reason
 		}
-		_ = UpdateCodexCredentialHealth(ch, health)
+		if healthErr := UpdateCodexCredentialHealth(ch, health); healthErr != nil {
+			return nil, fmt.Errorf("failed to persist Codex credential probe failure: %w", healthErr)
+		}
 		meta, metaErr := BuildCodexCredentialMetadata(ch)
 		if metaErr != nil {
 			return nil, err
@@ -203,6 +212,7 @@ func ClearCodexCredentialAuthIssue(ch *model.Channel) error {
 	}
 	health.LastUpstreamStatus = 0
 	health.LastUpstreamAuthCode = ""
+	health.LastUpstreamAuthAt = ""
 	health.RequiresRegeneration = false
 	health.RegenerationReason = ""
 	return UpdateCodexCredentialHealth(ch, health)
@@ -212,14 +222,16 @@ func RecordCodexCredentialIssue(ch *model.Channel, issue CodexCredentialIssue) e
 	if ch == nil || !issue.IsAuth {
 		return nil
 	}
-	health := dto.CodexCredentialHealth{
-		LastProbeAt:          time.Now().Format(time.RFC3339),
-		LastProbeStatus:      codexCredentialProbeStatusAuthFailed,
-		LastUpstreamStatus:   issue.UpstreamStatus,
-		LastUpstreamAuthCode: issue.UpstreamError,
-		RequiresRegeneration: issue.RequiresRegeneration,
-		RegenerationReason:   issue.Reason,
+	setting := ch.GetSetting()
+	health := dto.CodexCredentialHealth{}
+	if setting.CodexCredentialHealth != nil {
+		health = *setting.CodexCredentialHealth
 	}
+	health.LastUpstreamAuthAt = time.Now().Format(time.RFC3339)
+	health.LastUpstreamStatus = issue.UpstreamStatus
+	health.LastUpstreamAuthCode = issue.UpstreamError
+	health.RequiresRegeneration = issue.RequiresRegeneration
+	health.RegenerationReason = issue.Reason
 	return UpdateCodexCredentialHealth(ch, health)
 }
 
@@ -291,6 +303,10 @@ func ClassifyCodexCredentialIssue(err error, fallbackStatus int) CodexCredential
 	return issue
 }
 
+func ClassifyCodexUpstreamResponse(status int, body []byte) CodexCredentialIssue {
+	return ClassifyCodexCredentialIssue(newCodexUpstreamAuthError("codex upstream request", status, body), status)
+}
+
 func CodexCredentialIssueMessage(issue CodexCredentialIssue) string {
 	switch issue.Reason {
 	case codexCredentialReasonMissingRefresh:
@@ -347,7 +363,9 @@ func RefreshCodexChannelCredential(ctx context.Context, channelID int, opts Code
 
 	res, err := RefreshCodexOAuthTokenWithProxy(refreshCtx, oauthKey.RefreshToken, ch.GetSetting().Proxy)
 	if err != nil {
-		_ = RecordCodexCredentialIssue(ch, ClassifyCodexCredentialIssue(err, 0))
+		if healthErr := RecordCodexCredentialIssue(ch, ClassifyCodexCredentialIssue(err, 0)); healthErr != nil {
+			return nil, nil, errors.Join(err, fmt.Errorf("failed to persist Codex auth health: %w", healthErr))
+		}
 		return nil, nil, err
 	}
 
@@ -378,7 +396,10 @@ func RefreshCodexChannelCredential(ctx context.Context, channelID int, opts Code
 	if err := model.DB.Model(&model.Channel{}).Where("id = ?", ch.Id).Update("key", string(encoded)).Error; err != nil {
 		return nil, nil, err
 	}
-	_ = ClearCodexCredentialAuthIssue(ch)
+	ch.Key = string(encoded)
+	if err := ClearCodexCredentialAuthIssue(ch); err != nil {
+		return nil, nil, fmt.Errorf("credential refreshed but failed to clear Codex auth health: %w", err)
+	}
 
 	if opts.ResetCaches {
 		model.InitChannelCache()

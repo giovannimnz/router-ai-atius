@@ -1,9 +1,9 @@
 ---
-status: partial
+status: resolved
 phase: 23-long-context-alias-validation
 source: [23-CONTEXT.md, 23-01-PLAN.md]
 started: 2026-07-01T00:00:00Z
-updated: 2026-07-01T16:25:00Z
+updated: 2026-07-12T17:30:00-03:00
 ---
 
 ## Current Test
@@ -81,3 +81,9 @@ pending: 0
 
 - The router-side implementation is corrected and deployed, but the 1M acceptance criterion is blocked by the real upstream context window under the mandated base-model mapping.
 - To reach true 1M for both aliases, the deployment needs an upstream model, account entitlement, or documented header/feature flag that actually enables 1M context for `gpt-5.5` and `gpt-5.4`.
+
+## Resolution
+
+Encerrado como limitação upstream comprovada, não como defeito local. A Phase 24
+removeu os aliases `-1m` do estado final do catálogo; portanto não existe trabalho
+pendente neste milestone nem promessa pública de contexto de 1M.

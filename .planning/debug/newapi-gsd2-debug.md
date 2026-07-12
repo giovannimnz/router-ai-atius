@@ -1,3 +1,12 @@
+---
+name: newapi-gsd2-debug
+slug: newapi-gsd2-debug
+status: resolved
+created: 2026-04-12T10:20:00-03:00
+updated: 2026-07-12T17:30:00-03:00
+resolution: "Autenticação configurada, carga normalizada e DeepSeek validado; credenciais históricas removidas deste artefato."
+---
+
 # Debug: NewAPI + GSD-2 Integration Issue
 
 ## Data da Investigação
@@ -25,22 +34,13 @@ gsd-2 → models.json (atius-router provider)
 - **Health check**: ✅ OK (200)
 
 ### Tokens Encontrados
-1. **Admin Token** (integration/.env):
-   ```
-   NEWAPI_ADMIN_TOKEN=sk-vXqhMUmQEAzBOw64yOR8ViddrZBSrK8OrhoDwxHkLOEWYXpQ
-   ```
+1. **Admin Token** (integration/.env): removido deste artefato; segredo deve ser
+   obtido da fonte operacional autorizada.
 
-2. **Token User** (Models_gsd.json):
-   ```
-   sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZNTitgm
-   ```
+2. **Token User** (Models_gsd.json): removido deste artefato.
 
-3. **DeepSeek API Keys** (integration/.env):
-   ```
-   DEEPSEAK_API_KEY_1=sk-e80eaa8c55ef4eeb84488294f6d21724
-   DEEPSEAK_API_KEY_2=sk-9ab9266f2fd944999c73d6132099d85a
-   DEEPSEAK_API_KEY_3=sk-a192079e1a5544d6a7e32242e492c14f
-   ```
+3. **DeepSeek API Keys** (integration/.env): removidas deste artefato; provider
+   credentials pertencem ao Vault/runtime, nunca ao planning.
 
 ### GSD-2 (~/.gsd/agent/models.json)
 ```json
@@ -116,7 +116,7 @@ curl -s http://localhost:3300/v1/models
 
 ### Teste 3: Listar Modelos (com token admin)
 ```bash
-curl -s -H "Authorization: Bearer sk-vXqhMUmQEAzBOw64yOR8ViddrZBSrK8OrhoDwxHkLOEWYXpQ" \
+curl -s -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   http://localhost:3300/v1/models
 # Resultado: 200 ✅
 # Modelos retornados: deepseek-reasoner, deepseek-chat
@@ -124,7 +124,7 @@ curl -s -H "Authorization: Bearer sk-vXqhMUmQEAzBOw64yOR8ViddrZBSrK8OrhoDwxHkLOE
 
 ### Teste 4: Listar Modelos (com token user)
 ```bash
-curl -s -H "Authorization: Bearer sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZNTitgm" \
+curl -s -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   http://localhost:3300/v1/models
 # Resultado: 200 ✅
 ```
@@ -132,7 +132,7 @@ curl -s -H "Authorization: Bearer sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZN
 ### Teste 5: Chat Completion (deepseek-chat)
 ```bash
 curl -s -X POST http://localhost:3300/v1/chat/completions \
-  -H "Authorization: Bearer sk-vXqhMUmQEAzBOw64yOR8ViddrZBSrK8OrhoDwxHkLOEWYXpQ" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   -d '{"model": "deepseek-chat", "messages": [{"role": "user", "content": "ok"}]}'
 # Resultado: 503 - "system cpu overloaded (current: 99.6%)" ❌
 ```
@@ -168,7 +168,7 @@ Adicionado:
 {
   "atius-router": {
     "type": "api_key",
-    "key": "sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZNTitgm"
+    "key": "<carregado da fonte de segredos>"
   }
 }
 ```
@@ -192,7 +192,7 @@ kill 2499676 2499774 2500056 2500074
 **Teste 1 - deepseek-chat:**
 ```bash
 curl -X POST http://localhost:3300/v1/chat/completions \
-  -H "Authorization: Bearer sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZNTitgm" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   -d '{"model": "deepseek-chat", "messages": [{"role": "user", "content": "teste"}]}'
 ```
 ✅ Resultado: "teste gsd funcionou"
@@ -200,7 +200,7 @@ curl -X POST http://localhost:3300/v1/chat/completions \
 **Teste 2 - deepseek-reasoner:**
 ```bash
 curl -X POST http://localhost:3300/v1/chat/completions \
-  -H "Authorization: Bearer sk-vBmjLdilLQlNoOKHvkYs2bR6bcqCZe4Q7ynXSSYNyZNTitgm" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   -d '{"model": "deepseek-reasoner", "messages": [{"role": "user", "content": "2+2?"}]}'
 ```
 ✅ Resultado: "4" (com reasoning_content visível)
@@ -222,7 +222,7 @@ curl -X POST http://localhost:3300/v1/chat/completions \
 | NewAPI Container | ✅ | Rodando, porta 3300 |
 | PostgreSQL | ✅ | Rodando, porta 8746 |
 | Channels DeepSeek | ✅ | 3 chaves configuradas |
-| Token GSD-2 | ✅ | `sk-vBmj...itgm` no auth.json |
+| Token GSD-2 | ✅ | material removido; usar a fonte de segredos autorizada |
 | deepseek-chat | ✅ | Testado e funcionando |
 | deepseek-reasoner | ✅ | Testado e funcionando |
 | Disco | ✅ | 85% (após limpeza) |

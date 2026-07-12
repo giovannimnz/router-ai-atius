@@ -14,7 +14,7 @@ Fix `GET /v1/claude/models` returning `{"data": null}` — root cause is middlew
 **Verification:**
 ```bash
 curl -s "https://router.atius.com.br/v1/claude/models" \
-  -H "Authorization: Bearer 9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   | python3 -m json.tool
 # Esperado: data com array de modelos (não null)
 ```
@@ -40,7 +40,7 @@ docker stop new-api && docker cp /home/ubuntu/new-api-build/new-api new-api:/new
 ### Task 4: Test endpoint
 ```bash
 curl -s "https://router.atius.com.br/v1/claude/models" \
-  -H "Authorization: Bearer 9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   | python3 -m json.tool
 ```
 

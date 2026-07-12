@@ -147,17 +147,17 @@ cd integration/bruno-tests/atius-claude-models && \
 ```bash
 # OpenAI format
 curl -s "https://router.atius.com.br/v1/models?api_format=openai" \
-  -H "Authorization: Bearer 9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   | python3 -m json.tool | head -30
 
 # Anthropic format
 curl -s "https://router.atius.com.br/v1/models?api_format=anthropic" \
-  -H "Authorization: Bearer 9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92" \
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" \
   | python3 -m json.tool | head -30
 
 # Deprecated endpoint
 curl -sv "https://router.atius.com.br/v1/claude/models" \
-  -H "Authorization: Bearer 9cfec16339f2306085cc45124b1b62e691f621fe82bbdc92" 2>&1 | grep -i "deprecation\|sunset\|link\|HTTP/"
+  -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 2>&1 | grep -i "deprecation\|sunset\|link\|HTTP/"
 ```
 
 ## Files Modified

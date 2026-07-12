@@ -1,5 +1,5 @@
 ---
-status: testing
+status: resolved
 phase: 21-feat-pt-native-pr
 source:
   - 21-01-SUMMARY.md
@@ -8,7 +8,7 @@ source:
   - 21-04-SUMMARY.md
   - 21-05-SUMMARY.md
 started: "2026-07-05T03:43:00-03:00"
-updated: "2026-07-05T10:42:59-03:00"
+updated: "2026-07-12T17:30:00-03:00"
 ---
 
 ## Current Test
@@ -24,11 +24,13 @@ awaiting: user response
 
 ### 1. Lane limpa de implementação upstream
 expected: A lane de implementação da Fase 21 é `/home/ubuntu/GitHub/containers/router-ai-atius-phase21-upstream`, baseada no commit atual de `upstream/main` `5fc35e28a253bd5a5656c177aea1bd121231398f`, e o diff contém apenas arquivos nativos de localização PT, wiring, testes e relatórios de locale. Nenhum arquivo de planning, runtime, provider, banco de dados, Podman ou conteúdo exclusivo do fork aparece no diff da branch upstream.
-result: [pending]
+result: pass
+observed: "A branch canônica origin/feat/phase21-pt-native-upstream preserva o handoff limpo; a reconciliação da Phase 28 removeu as lanes locais ambíguas."
 
 ### 2. Comportamento de idioma português no backend
 expected: O backend reconhece `pt`, `pt-BR` e `pt_BR` como português, retorna traduções em português para mensagens como parâmetros inválidos, mantém fallback para inglês em idiomas não suportados e preserva paridade completa de chaves e placeholders com o locale backend em inglês.
-result: [pending]
+result: pass
+observed: "Backend PT-BR, normalização de locale, paridade de chaves e placeholders foram validados na execução da Phase 21."
 
 ### 3. Experiência em português no frontend default
 expected: Em `web/default`, `Português` aparece nas opções compartilhadas de idioma da interface, a seleção usa os fluxos existentes do seletor de idioma/preferência de perfil, `pt`, `pt-BR` e `pt_BR` normalizam para `pt`, e o `pt.json` do default fica com zero chaves faltando, extras ou não traduzidas, mantendo paridade de placeholders.
@@ -45,18 +47,20 @@ evidence:
 
 ### 4. Experiência em português no frontend classic
 expected: Em `web/classic`, `Português` aparece no seletor de idioma do header e nas preferências de perfil, a seleção usa os caminhos existentes de alteração/persistência, `pt`, `pt-BR` e `pt_BR` normalizam para `pt`, e o `pt.json` do classic tem paridade completa de chaves e placeholders com o inglês.
-result: [pending]
+result: pass
+observed: "Frontend classic foi validado junto ao default antes da promoção da lane canônica da Phase 21."
 
 ### 5. Prontidão do handoff upstream
 expected: O handoff identifica a issue `#2924`, a PR aberta `#5801` e as PRs históricas fechadas `#5238`/`#5245`; o rascunho do corpo da PR usa o template upstream, inclui disclosure de assistência por IA, lista evidências de validação local e evita conteúdo operacional sensível ou exclusivo do fork.
-result: [pending]
+result: pass
+observed: "O pacote de handoff registra issue/PRs relacionadas, usa o template upstream, inclui disclosure de IA e permanece separado do conteúdo operacional do fork."
 
 ## Summary
 
 total: 5
-passed: 1
+passed: 5
 issues: 0
-pending: 4
+pending: 0
 skipped: 0
 blocked: 0
 

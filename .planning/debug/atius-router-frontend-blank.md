@@ -1,11 +1,11 @@
 ---
 name: atius-router-frontend-blank
 slug: atius-router-frontend-blank
-status: fixing
+status: resolved
 trigger: "Atius Router dashboard returns '{}' (blank page) — frontend not loading, only /docs/ works"
 trigger_source: user-reported
 created: 2026-05-31
-updated: 2026-05-31T04:02:08-03:00
+updated: 2026-07-12T17:30:00-03:00
 symptoms:
   expected: "Frontend React app renders at https://router.atius.com.br/ with login page or dashboard"
   actual: "Browser receives HTML with only body content '{}' — blank page, no React mount"
@@ -76,7 +76,7 @@ evidence:
 eliminated: []
 root_cause: "docker-publish.yml calcula TAG via `git describe` antes do checkout em workflow_run; isso resulta em TAG vazia e aborta o build, deixando a GHCR sem nova imagem (a UI segue com dist placeholder e responde '{}')."
 fix: "Reordenar docker-publish.yml para fazer checkout antes do step 'Determine tag', permitindo `git describe` rodar com tags disponíveis."
-verification: "Pendente: executar workflow docker-publish (workflow_run ou manual) e validar que `/` retorna HTML completo em vez de '{}'."
+verification: "Resolvido por builds/deploys posteriores: o frontend público voltou a servir o SPA e as Phases 21 e 32 validaram bundles e UI em produção."
 files_changed:
   - ".github/workflows/docker-publish.yml"
 tags:
@@ -114,4 +114,5 @@ reasoning_checkpoint:
 
 ## Resolution Log
 
-*(to be filled after root cause confirmed)*
+- 2026-07-12: sessão histórica encerrada. O fluxo de build/deploy foi corrigido
+  e o runtime atual serve o frontend completo; o sintoma `{}` não permanece.

@@ -80,7 +80,7 @@ curl https://router.atius.com.br/docs/ → 405 (Cloudflare bloqueia HEAD/POST)
 ### /v1/chat/completions (OpenAI) ✅
 ```
 POST /v1/chat/completions
-Authorization: Bearer sk-EDrVskkI7caIYa8p6Q8E2JFjOehHj3g8QUjtYDZMbaVn0SBL
+Authorization: Bearer $ATIUS_ROUTER_TOKEN
 Model: MiniMax-M2.7
 Response: 200 OK — "OK" (one word)
 ```
@@ -88,7 +88,7 @@ Response: 200 OK — "OK" (one word)
 ### /v1/messages (Anthropic) ✅
 ```
 POST /v1/messages
-Authorization: Bearer sk-EDrVskkI7caIYa8p6Q8E2JFjOehHj3g8QUjtYDZMbaVn0SBL
+Authorization: Bearer $ATIUS_ROUTER_TOKEN
 Model: MiniMax-M2.7
 Response: 200 OK
 {
@@ -130,7 +130,7 @@ O MaxAge foi alterado para 43200 (12h) no código fonte. A verificação do bin�
 | 3 | admin2 | admin2@atius.com | 100 |
 | 4 | admin3 | admin3@atius.com | 100 |
 
-Login via API não funciona com credenciais testadas (todas retornam "incorrect"). O token Bearer (`sk-EDrVskkI7caIYa8p6Q8E2JFjOehHj3g8QUjtYDZMbaVn0SBL`) funciona para APIs, mas o login via form do dashboard está com problema de credenciais.
+Login via API não funciona com credenciais testadas (todas retornam "incorrect"). O token Bearer então configurado funcionava para APIs, mas seu valor foi removido deste histórico; o login via form do dashboard estava com problema de credenciais.
 
 ### Conclusão
 

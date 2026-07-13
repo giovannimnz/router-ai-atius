@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 mode=dry-run
 evidence_dir=""
 evidence_root="${PHASE29_EVIDENCE_ROOT:-$HOME/.local/state/router-ai-atius/phase29}"
+resume=false
+baseline_free_bytes=""
 
 die() {
   echo "cleanup failed: $*" >&2
@@ -155,7 +157,9 @@ prepare_evidence_dir() {
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --live) mode=live ;;
+    --resume) resume=true ;;
     --evidence-dir) evidence_dir="${2:?}"; shift ;;
+    --baseline-free-bytes) baseline_free_bytes="${2:?}"; shift ;;
     --self-test) self_test; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -178,12 +182,20 @@ fi
 [ -n "$evidence_dir" ] || die '--evidence-dir required'
 prepare_evidence_dir
 
-before="$(df -B1 --output=avail / | tail -1 | tr -d ' ')"
+attempt_before="$(df -B1 --output=avail / | tail -1 | tr -d ' ')"
+if [ -z "$baseline_free_bytes" ]; then baseline_free_bytes="$attempt_before"; fi
+[[ "$baseline_free_bytes" =~ ^[0-9]+$ ]] || die 'baseline free bytes must be an integer'
+before="$baseline_free_bytes"
 items="$evidence_dir/cleanup-items.jsonl"
-if [ -e "$items" ] || [ -L "$items" ]; then die 'cleanup item evidence already exists'; fi
-(set -o noclobber; : > "$items") 2>/dev/null || die 'cannot create cleanup item evidence safely'
-chmod 600 "$items"
-removed_sum=0
+if $resume; then
+  if [ ! -f "$items" ] || [ -L "$items" ]; then die 'resume requires regular cleanup item evidence'; fi
+  removed_sum="$(jq -s 'map(.bytes) | add // 0' "$items")"
+else
+  if [ -e "$items" ] || [ -L "$items" ]; then die 'cleanup item evidence already exists'; fi
+  (set -o noclobber; : > "$items") 2>/dev/null || die 'cannot create cleanup item evidence safely'
+  chmod 600 "$items"
+  removed_sum=0
+fi
 
 for record in "${ALLOWLIST[@]}"; do
   IFS='|' read -r path owner policy method <<< "$record"
@@ -203,7 +215,13 @@ for record in "${ALLOWLIST[@]}"; do
   assert_no_open_descendants "$path"
   if [ "$owner" = root ]; then bytes="$(sudo -n du -sb "$path" | awk '{print $1}')"; else bytes="$(du -sb "$path" | awk '{print $1}')"; fi
   assert_no_open_descendants "$path"
-  if [ "$owner" = root ]; then sudo -n rm -rf -- "$path"; else rm -rf -- "$path"; fi
+  if [ "$owner" = root ]; then
+    sudo -n chmod -R u+w "$path"
+    sudo -n rm -rf -- "$path"
+  else
+    chmod -R u+w "$path"
+    rm -rf -- "$path"
+  fi
   [ ! -e "$path" ] || die "path still exists after removal: $path"
   removed_sum=$((removed_sum + bytes))
   printf '{"path":"%s","owner":"%s","policy":"%s","bytes":%s}\n' "$path" "$owner" "$policy" "$bytes" >> "$items"
@@ -225,8 +243,8 @@ jq -n \
   --arg status "$status" --arg cpu_max "$cpu" --arg cluster_uid "$cluster_uid" \
   --argjson reclaimed_bytes "$reclaimed" --argjson free_percent "$free_percent" \
   --argjson removed_sum_bytes "$removed_sum" --argjson generated_at_epoch "$generated_at_epoch" \
-  --argjson before_free_bytes "$before" --argjson after_free_bytes "$after" \
-  '{status:$status,reclaimed_bytes:$reclaimed_bytes,removed_sum_bytes:$removed_sum_bytes,free_percent:$free_percent,stable_seconds:0,cpu_max:$cpu_max,cluster_uid:$cluster_uid,generated_at_epoch:$generated_at_epoch,before_free_bytes:$before_free_bytes,after_free_bytes:$after_free_bytes}' \
+  --argjson before_free_bytes "$before" --argjson attempt_before_free_bytes "$attempt_before" --argjson after_free_bytes "$after" \
+  '{status:$status,reclaimed_bytes:$reclaimed_bytes,removed_sum_bytes:$removed_sum_bytes,free_percent:$free_percent,stable_seconds:0,cpu_max:$cpu_max,cluster_uid:$cluster_uid,generated_at_epoch:$generated_at_epoch,before_free_bytes:$before_free_bytes,attempt_before_free_bytes:$attempt_before_free_bytes,after_free_bytes:$after_free_bytes}' \
   > "$evidence_dir/cleanup.json"
 chmod 600 "$evidence_dir/cleanup.json"
 [ "$status" = pending-stability ] || die 'recovery gates not met; no-go evidence written'

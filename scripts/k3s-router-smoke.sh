@@ -165,10 +165,11 @@ validate_restore_chain() {
 }
 
 validate_workload_json() {
-  local file="$1" app="$2" expected_image="$3" expected_digest
+  local file="$1" app="$2" expected_image="$3" expected_digest expected_runtime_digest
   [[ "$expected_image" =~ @sha256:[0-9a-f]{64}$ ]] || die "$app apply image is not digest pinned"
   expected_digest="${expected_image##*@}"
-  jq -e --arg app "$app" --arg image "$expected_image" --arg digest "$expected_digest" '
+  expected_runtime_digest="${4:-$expected_digest}"
+  jq -e --arg app "$app" --arg image "$expected_image" --arg digest "$expected_runtime_digest" '
     .items | length == 1 and
     .[0].metadata.labels["app.kubernetes.io/name"] == $app and
     (.[0].metadata.name | type == "string" and length > 0) and
@@ -238,13 +239,14 @@ validate_workload_chain() {
   local key="$1" identity_file="$2"
   jq -e --arg key "$key" --argjson live "$(cat "$identity_file")" '
     .images[$key].digest as $digest |
+    (.images[$key].runtime_digest // $digest) as $runtime_digest |
     .workloads[$key] == $live and
     .images[$key].exact == true and
     (.images[$key].reference | test("@sha256:[0-9a-f]{64}$")) and
     .images[$key].digest == (.images[$key].reference | split("@")[-1]) and
     .images[$key].runtime_image_id == $live.container.image_id and
     .images[$key].reference == $live.container.image_ref and
-    ($live.container.image_id | endswith($digest))
+    ($live.container.image_id | endswith($runtime_digest))
   ' "$apply_evidence" >/dev/null || die "$key live/apply workload or immutable image identity mismatch"
 }
 
@@ -421,8 +423,9 @@ for key, (kind, app, container_name) in apps.items():
     image_ref = required_text(containers[0].get("image"), f"{app} image ref")
     image_id = required_text(container_status.get("imageID"), f"{app} imageID")
     digest_match = re.search(r"@(sha256:[0-9a-f]{64})$", image_ref)
-    if not digest_match or not image_id.endswith(digest_match.group(1)):
-        raise SystemExit(f"{app} image reference/imageID digest differs")
+    runtime_match = re.search(r"(sha256:[0-9a-f]{64})$", image_id)
+    if not digest_match or not runtime_match:
+        raise SystemExit(f"{app} image reference or runtime imageID is not digest-addressed")
     pod_view = {
         **pod_meta,
         "ip": required_text(pod.get("status", {}).get("podIP"), f"{app} pod IP"),
@@ -433,6 +436,7 @@ for key, (kind, app, container_name) in apps.items():
         "image_ref": image_ref,
         "image_id": image_id,
         "image_digest": digest_match.group(1),
+        "runtime_digest": runtime_match.group(1),
         "restart_count": restart_count,
         "resources": {"requests_cpu": "500m", "limits_cpu": "500m"},
     }
@@ -714,9 +718,9 @@ self_test() {
   baseline_sha="$(sha256sum "$test_dir/catalog-baseline.json" | awk '{print $1}')"
   jq -n --arg sha "$restore_sha" --arg baseline_sha "$baseline_sha" '
     {inputs:{restore_sha256:$sha,catalog_baseline_sha256:$baseline_sha},
-     images:{router:{reference:("example@sha256:"+("a"*64)),digest:("sha256:"+("a"*64)),runtime_image_id:("example@sha256:"+("a"*64)),exact:true},
-       redis:{reference:("redis@sha256:"+("b"*64)),digest:("sha256:"+("b"*64)),runtime_image_id:("redis@sha256:"+("b"*64)),exact:true},
-       postgres:{reference:("postgres@sha256:"+("c"*64)),digest:("sha256:"+("c"*64)),runtime_image_id:("postgres@sha256:"+("c"*64)),exact:true}},
+     images:{router:{reference:("example@sha256:"+("a"*64)),digest:("sha256:"+("a"*64)),runtime_digest:("sha256:"+("a"*64)),runtime_image_id:("example@sha256:"+("a"*64)),exact:true},
+       redis:{reference:("redis@sha256:"+("b"*64)),digest:("sha256:"+("b"*64)),runtime_digest:("sha256:"+("b"*64)),runtime_image_id:("redis@sha256:"+("b"*64)),exact:true},
+       postgres:{reference:("postgres@sha256:"+("c"*64)),digest:("sha256:"+("c"*64)),runtime_digest:("sha256:"+("c"*64)),runtime_image_id:("postgres@sha256:"+("c"*64)),exact:true}},
      workloads:{router:{app:"router-ai-atius",controller:{kind:"Deployment",name:"router-ai-atius",uid:"deployment-uid"},pod_owner:{name:"router-rs",uid:"rs-uid"},pod:{name:"router-abc",uid:"pod-uid",ip:"10.42.0.9"},container:{name:"router",image_ref:("example@sha256:"+("a"*64)),image_id:("example@sha256:"+("a"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}},
        redis:{app:"router-ai-atius-redis",controller:{kind:"Deployment",name:"router-ai-atius-redis",uid:"redis-deployment-uid"},pod_owner:{name:"redis-rs",uid:"redis-rs-uid"},pod:{name:"redis-abc",uid:"redis-pod-uid",ip:"10.42.0.10"},container:{name:"redis",image_ref:("redis@sha256:"+("b"*64)),image_id:("redis@sha256:"+("b"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}},
        postgres:{app:"router-ai-atius-postgres",controller:{kind:"StatefulSet",name:"router-ai-atius-postgres",uid:"postgres-sts-uid"},pod_owner:{name:"router-ai-atius-postgres",uid:"postgres-sts-uid"},pod:{name:"router-ai-atius-postgres-0",uid:"postgres-pod-uid",ip:"10.42.0.11"},container:{name:"postgres",image_ref:("postgres@sha256:"+("c"*64)),image_id:("postgres@sha256:"+("c"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}}},
@@ -780,7 +784,8 @@ self_test() {
        pod_owner:($item.pod_owner + {kind:(if $key == "postgres" then "StatefulSet" else "ReplicaSet" end),resource_version:$owner_rv}),
        pod:($item.pod + {resource_version:$pod_rv,node:"atius-srv-1"}),
        container:{name:$item.container.name,image_ref:$item.container.image_ref,image_id:$item.container.image_id,
-         image_digest:$apply.images[$key].digest,restart_count:0,resources:$item.container.resources}};
+         image_digest:$apply.images[$key].digest,runtime_digest:$apply.images[$key].runtime_digest,
+         restart_count:0,resources:$item.container.resources}};
     {schema_version:1,
      workloads:{router:workload("router";"101";"102";"103"),redis:workload("redis";"201";"202";"203"),postgres:workload("postgres";"301";"301";"303")},
      services:{router:{name:"router-ai-atius",uid:"router-service-uid",resource_version:"401",type:"ClusterIP",cluster_ip:"10.43.0.10"},
@@ -884,9 +889,12 @@ kube -n "$namespace" get endpointslices.discovery.k8s.io \
 router_image="$(jq -r '.images.router.reference // ""' "$apply_evidence")"
 redis_image="$(jq -r '.images.redis.reference // ""' "$apply_evidence")"
 postgres_image="$(jq -r '.images.postgres.reference // ""' "$apply_evidence")"
-validate_workload_json "$tmp/router-pods.json" router-ai-atius "$router_image"
-validate_workload_json "$tmp/redis-pods.json" router-ai-atius-redis "$redis_image"
-validate_workload_json "$tmp/postgres-pods.json" router-ai-atius-postgres "$postgres_image"
+router_runtime_digest="$(jq -r '.images.router.runtime_digest // .images.router.digest // ""' "$apply_evidence")"
+redis_runtime_digest="$(jq -r '.images.redis.runtime_digest // .images.redis.digest // ""' "$apply_evidence")"
+postgres_runtime_digest="$(jq -r '.images.postgres.runtime_digest // .images.postgres.digest // ""' "$apply_evidence")"
+validate_workload_json "$tmp/router-pods.json" router-ai-atius "$router_image" "$router_runtime_digest"
+validate_workload_json "$tmp/redis-pods.json" router-ai-atius-redis "$redis_image" "$redis_runtime_digest"
+validate_workload_json "$tmp/postgres-pods.json" router-ai-atius-postgres "$postgres_image" "$postgres_runtime_digest"
 workload_identity router-ai-atius deployment router-ai-atius "$router_image" "$tmp/router-pods.json" "$tmp/router-identity.json"
 workload_identity router-ai-atius-redis deployment router-ai-atius-redis "$redis_image" "$tmp/redis-pods.json" "$tmp/redis-identity.json"
 workload_identity router-ai-atius-postgres statefulset router-ai-atius-postgres "$postgres_image" "$tmp/postgres-pods.json" "$tmp/postgres-identity.json"

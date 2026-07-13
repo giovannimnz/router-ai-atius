@@ -123,7 +123,9 @@ validate_evidence() {
       .image.exact == true and (.image.digest | test("^sha256:[0-9a-f]{64}$")) and
       all([.images.router,.images.redis,.images.postgres][]; . as $image |
         $image.exact == true and ($image.reference | test("@sha256:[0-9a-f]{64}$")) and
-        ($image.digest | test("^sha256:[0-9a-f]{64}$")) and ($image.runtime_image_id | endswith($image.digest))) and
+        ($image.digest | test("^sha256:[0-9a-f]{64}$")) and
+        ($image.runtime_digest | test("^sha256:[0-9a-f]{64}$")) and
+        ($image.runtime_image_id | endswith($image.runtime_digest))) and
       all([.workloads.router,.workloads.redis,.workloads.postgres][];
         (.controller.uid | length) > 0 and (.pod.uid | length) > 0 and (.pod.ip | length) > 0 and
         (.container.image_ref | test("@sha256:[0-9a-f]{64}$")) and
@@ -295,8 +297,9 @@ for key, (app, kind, controller_name) in specs.items():
     image_ref = containers[0].get("image", "")
     image_id = statuses[0].get("imageID", "")
     digest_match = re.search(r"@?(sha256:[0-9a-f]{64})$", image_ref)
-    if not digest_match or not image_id.endswith(digest_match.group(1)):
-        raise SystemExit(f"{app} image reference/imageID mismatch")
+    runtime_match = re.search(r"(sha256:[0-9a-f]{64})$", image_id)
+    if not digest_match or not runtime_match:
+        raise SystemExit(f"{app} image reference or runtime imageID is not digest-addressed")
     resources = containers[0].get("resources", {})
     if resources.get("requests", {}).get("cpu") != "500m" or resources.get("limits", {}).get("cpu") != "500m":
         raise SystemExit(f"{app} CPU contract mismatch")
@@ -317,7 +320,7 @@ for key, (app, kind, controller_name) in specs.items():
        (snapshot.get("container", {}).get("name"), snapshot.get("container", {}).get("image_ref"), snapshot.get("container", {}).get("image_id"), snapshot.get("container", {}).get("restart_count")) != (actual["container"]["name"], image_ref, image_id, statuses[0].get("restartCount")):
         raise SystemExit(f"{app} live identity differs semantically from smoke snapshot")
     image_evidence = apply.get("images", {}).get(key, {})
-    if image_evidence.get("reference") != image_ref or image_evidence.get("runtime_image_id") != image_id or image_evidence.get("digest") != digest_match.group(1) or image_evidence.get("exact") is not True:
+    if image_evidence.get("reference") != image_ref or image_evidence.get("runtime_image_id") != image_id or image_evidence.get("digest") != digest_match.group(1) or image_evidence.get("runtime_digest") != runtime_match.group(1) or image_evidence.get("exact") is not True:
         raise SystemExit(f"{app} image evidence differs from live identity")
     workloads[key] = actual
 
@@ -615,7 +618,7 @@ self_test() {
        resources:{requests_cpu:"500m",limits_cpu:"500m"}}};
     ("example@sha256:"+("a"*64)) as $image | ("sha256:"+("a"*64)) as $digest |
     {status:"go",cluster_uid:$c,generated_at_epoch:$n,cpu_max:"80000 100000",inputs:{manifest_sha256:$m,restore_sha256:$r,bootstrap_sha256:$b},
-     image:{exact:true,digest:$digest},images:{router:{reference:$image,digest:$digest,runtime_image_id:$image,exact:true},redis:{reference:$image,digest:$digest,runtime_image_id:$image,exact:true},postgres:{reference:$image,digest:$digest,runtime_image_id:$image,exact:true}},
+     image:{exact:true,digest:$digest},images:{router:{reference:$image,digest:$digest,runtime_digest:$digest,runtime_image_id:$image,exact:true},redis:{reference:$image,digest:$digest,runtime_digest:$digest,runtime_image_id:$image,exact:true},postgres:{reference:$image,digest:$digest,runtime_digest:$digest,runtime_image_id:$image,exact:true}},
      workloads:{router:workload("router-ai-atius";"Deployment";"router-ai-atius";"router-pod";"router-uid";"10.42.0.12";"router-ai-atius";$image),redis:workload("router-ai-atius-redis";"Deployment";"router-ai-atius-redis";"redis-pod";"redis-uid";"10.42.0.11";"redis";$image),postgres:workload("router-ai-atius-postgres";"StatefulSet";"router-ai-atius-postgres";"postgres-pod";"postgres-uid";"10.42.0.10";"postgres";$image)},
      placement:{node:"atius-srv-1",postgres_ready:true,redis_ready_before_router:true,router_ready:true,cpu_per_pod:"500m"},
      pvs:[{pvc:"router-ai-atius-data",pvc_uid:"router-claim",pv:"router-pv",reclaim_policy:"Retain",claim_uid_matched:true},{pvc:"router-ai-atius-postgres-data",pvc_uid:"postgres-claim",pv:"postgres-pv",reclaim_policy:"Retain",claim_uid_matched:true}],

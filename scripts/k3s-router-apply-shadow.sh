@@ -199,10 +199,12 @@ PY
 }
 
 validate_workload_json() {
-  local file="$1" app="$2" expected_image="$3" expected_digest
+  local file="$1" app="$2" expected_image="$3" expected_digest expected_runtime_digest
   [[ "$expected_image" =~ @sha256:[0-9a-f]{64}$ ]] || die "$app image is not digest pinned"
   expected_digest="${expected_image##*@}"
-  jq -e --arg app "$app" --arg image "$expected_image" --arg digest "$expected_digest" '
+  expected_runtime_digest="${4:-$expected_digest}"
+  [[ "$expected_runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "$app runtime digest is malformed"
+  jq -e --arg app "$app" --arg image "$expected_image" --arg digest "$expected_runtime_digest" '
     .items | length == 1 and
     .[0].metadata.labels["app.kubernetes.io/name"] == $app and
     (.[0].metadata.name | type == "string" and length > 0) and
@@ -258,9 +260,9 @@ validate_endpointslice_json() {
 }
 
 workload_snapshot() {
-  local app="$1" expected_image="$2" output="$3"
+  local app="$1" expected_image="$2" output="$3" expected_runtime_digest="${4:-}"
   kube -n "$namespace" get pods -l "app.kubernetes.io/name=$app" -o json > "$output"
-  validate_workload_json "$output" "$app" "$expected_image"
+  validate_workload_json "$output" "$app" "$expected_image" "$expected_runtime_digest"
 }
 
 workload_identity() {
@@ -312,10 +314,11 @@ workload_identity() {
 
 service_snapshot() {
   local service="$1" port="$2" service_file="$3" slice_file="$4" workload_file="$5" app="$6"
-  local pod_name pod_uid pod_ip expected_image
+  local pod_name pod_uid pod_ip expected_image expected_runtime_digest
   expected_image="$(jq -r '.items[0].spec.containers[0].image' "$workload_file")"
+  expected_runtime_digest="$(jq -r '.items[0].status.containerStatuses[0].imageID | capture("(?<digest>sha256:[0-9a-f]{64})$").digest' "$workload_file")"
   for _ in $(seq 1 60); do
-    workload_snapshot "$app" "$expected_image" "$workload_file"
+    workload_snapshot "$app" "$expected_image" "$workload_file" "$expected_runtime_digest"
     kube -n "$namespace" get service "$service" -o json > "$service_file"
     validate_service_json "$service_file" "$service" "$port" "$app"
     pod_name="$(jq -r '.items[0].metadata.name' "$workload_file")"
@@ -344,13 +347,15 @@ capture_apply_runtime_snapshot() (
 
 validate_apply_runtime_snapshot() {
   local snapshot="$1" postgres_binding="$2" router_binding="$3"
-  local router_ref="$4" redis_ref="$5" postgres_ref="$6"
+  local router_ref="$4" redis_ref="$5" postgres_ref="$6" router_runtime_digest="$7"
   jq -e --arg router_ref "$router_ref" --arg redis_ref "$redis_ref" --arg postgres_ref "$postgres_ref" \
+    --arg router_runtime_digest "$router_runtime_digest" \
     --argjson bindings "[$postgres_binding,$router_binding]" '
-    def image_matches($key; $ref):
+    def image_matches($key; $ref; $runtime_digest):
       .workloads[$key].container.image_ref == $ref and
       .workloads[$key].container.image_digest == ($ref | split("@")[-1]) and
-      (.workloads[$key].container.image_id | endswith(.workloads[$key].container.image_digest));
+      .workloads[$key].container.runtime_digest == $runtime_digest and
+      (.workloads[$key].container.image_id | endswith($runtime_digest));
     def binding_matches($key):
       .storage[$key] as $storage |
       $storage.binding_verified == true and
@@ -360,8 +365,9 @@ validate_apply_runtime_snapshot() {
         .pvc == $storage.pvc.name and .pvc_uid == $storage.pvc.uid and
         .pv == $storage.pv.name and .reclaim_policy == "Retain" and .claim_uid_matched == true);
     .schema_version == 1 and
-    image_matches("router"; $router_ref) and image_matches("redis"; $redis_ref) and
-    image_matches("postgres"; $postgres_ref) and
+    image_matches("router"; $router_ref; $router_runtime_digest) and
+    image_matches("redis"; $redis_ref; ($redis_ref | split("@")[-1])) and
+    image_matches("postgres"; $postgres_ref; ($postgres_ref | split("@")[-1])) and
     binding_matches("router") and binding_matches("postgres")
   ' "$snapshot" >/dev/null || die 'canonical runtime snapshot differs from approved image or PVC/PV binding identity'
 }
@@ -430,7 +436,8 @@ apply_router_after_retain() {
 write_apply_evidence() {
   local output="$evidence_dir/shadow-apply.json" tmp_file generated_at generated_epoch commit
   local restore_sha bootstrap_sha baseline_sha expected_catalog_sha router_image router_digest runtime_image_id cgroup
-  local redis_image redis_digest redis_runtime_image_id postgres_image postgres_digest postgres_runtime_image_id
+  local router_runtime_digest redis_image redis_digest redis_runtime_image_id redis_runtime_digest
+  local postgres_image postgres_digest postgres_runtime_image_id postgres_runtime_digest
   local postgres_pv="$1" router_pv="$2" redis_service="$3" router_service="$4" apply_snapshot="$5"
   local runtime_snapshot_sha pre_publish_snapshot
   if [ -e "$output" ] || [ -L "$output" ]; then die 'shadow-apply.json already exists'; fi
@@ -444,12 +451,15 @@ write_apply_evidence() {
   router_image="$(jq -r '.image_ref' "$bootstrap")"
   router_digest="$(jq -r '.manifest_digest' "$bootstrap")"
   runtime_image_id="$(jq -r '.workloads.router.container.image_id' "$apply_snapshot")"
+  router_runtime_digest="${runtime_image_id##*@}"
   redis_image="$(manifest_image router-ai-atius-redis k8s/router-ai-atius/redis.yaml)"
   redis_digest="${redis_image##*@}"
   redis_runtime_image_id="$(jq -r '.workloads.redis.container.image_id' "$apply_snapshot")"
+  redis_runtime_digest="${redis_runtime_image_id##*@}"
   postgres_image="$(manifest_image router-ai-atius-postgres k8s/router-ai-atius/postgres.yaml)"
   postgres_digest="${postgres_image##*@}"
   postgres_runtime_image_id="$(jq -r '.workloads.postgres.container.image_id' "$apply_snapshot")"
+  postgres_runtime_digest="${postgres_runtime_image_id##*@}"
   cgroup="$(cpu_max_value)"
   runtime_snapshot_sha="$(sha256sum "$apply_snapshot" | awk '{print $1}')"
   # shellcheck disable=SC2031
@@ -461,11 +471,11 @@ write_apply_evidence() {
     --arg restore_sha256 "$restore_sha" --arg bootstrap_sha256 "$bootstrap_sha" \
     --arg catalog_baseline_sha256 "$baseline_sha" --arg expected_catalog_sha256 "$expected_catalog_sha" \
     --arg manifest_sha256 "$current_manifest_hash" --arg image_ref "$router_image" \
-    --arg image_digest "$router_digest" --arg runtime_image_id "$runtime_image_id" \
+    --arg image_digest "$router_digest" --arg runtime_image_id "$runtime_image_id" --arg router_runtime_digest "$router_runtime_digest" \
     --arg redis_image_ref "$redis_image" --arg redis_image_digest "$redis_digest" \
-    --arg redis_runtime_image_id "$redis_runtime_image_id" \
+    --arg redis_runtime_image_id "$redis_runtime_image_id" --arg redis_runtime_digest "$redis_runtime_digest" \
     --arg postgres_image_ref "$postgres_image" --arg postgres_image_digest "$postgres_digest" \
-    --arg postgres_runtime_image_id "$postgres_runtime_image_id" \
+    --arg postgres_runtime_image_id "$postgres_runtime_image_id" --arg postgres_runtime_digest "$postgres_runtime_digest" \
     --argjson pvs "[$postgres_pv,$router_pv]" \
     --arg runtime_snapshot_sha256 "$runtime_snapshot_sha" \
     --argjson runtime_snapshot "$(cat "$apply_snapshot")" \
@@ -484,11 +494,11 @@ write_apply_evidence() {
       inputs:{restore_sha256:$restore_sha256,bootstrap_sha256:$bootstrap_sha256,manifest_sha256:$manifest_sha256,
         catalog_baseline_sha256:$catalog_baseline_sha256},
       catalog:{expected_sha256:$expected_catalog_sha256},
-      image:{reference:$image_ref,digest:$image_digest,runtime_image_id:$runtime_image_id,exact:true},
+      image:{reference:$image_ref,digest:$image_digest,runtime_digest:$router_runtime_digest,runtime_image_id:$runtime_image_id,exact:true},
       images:{
-        router:{reference:$image_ref,digest:$image_digest,runtime_image_id:$runtime_image_id,exact:true},
-        redis:{reference:$redis_image_ref,digest:$redis_image_digest,runtime_image_id:$redis_runtime_image_id,exact:true},
-        postgres:{reference:$postgres_image_ref,digest:$postgres_image_digest,runtime_image_id:$postgres_runtime_image_id,exact:true}},
+        router:{reference:$image_ref,digest:$image_digest,runtime_digest:$router_runtime_digest,runtime_image_id:$runtime_image_id,exact:true},
+        redis:{reference:$redis_image_ref,digest:$redis_image_digest,runtime_digest:$redis_runtime_digest,runtime_image_id:$redis_runtime_image_id,exact:true},
+        postgres:{reference:$postgres_image_ref,digest:$postgres_image_digest,runtime_digest:$postgres_runtime_digest,runtime_image_id:$postgres_runtime_image_id,exact:true}},
       workloads:{router:legacy_workload("router";"router-ai-atius"),redis:legacy_workload("redis";"router-ai-atius-redis"),
         postgres:legacy_workload("postgres";"router-ai-atius-postgres")},
       placement:{node:"atius-srv-1",postgres_ready:true,redis_ready_before_router:true,router_ready:true,cpu_per_pod:"500m"},
@@ -660,7 +670,7 @@ router_image="$(manifest_image router-ai-atius k8s/router-ai-atius/router.yaml)"
 redis_image="$(manifest_image router-ai-atius-redis k8s/router-ai-atius/redis.yaml)"
 postgres_image="$(manifest_image router-ai-atius-postgres k8s/router-ai-atius/postgres.yaml)"
 [ "$router_image" = "$(jq -r '.image_ref' "$bootstrap")" ] || die 'router manifest image differs from bootstrap evidence'
-expected_digest="$(jq -r '.manifest_digest' "$bootstrap")"
+expected_runtime_digest="$(jq -r '.podman_digest' "$bootstrap")"
 assert_containerd_image "$router_image" router
 existing_router_deployments="$(kube -n "$namespace" get deployments -o json | jq '[.items[] | select(.metadata.name == "router-ai-atius")] | length')"
 existing_router_pods="$(kube -n "$namespace" get pods -l app.kubernetes.io/name=router-ai-atius -o json | jq '.items | length')"
@@ -680,11 +690,12 @@ apply_router_after_retain "$tmp"
 
 workload_snapshot router-ai-atius-postgres "$postgres_image" "$tmp/postgres-pods.json"
 workload_snapshot router-ai-atius-redis "$redis_image" "$tmp/redis-pods.json"
-workload_snapshot router-ai-atius "$router_image" "$tmp/router-pods.json"
+workload_snapshot router-ai-atius "$router_image" "$tmp/router-pods.json" "$expected_runtime_digest"
 assert_containerd_image "$postgres_image" postgres
 runtime_image_id="$(jq -r '.items[0].status.containerStatuses[0].imageID' "$tmp/router-pods.json")"
 case "$runtime_image_id" in
-  *@sha256:*) [ "${runtime_image_id##*@}" = "$expected_digest" ] || die 'router runtime imageID reports a different digest' ;;
+  *@sha256:*) [ "${runtime_image_id##*@}" = "$expected_runtime_digest" ] || die 'router runtime imageID reports a different content digest' ;;
+  *) die 'router runtime imageID is not digest-addressed' ;;
 esac
 service_snapshot router-ai-atius-redis 6379 "$tmp/redis-service.json" "$tmp/redis-slices.json" "$tmp/redis-pods.json" router-ai-atius-redis
 service_snapshot router-ai-atius 3000 "$tmp/router-service.json" "$tmp/router-slices.json" "$tmp/router-pods.json" router-ai-atius
@@ -696,6 +707,6 @@ quota_ok "$(cpu_max_value)"
 apply_runtime_snapshot="$tmp/runtime-snapshot-apply.json"
 capture_apply_runtime_snapshot "$apply_runtime_snapshot" apply "$tmp"
 validate_apply_runtime_snapshot "$apply_runtime_snapshot" "$postgres_pv" "$router_pv" \
-  "$router_image" "$redis_image" "$postgres_image"
+  "$router_image" "$redis_image" "$postgres_image" "$expected_runtime_digest"
 write_apply_evidence "$postgres_pv" "$router_pv" "$tmp/redis-service.json" "$tmp/router-service.json" "$apply_runtime_snapshot"
 echo 'shadow runtime stage: PASS'

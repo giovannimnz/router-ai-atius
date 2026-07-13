@@ -893,6 +893,7 @@ pod_json="$(sudo -n k3s kubectl -n "$namespace" get pods -l app.kubernetes.io/na
 pod="$(jq -r '.items[0].metadata.name' <<< "$pod_json")"
 [ "$(jq -r '.items[0].spec.nodeName' <<< "$pod_json")" = atius-srv-1 ] || die 'PostgreSQL pod is outside atius-srv-1'
 jq -e '.items[0].status.containerStatuses | length == 1 and all(.ready == true)' <<< "$pod_json" >/dev/null || die 'PostgreSQL pod is not Ready'
+tmp="$(mktemp -d /dev/shm/phase29-restore.XXXXXX)"
 
 if $replace_go_target; then
   run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
@@ -903,11 +904,25 @@ if $replace_go_target; then
   run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
     psql -X --set ON_ERROR_STOP=on -U "$database_user" -d postgres -c \
     'DO $phase29$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\''postgres'\'') THEN CREATE ROLE postgres NOLOGIN; END IF; END $phase29$;'
+  helper="$HOME/.local/bin/atius-vault-env"
+  [ -x "$helper" ] || die 'Vault helper unavailable for target role synchronization'
+  set +x
+  # shellcheck disable=SC1090
+  source <("$helper" router-ai-atius)
+  [ -n "${POSTGRES_PASSWORD:-}" ] || die 'Vault profile did not provide the database password'
+  case "$POSTGRES_PASSWORD" in *$'\r'*|*$'\n'*) die 'database password contains a forbidden line break' ;; esac
+  password_sql="$tmp/admin-password.sql"
+  escaped_password="${POSTGRES_PASSWORD//\'/\'\'}"
+  printf "ALTER ROLE %s PASSWORD '%s';\n" "$database_user" "$escaped_password" > "$password_sql"
+  chmod 600 "$password_sql"
+  unset POSTGRES_PASSWORD escaped_password
+  run_interruptible_stdin "$password_sql" sudo -n k3s kubectl -n "$namespace" exec -i "$pod" -- \
+    psql -X --set ON_ERROR_STOP=on -U "$database_user" -d postgres >/dev/null
+  rm -f "$password_sql"
 fi
 
 target_version="$(sudo -n k3s kubectl -n "$namespace" exec "$pod" -- psql -X --set ON_ERROR_STOP=on -U "$database_user" -d "$database" -Atc "select current_setting('server_version_num')")"
 [[ "$target_version" =~ ^17[0-9]{4}$ ]] || die 'k3s target is not PostgreSQL 17'
-tmp="$(mktemp -d /dev/shm/phase29-restore.XXXXXX)"
 pre_restore_inventory="$tmp/pre-restore-inventory.tsv"
 query_pre_restore_inventory "$pod" "$pre_restore_inventory"
 pre_restore_inventory_json="$(clean_inventory_json "$pre_restore_inventory")"

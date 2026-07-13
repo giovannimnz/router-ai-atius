@@ -136,6 +136,15 @@ if not re.fullmatch(r"ghcr\.io/giovannimnz/router-ai-atius@sha256:[0-9a-f]{64}",
     raise SystemExit("router image must use an exact 64-hex digest")
 if container.get("imagePullPolicy") != "Never":
     raise SystemExit("router imagePullPolicy must be Never for the imported image")
+if container.get("command") != ["/bin/sh", "-ec"]:
+    raise SystemExit("router must construct secret-bearing connection strings at runtime")
+router_argv = "\n".join(container.get("args", []))
+for required in ('url_encode()', 'export SQL_DSN=', 'export REDIS_CONN_STRING=', 'exec /new-api'):
+    if required not in router_argv:
+        raise SystemExit(f"router runtime connection-string wrapper omitted {required}")
+router_env = {item.get("name"): item for item in container.get("env", [])}
+if "SQL_DSN" in router_env or "REDIS_CONN_STRING" in router_env:
+    raise SystemExit("router connection strings must not be stored as literal manifest env values")
 
 postgres = workloads["router-ai-atius-postgres"]
 postgres_container = postgres["spec"]["template"]["spec"]["containers"][0]

@@ -417,6 +417,8 @@ assert_containerd_image() {
 apply_router_after_retain() {
   local tmp_dir="$1"
   apply_manifest_resource PersistentVolumeClaim router-ai-atius-data k8s/router-ai-atius/router.yaml
+  kube -n "$namespace" annotate pvc/router-ai-atius-data \
+    volume.kubernetes.io/selected-node=atius-srv-1 --overwrite >/dev/null
   kube -n "$namespace" wait --for=jsonpath='{.status.phase}'=Bound pvc/router-ai-atius-data --timeout=15m
   postgres_pv="$(patch_retain_by_claim_uid router-ai-atius-postgres-data "$tmp_dir")"
   router_pv="$(patch_retain_by_claim_uid router-ai-atius-data "$tmp_dir")"
@@ -551,6 +553,7 @@ self_test() {
   )
   expected_order="$(printf '%s\n' \
     'apply PersistentVolumeClaim/router-ai-atius-data' \
+    "kube -n $namespace annotate pvc/router-ai-atius-data volume.kubernetes.io/selected-node=atius-srv-1 --overwrite" \
     "kube -n $namespace wait --for=jsonpath={.status.phase}=Bound pvc/router-ai-atius-data --timeout=15m" \
     'retain router-ai-atius-postgres-data' \
     'retain router-ai-atius-data' \

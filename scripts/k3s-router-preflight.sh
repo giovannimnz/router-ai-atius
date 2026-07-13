@@ -67,6 +67,7 @@ end=$((SECONDS + stable_seconds))
 while [ "$SECONDS" -lt "$end" ]; do
   live_state_ok
   remaining=$((end - SECONDS))
+  [ "$remaining" -gt 0 ] || break
   if [ "$remaining" -gt 30 ]; then sleep 30; else sleep "$remaining"; fi
 done
 live_state_ok

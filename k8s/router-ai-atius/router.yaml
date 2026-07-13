@@ -49,6 +49,29 @@ spec:
         - name: router-ai-atius
           image: ghcr.io/giovannimnz/router-ai-atius@sha256:db7978a0db9fe745c133f91722e6d446c3506300ef36958dedb2ede5907d1b3a
           imagePullPolicy: Never
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              url_encode() {
+                encoded=
+                for hex in $(printf '%s' "$1" | od -An -tx1); do
+                  case "$hex" in
+                    2d|2e|3[0-9]|4[1-9a-f]|5[0-9a]|5f|6[1-9a-f]|7[0-9a]|7e)
+                      octal="$(printf '%03o' "$(printf '%d' "0x${hex}")")"
+                      encoded="${encoded}$(printf '%b' "\\${octal}")"
+                      ;;
+                    *)
+                      encoded="${encoded}%$(printf '%s' "$hex" | tr '[:lower:]' '[:upper:]')"
+                      ;;
+                  esac
+                done
+                printf '%s' "$encoded"
+              }
+              export SQL_DSN="postgresql://admin:$(url_encode "$POSTGRES_PASSWORD")@router-ai-atius-postgres:5432/DBRouterAiAtius?sslmode=disable"
+              export REDIS_CONN_STRING="redis://:$(url_encode "$REDIS_PASSWORD")@router-ai-atius-redis:6379"
+              exec /new-api
           ports:
             - containerPort: 3000
               name: http
@@ -56,10 +79,6 @@ spec:
             - configMapRef:
                 name: router-ai-atius-config
           env:
-            - name: SQL_DSN
-              value: postgresql://admin:$(POSTGRES_PASSWORD)@router-ai-atius-postgres:5432/DBRouterAiAtius?sslmode=disable
-            - name: REDIS_CONN_STRING
-              value: redis://:$(REDIS_PASSWORD)@router-ai-atius-redis:6379
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

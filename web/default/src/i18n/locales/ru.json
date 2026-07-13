@@ -888,6 +888,7 @@
     "Codex CLI Header Passthrough": "Проброс заголовков Codex CLI",
     "Codex credential must be a JSON object with access_token and account_id": "Учетные данные Codex должны быть JSON-объектом с access_token и account_id",
     "Codex OAuth credential": "Учётные данные OAuth Codex",
+    "Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.": "Тесты ответов Codex всегда используют стриминг на upstream, поэтому для этого endpoint потоковый режим принудительно включён.",
     "Cohere": "Cohere",
     "Collapse": "Свернуть",
     "Collapse All": "Свернуть все",

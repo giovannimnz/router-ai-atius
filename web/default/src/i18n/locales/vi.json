@@ -888,6 +888,7 @@
     "Codex CLI Header Passthrough": "Chuyển tiếp header Codex CLI",
     "Codex credential must be a JSON object with access_token and account_id": "Thông tin xác thực Codex phải là đối tượng JSON có access_token và account_id",
     "Codex OAuth credential": "Thông tin xác thực OAuth Codex",
+    "Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.": "Các bài kiểm tra phản hồi Codex luôn dùng streaming ở upstream, nên chế độ stream được ép buộc cho endpoint này.",
     "Cohere": "Cohere",
     "Collapse": "Thu gọn",
     "Collapse All": "Thu gọn tất cả",

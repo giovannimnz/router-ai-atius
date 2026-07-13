@@ -888,6 +888,7 @@
     "Codex CLI Header Passthrough": "Passthrough en-tête Codex CLI",
     "Codex credential must be a JSON object with access_token and account_id": "L'identifiant Codex doit être un objet JSON avec access_token et account_id",
     "Codex OAuth credential": "Identifiant OAuth Codex",
+    "Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.": "Les tests de réponse Codex utilisent toujours le streaming côté upstream ; le mode stream est donc forcé pour ce endpoint.",
     "Cohere": "Cohere",
     "Collapse": "Réduire",
     "Collapse All": "Tout réduire",

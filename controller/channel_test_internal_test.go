@@ -161,3 +161,62 @@ func TestShouldUseStreamForChannelTest(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveChannelTestStream(t *testing.T) {
+	codexChannel := &model.Channel{Type: constant.ChannelTypeCodex}
+	openAIChannel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+
+	tests := []struct {
+		name         string
+		channel      *model.Channel
+		model        string
+		endpointType string
+		requested    bool
+		want         bool
+	}{
+		{
+			name:      "codex responses test forces stream even when unchecked",
+			channel:   codexChannel,
+			model:     "gpt-5.4",
+			requested: false,
+			want:      true,
+		},
+		{
+			name:         "codex explicit responses endpoint forces stream",
+			channel:      codexChannel,
+			model:        "gpt-5.6-terra",
+			endpointType: string(constant.EndpointTypeOpenAIResponse),
+			requested:    false,
+			want:         true,
+		},
+		{
+			name:         "codex compact endpoint keeps stream disabled",
+			channel:      codexChannel,
+			model:        "gpt-5.5" + ratio_setting.CompactModelSuffix,
+			endpointType: string(constant.EndpointTypeOpenAIResponseCompact),
+			requested:    false,
+			want:         false,
+		},
+		{
+			name:      "non codex preserves unchecked state",
+			channel:   openAIChannel,
+			model:     "gpt-4o-mini",
+			requested: false,
+			want:      false,
+		},
+		{
+			name:      "explicit stream stays enabled",
+			channel:   openAIChannel,
+			model:     "gpt-4o-mini",
+			requested: true,
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveChannelTestStream(tt.channel, tt.model, tt.endpointType, tt.requested)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

@@ -210,6 +210,14 @@ const STREAM_INCOMPATIBLE_ENDPOINTS = new Set([
   'openai-response-compact',
 ])
 
+const CODEX_CHANNEL_TYPE = 57
+
+function shouldForceStreamForChannelTest(channelType: number, endpointType: string) {
+  if (channelType !== CODEX_CHANNEL_TYPE) return false
+
+  return endpointType === 'auto' || endpointType === 'openai-response'
+}
+
 const MODEL_PRICE_ERROR_CODE = 'model_price_error'
 const FAILURE_SUMMARY_MAX_LENGTH = 96
 const BATCH_TEST_CONCURRENCY = 5
@@ -415,17 +423,25 @@ function ChannelTestDialogContent({
     setPagination({ pageIndex: 0, pageSize: 30 })
   }, [])
 
-  const streamDisabled = STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
-  const effectiveStreamTest = !streamDisabled && isStreamTest
+  const streamForced = shouldForceStreamForChannelTest(
+    currentRow.type,
+    endpointType
+  )
+  const streamDisabled =
+    streamForced || STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
+  const effectiveStreamTest = streamForced || (!streamDisabled && isStreamTest)
 
   const handleEndpointTypeChange = useCallback((value: string | null) => {
     if (value === null) return
 
     setEndpointType(value)
-    if (STREAM_INCOMPATIBLE_ENDPOINTS.has(value)) {
+    if (
+      STREAM_INCOMPATIBLE_ENDPOINTS.has(value) ||
+      shouldForceStreamForChannelTest(currentRow.type, value)
+    ) {
       setIsStreamTest(false)
     }
-  }, [])
+  }, [currentRow.type])
 
   const handleSearchTermChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -1046,7 +1062,11 @@ function ChannelTestDialogContent({
                 </span>
               </div>
               <p className='text-muted-foreground text-xs'>
-                {t('Enable streaming mode for the test request.')}
+                {streamForced
+                  ? t(
+                      'Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.'
+                    )
+                  : t('Enable streaming mode for the test request.')}
               </p>
             </div>
           </div>

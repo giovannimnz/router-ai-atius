@@ -888,6 +888,7 @@
     "Codex CLI Header Passthrough": "Codex CLI ヘッダーパススルー",
     "Codex credential must be a JSON object with access_token and account_id": "Codex 認証情報は access_token と account_id を含む JSON オブジェクトである必要があります",
     "Codex OAuth credential": "Codex OAuth 認証情報",
+    "Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.": "Codex の応答テストは常に上流でストリーミングを使用するため、このエンドポイントではストリームモードが強制されます。",
     "Cohere": "Cohere",
     "Collapse": "折りたたむ",
     "Collapse All": "すべて折りたたむ",

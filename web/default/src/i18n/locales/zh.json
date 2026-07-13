@@ -888,6 +888,7 @@
     "Codex CLI Header Passthrough": "Codex CLI 请求头透传",
     "Codex credential must be a JSON object with access_token and account_id": "Codex 凭据必须是包含 access_token 和 account_id 的 JSON 对象",
     "Codex OAuth credential": "Codex OAuth 凭据",
+    "Codex response tests always use streaming upstream, so stream mode is forced for this endpoint.": "Codex 响应测试始终使用上游流式模式，因此该端点会强制启用流模式。",
     "Cohere": "Cohere",
     "Collapse": "收起",
     "Collapse All": "全部收起",

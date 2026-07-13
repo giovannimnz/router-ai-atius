@@ -12,6 +12,14 @@ die() {
   exit 1
 }
 
+cpu_max_value() {
+  local cgroup file
+  cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"
+  file="/sys/fs/cgroup${cgroup}/cpu.max"
+  [ -r "$file" ] || die "cpu.max unavailable for cgroup $cgroup"
+  cat "$file"
+}
+
 # Every entry was audited on atius-srv-1 as an unmounted, regenerable cache or
 # an orphaned build directory with no process holding it open.
 ALLOWLIST=(
@@ -163,7 +171,7 @@ fi
 
 [ "${PHASE29_EXECUTE:-0}" = 1 ] || die '--live requires PHASE29_EXECUTE=1'
 [ "${PHASE29_CLEANUP_CONFIRM:-}" = DELETE_ONLY_LITERAL_ALLOWLIST ] || die 'missing exact cleanup confirmation'
-read -r quota period < /sys/fs/cgroup/cpu.max
+read -r quota period <<< "$(cpu_max_value)"
 if [ "$quota" = max ] || [ "$period" -le 0 ] || [ $((quota * 10)) -gt $((period * 8)) ]; then
   die "cpu.max exceeds 800m: $quota $period"
 fi
@@ -206,7 +214,7 @@ after="$(df -B1 --output=avail / | tail -1 | tr -d ' ')"
 reclaimed=$((after - before))
 if [ "$removed_sum" -lt "$reclaimed" ]; then reclaimed="$removed_sum"; fi
 free_percent=$((100 - $(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')))
-cpu="$(cat /sys/fs/cgroup/cpu.max)"
+cpu="$(cpu_max_value)"
 generated_at_epoch="$(date +%s)"
 cluster_uid="$(sudo -n k3s kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')"
 status=no-go

@@ -12,6 +12,7 @@ die() {
   echo "shadow apply failed: $*" >&2
   exit 1
 }
+cpu_max_value() { local cgroup file; cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"; file="/sys/fs/cgroup${cgroup}/cpu.max"; [ -r "$file" ] || die "cpu.max unavailable for cgroup $cgroup"; cat "$file"; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -40,7 +41,7 @@ fi
 [ "${RUN_K3S_ROUTER_APPLY:-0}" = 1 ] || die '--live requires RUN_K3S_ROUTER_APPLY=1'
 [ "${PHASE29_EXECUTE:-0}" = 1 ] || die '--live requires PHASE29_EXECUTE=1'
 [ "${PHASE29_APPLY_CONFIRM:-}" = APPLY_CLUSTERIP_SHADOW_ONLY ] || die 'missing exact apply confirmation'
-read -r quota period < /sys/fs/cgroup/cpu.max
+read -r quota period <<< "$(cpu_max_value)"
 if [ "$quota" = max ] || [ "$period" -le 0 ] || [ $((quota * 10)) -gt $((period * 8)) ]; then die "cpu.max exceeds 800m: $quota $period"; fi
 if [ ! -f "$cleanup" ] || [ -L "$cleanup" ]; then die 'valid cleanup evidence required'; fi
 if [ ! -f "$bootstrap" ] || [ -L "$bootstrap" ]; then die 'valid bootstrap evidence required'; fi

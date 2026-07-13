@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 mode=dry-run; cleanup=""; evidence_dir=""
 evidence_root="${PHASE29_EVIDENCE_ROOT:-$HOME/.local/state/router-ai-atius/phase29}"
 die() { echo "bootstrap failed: $*" >&2; exit 1; }
+cpu_max_value() { local cgroup file; cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"; file="/sys/fs/cgroup${cgroup}/cpu.max"; [ -r "$file" ] || die "cpu.max unavailable for cgroup $cgroup"; cat "$file"; }
 self_test() {
   [ "$(printf '%s\n' POSTGRES_PASSWORD REDIS_PASSWORD SESSION_SECRET | sort | paste -sd, -)" = 'POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET' ] || die 'secret key contract changed'
   echo 'bootstrap self-test: PASS'
@@ -13,7 +14,7 @@ self_test >/dev/null
 [ "$mode" = live ] || { echo 'bootstrap dry-run: label, Secret, image import and manifest remain unchanged'; exit 0; }
 [ "${PHASE29_EXECUTE:-0}" = 1 ] || die '--live requires PHASE29_EXECUTE=1'
 [ "${PHASE29_BOOTSTRAP_CONFIRM:-}" = LABEL_SECRET_IMAGE_AFTER_GREEN ] || die 'missing exact bootstrap confirmation'
-read -r quota period < /sys/fs/cgroup/cpu.max; if [ "$quota" = max ] || [ "$period" -le 0 ] || [ $((quota * 10)) -gt $((period * 8)) ]; then die "cpu.max exceeds 800m: $quota $period"; fi
+read -r quota period <<< "$(cpu_max_value)"; if [ "$quota" = max ] || [ "$period" -le 0 ] || [ $((quota * 10)) -gt $((period * 8)) ]; then die "cpu.max exceeds 800m: $quota $period"; fi
 [ -f "$cleanup" ] || die 'cleanup evidence missing'; grep -Eq '"status"[[:space:]]*:[[:space:]]*"go"' "$cleanup" || die 'cleanup evidence is not green'
 [ -n "$evidence_dir" ] || die '--evidence-dir required'
 case "$evidence_dir" in "$evidence_root"/run-[A-Za-z0-9._-]*) ;; *) die "invalid evidence directory" ;; esac
@@ -50,7 +51,7 @@ sed -i -E "s#image: ghcr.io/giovannimnz/router-ai-atius@sha256:[^[:space:]]+#ima
 sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq 'ghcr.io/giovannimnz/router-ai-atius:latest' || die 'source image reference not imported'
 sudo -n k3s ctr -n k8s.io images tag --force 'ghcr.io/giovannimnz/router-ai-atius:latest' "$immutable" >/dev/null
 sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq "$immutable" || die 'exact immutable reference not found in containerd'
-cpu="$(cat /sys/fs/cgroup/cpu.max)"; read -r q p <<< "$cpu"; if [ "$q" = max ] || [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $cpu"; fi
+cpu="$(cpu_max_value)"; read -r q p <<< "$cpu"; if [ "$q" = max ] || [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $cpu"; fi
 manifest_hash="$(sha256sum k8s/router-ai-atius/*.yaml | sha256sum | awk '{print $1}')"
 cluster_uid="$(sudo -n k3s kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')"
 generated_at_epoch="$(date +%s)"

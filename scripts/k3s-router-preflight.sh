@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mode=dry-run; stable_seconds="${PHASE29_REQUIRE_STABLE_SECONDS:-300}"; cleanup=""; bootstrap=""
 die() { echo "preflight failed: $*" >&2; exit 1; }
+cpu_max_value() { local cgroup file; cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"; file="/sys/fs/cgroup${cgroup}/cpu.max"; [ -r "$file" ] || die "cpu.max unavailable for cgroup $cgroup"; cat "$file"; }
 quota_ok() { local q p; read -r q p <<< "$1"; if [ "$q" = max ] || [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $1"; fi; }
 free_space_ok() { local free_percent="$1"; [ "$free_percent" -ge 25 ] || die 'root filesystem is below 25% free'; }
 evidence_identity_ok() {
@@ -22,7 +23,7 @@ scripts/k3s-router-validate-manifests.sh
 [ "$mode" = live ] || { echo 'preflight dry-run: PASS (no host/cluster command executed)'; exit 0; }
 [ "${PHASE29_LIVE:-0}" = 1 ] || die '--live requires PHASE29_LIVE=1'
 [ "$stable_seconds" -ge 300 ] || die 'stability window must be >=300s'
-quota_ok "$(cat /sys/fs/cgroup/cpu.max)"
+quota_ok "$(cpu_max_value)"
 if [ -n "$cleanup" ]; then
   [ -f "$cleanup" ] || die 'cleanup evidence missing'
   [ ! -L "$cleanup" ] || die 'cleanup evidence cannot be a symlink'

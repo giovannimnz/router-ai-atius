@@ -37,7 +37,7 @@ sudo -n k3s kubectl label node atius-srv-1 atius.com.br/router-ai-atius-node=tru
 nodes="$(sudo -n k3s kubectl get nodes -l atius.com.br/router-ai-atius-node=true -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
 [ "$nodes" = atius-srv-1 ] || die "dedicated label is not exclusive: $nodes"
 sudo -n k3s kubectl -n router-ai-atius create secret generic router-ai-atius-secrets --from-env-file="$env_file" --dry-run=client -o yaml | sudo -n k3s kubectl apply -f - >/dev/null
-keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secrets -o jsonpath='{range $k,$v := .data}{$k}{"\n"}{end}' | sort | paste -sd, -)"
+keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secrets -o json | jq -r '.data | keys[]' | paste -sd, -)"
 [ "$keys" = 'POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET' ] || die "unexpected Secret keys: $keys"
 rm -f "$env_file"
 unset POSTGRES_PASSWORD REDIS_PASSWORD SESSION_SECRET

@@ -40,7 +40,7 @@ if [ -n "$bootstrap" ]; then
   [ "$(jq -r '.manifest_sha256' "$bootstrap")" = "$manifest_hash" ] || die 'bootstrap evidence does not match manifests'
   nodes="$(sudo -n k3s kubectl get nodes -l atius.com.br/router-ai-atius-node=true -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
   [ "$nodes" = atius-srv-1 ] || die 'dedicated label is not exclusive'
-  keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secrets -o jsonpath='{range $k,$v := .data}{$k}{"\n"}{end}' | sort | paste -sd, -)"
+  keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secrets -o json | jq -r '.data | keys[]' | paste -sd, -)"
   [ "$keys" = 'POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET' ] || die 'live Secret key contract differs'
   image="$(python3 -c 'import yaml; d=list(yaml.safe_load_all(open("k8s/router-ai-atius/router.yaml"))); print(next(x for x in d if x and x.get("kind")=="Deployment")["spec"]["template"]["spec"]["containers"][0]["image"])')"
   sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq "$image" || die 'exact router image reference is absent from containerd'

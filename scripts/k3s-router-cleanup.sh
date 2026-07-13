@@ -74,6 +74,7 @@ ALLOWLIST=(
   '/tmp/tmp.yLFoTsq5DL|ubuntu|orphaned-build-dir|directory'
   '/tmp/codex-electron42-inspect|ubuntu|orphaned-build-dir|directory'
   '/tmp/codex-e42-investigate|ubuntu|orphaned-build-dir|directory'
+  '/tmp/tmp.Nb54exSNDH|ubuntu|orphaned-build-dir|directory'
   '/home/ubuntu/.cache/router-ai-atius|ubuntu|regenerable-project-cache|directory'
   '/home/ubuntu/.cache/camoufox|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/uv|ubuntu|regenerable-package-cache|directory'
@@ -248,7 +249,7 @@ cluster_uid="$(sudo -n k3s kubectl get namespace kube-system -o jsonpath='{.meta
 status=no-go
 if [ "$reclaimed" -ge 21474836480 ] && [ "$free_percent" -ge 25 ]; then status=pending-stability; fi
 if $resume && [ -f "$evidence_dir/cleanup.json" ] && [ ! -L "$evidence_dir/cleanup.json" ]; then
-  jq -e '.status == "no-go"' "$evidence_dir/cleanup.json" >/dev/null || die 'resume can replace only no-go cleanup evidence'
+  jq -e '.status == "no-go" or .status == "pending-stability"' "$evidence_dir/cleanup.json" >/dev/null || die 'resume can replace only incomplete cleanup evidence'
   rm -f "$evidence_dir/cleanup.json"
 fi
 if [ -e "$evidence_dir/cleanup.json" ] || [ -L "$evidence_dir/cleanup.json" ]; then die 'cleanup evidence already exists'; fi

@@ -242,15 +242,42 @@ export interface CodexCredentialResponse {
 
 export type CodexCredentialRefreshResponse = CodexCredentialResponse
 export type CodexCredentialProbeResponse = CodexCredentialResponse
-export type CodexCredentialRegenerationCompleteResponse =
-  CodexCredentialResponse
+export interface CodexDeviceAuthorization {
+  flow: 'device_code'
+  verification_url: string
+  user_code: string
+  interval_seconds: number
+  expires_at: string
+}
 
-export interface CodexCredentialRegenerationStartResponse {
+export interface CodexDeviceAuthorizationStartResponse {
   success: boolean
   message?: string
-  data?: {
-    authorize_url: string
-  }
+  data?: CodexDeviceAuthorization
+}
+
+export interface CodexDeviceAuthorizationPollResponse {
+  success: boolean
+  message?: string
+  retryable?: boolean
+  retry_after?: number
+  terminal?: boolean
+  requires_regeneration?: boolean
+  data?:
+    | CodexCredentialMetadata
+    | {
+        status:
+          | 'pending'
+          | 'cancelled'
+          | 'expired'
+          | 'terminal'
+          | 'uncertain_requires_regeneration'
+      }
+}
+
+export interface CodexDeviceAuthorizationCancelResponse {
+  success: boolean
+  message?: string
 }
 
 // Multi-Key Management Types

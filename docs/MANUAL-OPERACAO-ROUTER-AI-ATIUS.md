@@ -451,22 +451,41 @@ não exibe `Base URL`, `API Key`, reveal/copy ou o JSON secreto desse canal.
 
 - `Atualizar credencial` usa o `refresh_token` já salvo. Se ele estiver ausente
   ou invalidado, a ação correta é `Regenerar credencial`.
-- `Regenerar credencial` inicia Authorization Code + PKCE. Abra a URL somente no
-  Brave/Chrome já autenticado, conclua o consentimento e cole no diálogo a URL
-  final de callback ou o par `code#state`.
+- `Regenerar credencial` inicia por padrão o device authorization oficial. A
+  interface mostra `https://auth.openai.com/codex/device`, o código temporário e
+  faz polling até a autorização terminar; o Router troca e salva a credencial
+  sem importar `auth.json` ou tokens do Codex CLI.
+- Authorization Code + PKCE não é fallback operacional. Os endpoints legacy
+  `/codex/regenerate/start` e `/codex/regenerate/complete` respondem fail-closed
+  e não fazem exchange nem escrevem no channel; a UI usa somente device flow.
 - `Probe upstream authentication` valida explicitamente a credencial no
   upstream. Ler metadata não executa probe.
 - `codex_upstream_token_invalidated` significa que o upstream rejeitou o token
   do channel Codex. Não é falha da API key interna usada pelo cliente do Router.
 - `codex_upstream_refresh_token_invalidated` ou `refresh_token_missing` exigem
   regeneração. Uma expiração local futura não prevalece sobre a falha upstream.
+- Antes de chamar o refresh upstream, o Router persiste `upstream_started` em
+  `codex_oauth_operations`. Antes de trocar o authorization code do device flow,
+  persiste `exchange_started`. Esses registros são fenced e o update final do
+  channel ocorre na mesma transação SQL que encerra a operação.
+- O upstream e o banco não compartilham uma transação atômica. Se o processo
+  morrer, houver timeout/erro de transporte ou falhar a persistência logo após
+  o retorno upstream, a operação vira `uncertain_requires_regeneration`; o
+  Router não reutiliza o refresh token nem o authorization code one-time.
+- Erro transitório do store durante polling retorna `retryable` e `retry_after`
+  sem cancelar o device flow. A UI cancela somente em estado terminal,
+  `cancelled` ou `expired`.
+- `codex_oauth_operations` é migrada no startup canônico. Requests apenas
+  verificam a tabela e falham fechado se a migração/store não estiver disponível.
+- Não copie a credencial do Router para outros hosts: cada cliente deve realizar
+  sua própria autorização, pois cópias divergentes da mesma família OAuth podem
+  ser invalidadas por uma renovação externa.
 - Break-glass: pode-se usar temporariamente apenas o `access_token` do Codex CLI,
   sem copiar `refresh_token`; esse fallback não tem renovação automática e deve
   ser substituído pela regeneração própria do Router.
 
-Nunca colar callback, authorization code, access token ou refresh token em logs,
-docs, Obsidian, GBrain ou tickets. A interface mantém o callback somente no
-estado transitório do diálogo.
+Nunca colar authorization code, access token ou refresh token em logs, docs,
+Obsidian, GBrain ou tickets. A interface não exibe esses valores.
 
 ## Protecao contra sync upstream
 

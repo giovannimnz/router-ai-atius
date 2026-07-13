@@ -121,7 +121,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
-  completeCodexCredentialRegeneration,
+  cancelCodexDeviceAuthorization,
   fetchModels,
   getAllModels,
   getChannel,
@@ -129,9 +129,10 @@ import {
   getCodexCredential,
   getGroups,
   getPrefillGroups,
+  pollCodexDeviceAuthorization,
   probeCodexCredential,
   refreshCodexCredential,
-  startCodexCredentialRegeneration,
+  startCodexDeviceAuthorization,
 } from '../../api'
 import {
   ADD_MODE_OPTIONS,
@@ -168,7 +169,7 @@ import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
-import type { Channel } from '../../types'
+import type { Channel, CodexDeviceAuthorization } from '../../types'
 import { useChannels } from '../channels-provider'
 import {
   CodexCredentialPanel,
@@ -177,7 +178,7 @@ import {
 } from '../codex/codex-credential-panel'
 import {
   CodexRegenerateDialog,
-  openOAuthAuthorizationWindow,
+  type CodexDevicePollOutcome,
 } from '../codex/codex-regenerate-dialog'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
@@ -242,6 +243,56 @@ const formatModelNames = (models: string[]): string =>
 
 const codexCredentialQueryKey = (channelId: number) =>
   ['channels', 'codex-credential', channelId] as const
+
+export async function confirmCodexDeviceAuthorizationCancellation(options: {
+  previousCancelRequest: Promise<unknown> | null
+  startRequest: Promise<unknown> | null
+  activeChannelId: number | null
+  cancel: (channelId: number) => Promise<{ success: boolean; message?: string }>
+  fallbackMessage: string
+}): Promise<void> {
+  await options.previousCancelRequest
+  try {
+    await options.startRequest
+  } catch {
+    // Cancel is idempotent and also clears any flow created before start failed.
+  }
+  if (!options.activeChannelId) return
+
+  const response = await options.cancel(options.activeChannelId)
+  if (!response.success) {
+    throw new Error(response.message || options.fallbackMessage)
+  }
+}
+
+export async function runAfterCodexRegenerationCancellation(
+  cancel: () => Promise<boolean>,
+  onConfirmed: () => void
+): Promise<boolean> {
+  if (!(await cancel())) return false
+  onConfirmed()
+  return true
+}
+
+export function coalesceCodexCancellation(
+  activeRequest: Promise<boolean> | null,
+  startRequest: () => Promise<boolean>
+): Promise<boolean> {
+  return activeRequest ?? startRequest()
+}
+
+export function restoreCodexCancellationUiAfterFailure<T>(state: {
+  blocked: boolean
+  regenerating: boolean
+  dialogOpen: boolean
+  deviceAuthorization: T
+}) {
+  return {
+    ...state,
+    blocked: false,
+    regenerating: false,
+  }
+}
 
 const MODEL_MAPPING_PREVIEW_FALLBACK: Array<{
   source: string
@@ -621,6 +672,20 @@ export function ChannelMutateDrawer({
     useState(false)
   const [codexRegenerateDialogOpen, setCodexRegenerateDialogOpen] =
     useState(false)
+  const [codexDeviceAuthorization, setCodexDeviceAuthorization] = useState<
+    CodexDeviceAuthorization | undefined
+  >()
+  const [codexCancellationBlocked, setCodexCancellationBlocked] =
+    useState(false)
+  const [isCodexCancellationInFlight, setIsCodexCancellationInFlight] =
+    useState(false)
+  const codexRegenerationAttemptRef = useRef(0)
+  const codexRegenerationChannelIdRef = useRef<number | null>(null)
+  const codexRegenerationStartRequestRef = useRef<Promise<unknown> | null>(null)
+  const codexRegenerationCancelRequestRef = useRef<Promise<boolean> | null>(
+    null
+  )
+  const codexRegenerateDialogRequestedRef = useRef(false)
   const [codexCredentialActionError, setCodexCredentialActionError] = useState<
     string | undefined
   >()
@@ -654,6 +719,9 @@ export function ChannelMutateDrawer({
 
   const isEditing = Boolean(currentRow)
   const channelId = currentRow?.id ?? null
+  const currentChannelIdRef = useRef(channelId)
+  currentChannelIdRef.current = channelId
+  const previousCodexChannelIdRef = useRef(channelId)
   const sensitiveLocked = isEditing && !canEditSensitive
 
   // Fetch channel details if editing
@@ -1347,6 +1415,107 @@ export function ChannelMutateDrawer({
     ])
   }, [channelId, queryClient])
 
+  const cancelCodexRegeneration = useCallback(
+    (
+      options: {
+        closeDialog?: boolean
+        preserveDeviceAuthorization?: boolean
+      } = {}
+    ): Promise<boolean> => {
+      const activeChannelId = codexRegenerationChannelIdRef.current
+      const startRequest = codexRegenerationStartRequestRef.current
+      const previousCancelRequest = codexRegenerationCancelRequestRef.current
+      const closeDialog = options.closeDialog ?? true
+
+      if (previousCancelRequest) {
+        return runAfterCodexRegenerationCancellation(
+          () =>
+            coalesceCodexCancellation(previousCancelRequest, async () => false),
+          () => {
+            if (closeDialog) {
+              codexRegenerateDialogRequestedRef.current = false
+              setCodexRegenerateDialogOpen(false)
+            }
+            if (!options.preserveDeviceAuthorization) {
+              setCodexDeviceAuthorization(undefined)
+            }
+          }
+        )
+      }
+
+      codexRegenerationAttemptRef.current += 1
+      setIsCodexCancellationInFlight(true)
+      setCodexCancellationBlocked(
+        Boolean(activeChannelId) && !options.preserveDeviceAuthorization
+      )
+      setIsCodexCredentialRegenerating(Boolean(activeChannelId))
+
+      const cancelRequest = (async () => {
+        try {
+          await confirmCodexDeviceAuthorizationCancellation({
+            previousCancelRequest,
+            startRequest,
+            activeChannelId,
+            cancel: cancelCodexDeviceAuthorization,
+            fallbackMessage: t('Failed to cancel device authorization'),
+          })
+          if (codexRegenerationChannelIdRef.current === activeChannelId) {
+            codexRegenerationChannelIdRef.current = null
+          }
+          if (closeDialog) {
+            codexRegenerateDialogRequestedRef.current = false
+            setCodexRegenerateDialogOpen(false)
+          }
+          if (!options.preserveDeviceAuthorization) {
+            setCodexDeviceAuthorization(undefined)
+          }
+          setCodexCancellationBlocked(false)
+          setIsCodexCredentialRegenerating(false)
+          return true
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : t('Failed to cancel device authorization')
+          setCodexCredentialActionError(message)
+          const restored = restoreCodexCancellationUiAfterFailure({
+            blocked: codexCancellationBlocked,
+            regenerating: isCodexCredentialRegenerating,
+            dialogOpen: codexRegenerateDialogOpen,
+            deviceAuthorization: codexDeviceAuthorization,
+          })
+          setCodexCancellationBlocked(restored.blocked)
+          setIsCodexCredentialRegenerating(restored.regenerating)
+          setCodexRegenerateDialogOpen(restored.dialogOpen)
+          setCodexDeviceAuthorization(restored.deviceAuthorization)
+          toast.error(message)
+          return false
+        }
+      })()
+
+      codexRegenerationCancelRequestRef.current = cancelRequest
+      return cancelRequest.finally(() => {
+        if (codexRegenerationCancelRequestRef.current === cancelRequest) {
+          codexRegenerationCancelRequestRef.current = null
+          setIsCodexCancellationInFlight(false)
+        }
+      })
+    },
+    [
+      codexCancellationBlocked,
+      codexDeviceAuthorization,
+      codexRegenerateDialogOpen,
+      isCodexCredentialRegenerating,
+      t,
+    ]
+  )
+
+  useEffect(() => {
+    const channelChanged = previousCodexChannelIdRef.current !== channelId
+    previousCodexChannelIdRef.current = channelId
+    if (!open || channelChanged) void cancelCodexRegeneration()
+  }, [cancelCodexRegeneration, channelId, open])
+
   const handleRefreshCodexCredential = useCallback(async () => {
     if (!channelId) return
     setCodexCredentialActionError(undefined)
@@ -1377,7 +1546,9 @@ export function ChannelMutateDrawer({
       const res = await probeCodexCredential(channelId)
       await invalidateCodexCredential()
       if (!res.success) {
-        throw new Error(res.message || t('Upstream authentication probe failed'))
+        throw new Error(
+          res.message || t('Upstream authentication probe failed')
+        )
       }
       toast.success(t('Upstream authentication probe succeeded'))
     } catch (error) {
@@ -1393,33 +1564,48 @@ export function ChannelMutateDrawer({
 
   const handleStartCodexRegeneration = useCallback(async () => {
     if (!channelId) return
+    codexRegenerateDialogRequestedRef.current = true
+    const cancellationConfirmed = await cancelCodexRegeneration({
+      closeDialog: false,
+    })
+    if (!cancellationConfirmed) return
+    if (
+      !codexRegenerateDialogRequestedRef.current ||
+      currentChannelIdRef.current !== channelId
+    ) {
+      return
+    }
+    const attemptId = codexRegenerationAttemptRef.current + 1
+    codexRegenerationAttemptRef.current = attemptId
+    codexRegenerationChannelIdRef.current = channelId
+    setCodexCancellationBlocked(false)
     setCodexCredentialActionError(undefined)
+    setCodexDeviceAuthorization(undefined)
+    setCodexRegenerateDialogOpen(true)
     setIsCodexCredentialRegenerating(true)
     try {
-      const res = await startCodexCredentialRegeneration(channelId)
-      if (!res.success || !res.data?.authorize_url) {
+      const startRequest = startCodexDeviceAuthorization(channelId)
+      codexRegenerationStartRequestRef.current = startRequest
+      const res = await startRequest
+      if (!res.success || !res.data?.user_code) {
         throw new Error(
           res.message || t('Failed to start credential regeneration')
         )
       }
-
-      const authorizeUrl = new URL(res.data.authorize_url)
-      if (authorizeUrl.protocol !== 'https:') {
-        throw new Error(t('The authorization URL is not secure'))
+      if (
+        codexRegenerationAttemptRef.current !== attemptId ||
+        codexRegenerationChannelIdRef.current !== channelId
+      ) {
+        return
       }
-      const popupOpened = openOAuthAuthorizationWindow(
-        authorizeUrl.toString(),
-        (url, target, features) => window.open(url, target, features)
-      )
-      if (!popupOpened) {
-        throw new Error(
-          t(
-            'The browser blocked the authorization window. Allow popups for this site and click Regenerate credential again.'
-          )
-        )
-      }
-      setCodexRegenerateDialogOpen(true)
+      setCodexDeviceAuthorization(res.data)
     } catch (error) {
+      if (
+        codexRegenerationAttemptRef.current !== attemptId ||
+        codexRegenerationChannelIdRef.current !== channelId
+      ) {
+        return
+      }
       const message =
         error instanceof Error
           ? error.message
@@ -1427,37 +1613,88 @@ export function ChannelMutateDrawer({
       setCodexCredentialActionError(message)
       toast.error(message)
     } finally {
-      setIsCodexCredentialRegenerating(false)
-    }
-  }, [channelId, t])
-
-  const handleCompleteCodexRegeneration = useCallback(
-    async (input: string) => {
-      if (!channelId) return false
-      setCodexCredentialActionError(undefined)
-      try {
-        const res = await completeCodexCredentialRegeneration(channelId, input)
-        if (!res.success) {
-          throw new Error(
-            res.message || t('Failed to complete credential regeneration')
-          )
-        }
-        await invalidateCodexCredential()
-        toast.success(t('Credential regenerated'))
-        return true
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : t('Credential regeneration failed')
-        setCodexCredentialActionError(message)
-        await invalidateCodexCredential()
-        toast.error(message)
-        return false
+      codexRegenerationStartRequestRef.current = null
+      if (
+        codexRegenerationAttemptRef.current === attemptId &&
+        codexRegenerationChannelIdRef.current === channelId
+      ) {
+        setIsCodexCredentialRegenerating(false)
       }
+    }
+  }, [cancelCodexRegeneration, channelId, t])
+
+  const handlePollCodexDeviceAuthorization = useCallback(
+    async (signal: AbortSignal): Promise<CodexDevicePollOutcome> => {
+      if (!channelId) throw new Error(t('Channel is not saved yet'))
+      const attemptId = codexRegenerationAttemptRef.current
+      if (codexRegenerationChannelIdRef.current !== channelId) {
+        return { status: 'pending' }
+      }
+      const res = await pollCodexDeviceAuthorization(channelId, signal)
+      if (
+        codexRegenerationAttemptRef.current !== attemptId ||
+        codexRegenerationChannelIdRef.current !== channelId
+      ) {
+        return { status: 'pending' }
+      }
+      const status =
+        res.data && 'status' in res.data ? res.data.status : undefined
+      if (res.retryable || status === 'pending') {
+        return {
+          status: 'pending',
+          retryAfterMs: Math.max(1, res.retry_after ?? 1) * 1000,
+        }
+      }
+      if (
+        res.terminal ||
+        status === 'cancelled' ||
+        status === 'expired' ||
+        status === 'terminal' ||
+        status === 'uncertain_requires_regeneration'
+      ) {
+        return {
+          status:
+            status === 'cancelled' || status === 'expired'
+              ? status
+              : 'terminal',
+          error: new Error(
+            res.message || t('Device authorization polling failed')
+          ),
+        }
+      }
+      if (!res.success) {
+        return { status: 'pending' }
+      }
+      await invalidateCodexCredential()
+      if (
+        codexRegenerationAttemptRef.current !== attemptId ||
+        codexRegenerationChannelIdRef.current !== channelId
+      ) {
+        return { status: 'pending' }
+      }
+      toast.success(t('Credential regenerated'))
+      return { status: 'completed' }
     },
     [channelId, invalidateCodexCredential, t]
   )
+
+  const handleCodexRegenerateDialogOpenChange = useCallback(
+    async (nextOpen: boolean) => {
+      if (nextOpen) {
+        setCodexRegenerateDialogOpen(true)
+        return
+      }
+      await cancelCodexRegeneration()
+    },
+    [cancelCodexRegeneration]
+  )
+
+  const handleExpireCodexDeviceAuthorization = useCallback(async () => {
+    await cancelCodexRegeneration({
+      closeDialog: false,
+      preserveDeviceAuthorization: true,
+    })
+  }, [cancelCodexRegeneration])
 
   // Unified function to update models
   const updateModels = useCallback(
@@ -1584,16 +1821,18 @@ export function ChannelMutateDrawer({
   )
 
   // Handle successful submission
-  const handleSuccess = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
-    if (channelId) {
-      queryClient.invalidateQueries({
-        queryKey: channelsQueryKeys.detail(channelId),
-      })
-    }
-    onOpenChange(false)
-    setOpen(null)
-  }, [channelId, queryClient, onOpenChange, setOpen])
+  const handleSuccess = useCallback(async () => {
+    await runAfterCodexRegenerationCancellation(cancelCodexRegeneration, () => {
+      queryClient.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
+      if (channelId) {
+        queryClient.invalidateQueries({
+          queryKey: channelsQueryKeys.detail(channelId),
+        })
+      }
+      onOpenChange(false)
+      setOpen(null)
+    })
+  }, [cancelCodexRegeneration, channelId, queryClient, onOpenChange, setOpen])
 
   // Show missing models confirmation dialog
   const confirmMissingModelMappings = useCallback(
@@ -1879,17 +2118,24 @@ export function ChannelMutateDrawer({
 
   // Handle drawer close
   const handleOpenChange = useCallback(
-    (v: boolean) => {
-      onOpenChange(v)
-      if (!v) {
-        form.reset(CHANNEL_FORM_DEFAULT_VALUES)
-        advancedNavScrollPendingRef.current = false
-        setActiveEditorSectionId(CHANNEL_EDITOR_SECTION_IDS.identity)
-        setExpandedEditorNavItemId(undefined)
-        setAdvancedSettingsOpen(false)
+    async (v: boolean) => {
+      if (v) {
+        onOpenChange(true)
+        return
       }
+      await runAfterCodexRegenerationCancellation(
+        cancelCodexRegeneration,
+        () => {
+          onOpenChange(false)
+          form.reset(CHANNEL_FORM_DEFAULT_VALUES)
+          advancedNavScrollPendingRef.current = false
+          setActiveEditorSectionId(CHANNEL_EDITOR_SECTION_IDS.identity)
+          setExpandedEditorNavItemId(undefined)
+          setAdvancedSettingsOpen(false)
+        }
+      )
     },
-    [onOpenChange, form]
+    [cancelCodexRegeneration, onOpenChange, form]
   )
 
   return (
@@ -2764,30 +3010,30 @@ export function ChannelMutateDrawer({
                             {/* General base_url for other types */}
                             {!isCodexChannel &&
                               ![3, 8, 22, 36, 45].includes(currentType) && (
-                              <FormField
-                                control={form.control}
-                                name='base_url'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{t('Base URL')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          FIELD_PLACEHOLDERS.BASE_URL
+                                <FormField
+                                  control={form.control}
+                                  name='base_url'
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>{t('Base URL')}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder={t(
+                                            FIELD_PLACEHOLDERS.BASE_URL
+                                          )}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormDescription>
+                                        {t(
+                                          'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
                                         )}
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(
-                                        'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
-                                      )}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            )}
+                                      </FormDescription>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
 
                             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
                               <FormField
@@ -2913,164 +3159,164 @@ export function ChannelMutateDrawer({
                                   control={form.control}
                                   name='key'
                                   render={({ field }) => {
-                                  let keyPlaceholder = t(
-                                    getKeyPromptForType(currentType)
-                                  )
-                                  if (isEditing) {
-                                    keyPlaceholder = t(
-                                      'Leave empty to keep existing key'
+                                    let keyPlaceholder = t(
+                                      getKeyPromptForType(currentType)
                                     )
-                                  } else if (
-                                    currentType === 33 &&
-                                    awsKeyType === 'api_key' &&
-                                    isBatchMode
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter API Key, one per line, format: APIKey|Region'
-                                    )
-                                  } else if (
-                                    currentType === 33 &&
-                                    awsKeyType === 'api_key'
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter API Key, format: APIKey|Region'
-                                    )
-                                  } else if (
-                                    currentType === 33 &&
-                                    isBatchMode
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
-                                    )
-                                  } else if (currentType === 33) {
-                                    keyPlaceholder = t(
-                                      'Enter key, format: AccessKey|SecretAccessKey|Region'
-                                    )
-                                  } else if (isBatchMode) {
-                                    keyPlaceholder = t(
-                                      'Enter one key per line for batch creation'
-                                    )
-                                  }
-
-                                  let keyDescription: ReactNode = t(
-                                    FIELD_DESCRIPTIONS.KEY
-                                  )
-                                  if (isEditing) {
-                                    let keyModeDescription = t(
-                                      'Append mode: New keys will be added to the end of the existing key list'
-                                    )
-                                    if (keyMode === 'replace') {
-                                      keyModeDescription = t(
-                                        'Replace mode: Will completely replace all existing keys'
+                                    if (isEditing) {
+                                      keyPlaceholder = t(
+                                        'Leave empty to keep existing key'
+                                      )
+                                    } else if (
+                                      currentType === 33 &&
+                                      awsKeyType === 'api_key' &&
+                                      isBatchMode
+                                    ) {
+                                      keyPlaceholder = t(
+                                        'Enter API Key, one per line, format: APIKey|Region'
+                                      )
+                                    } else if (
+                                      currentType === 33 &&
+                                      awsKeyType === 'api_key'
+                                    ) {
+                                      keyPlaceholder = t(
+                                        'Enter API Key, format: APIKey|Region'
+                                      )
+                                    } else if (
+                                      currentType === 33 &&
+                                      isBatchMode
+                                    ) {
+                                      keyPlaceholder = t(
+                                        'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
+                                      )
+                                    } else if (currentType === 33) {
+                                      keyPlaceholder = t(
+                                        'Enter key, format: AccessKey|SecretAccessKey|Region'
+                                      )
+                                    } else if (isBatchMode) {
+                                      keyPlaceholder = t(
+                                        'Enter one key per line for batch creation'
                                       )
                                     }
-                                    keyDescription = (
-                                      <>
-                                        {t(
-                                          'Enter new key to update, or leave empty to keep current key'
-                                        )}
-                                        {isMultiKeyChannel && (
-                                          <span className='text-warning mt-1 block'>
-                                            {keyModeDescription}
-                                          </span>
-                                        )}
-                                      </>
+
+                                    let keyDescription: ReactNode = t(
+                                      FIELD_DESCRIPTIONS.KEY
                                     )
-                                  } else if (isBatchMode) {
-                                    keyDescription = t(
-                                      'Enter one API key per line for batch creation'
-                                    )
-                                  }
-                                  return (
-                                    <FormItem>
-                                      <FormLabel>{t('API Key *')}</FormLabel>
-                                      <FormControl>
-                                        <Textarea
-                                          placeholder={keyPlaceholder}
-                                          rows={isBatchMode ? 8 : 4}
-                                          {...field}
-                                        />
-                                      </FormControl>
-                                      <FormDescription>
-                                        <div className='flex flex-col gap-2'>
-                                          <span>{keyDescription}</span>
-                                          {isBatchMode && (
-                                            <Button
-                                              type='button'
-                                              variant='outline'
-                                              size='sm'
-                                              onClick={handleDeduplicateKeys}
-                                              className='w-fit'
-                                            >
-                                              <Trash2 className='mr-2 h-4 w-4' />
-                                              {t('Remove Duplicates')}
-                                            </Button>
+                                    if (isEditing) {
+                                      let keyModeDescription = t(
+                                        'Append mode: New keys will be added to the end of the existing key list'
+                                      )
+                                      if (keyMode === 'replace') {
+                                        keyModeDescription = t(
+                                          'Replace mode: Will completely replace all existing keys'
+                                        )
+                                      }
+                                      keyDescription = (
+                                        <>
+                                          {t(
+                                            'Enter new key to update, or leave empty to keep current key'
                                           )}
-                                        </div>
-                                      </FormDescription>
-                                      {isEditing && canRevealChannelKey && (
-                                        <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
-                                          <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                            <div>
-                                              <p className='text-sm font-medium'>
-                                                {t('Current key')}
-                                              </p>
-                                              <p className='text-muted-foreground text-xs'>
-                                                {t(
-                                                  'Verification required to reveal the saved key.'
-                                                )}
-                                              </p>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
+                                          {isMultiKeyChannel && (
+                                            <span className='text-warning mt-1 block'>
+                                              {keyModeDescription}
+                                            </span>
+                                          )}
+                                        </>
+                                      )
+                                    } else if (isBatchMode) {
+                                      keyDescription = t(
+                                        'Enter one API key per line for batch creation'
+                                      )
+                                    }
+                                    return (
+                                      <FormItem>
+                                        <FormLabel>{t('API Key *')}</FormLabel>
+                                        <FormControl>
+                                          <Textarea
+                                            placeholder={keyPlaceholder}
+                                            rows={isBatchMode ? 8 : 4}
+                                            {...field}
+                                          />
+                                        </FormControl>
+                                        <FormDescription>
+                                          <div className='flex flex-col gap-2'>
+                                            <span>{keyDescription}</span>
+                                            {isBatchMode && (
                                               <Button
                                                 type='button'
                                                 variant='outline'
                                                 size='sm'
-                                                onClick={handleRevealKey}
-                                                disabled={
-                                                  isChannelKeyLoading ||
-                                                  verificationState.loading
-                                                }
+                                                onClick={handleDeduplicateKeys}
+                                                className='w-fit'
                                               >
-                                                {isChannelKeyLoading ||
-                                                verificationState.loading ? (
-                                                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                                ) : (
-                                                  <Eye className='mr-2 h-4 w-4' />
-                                                )}
-                                                {t('Reveal key')}
+                                                <Trash2 className='mr-2 h-4 w-4' />
+                                                {t('Remove Duplicates')}
                                               </Button>
-                                              <Button
-                                                type='button'
-                                                variant='ghost'
-                                                size='sm'
-                                                onClick={async () => {
-                                                  if (channelKey) {
-                                                    await copyToClipboard(
-                                                      channelKey
-                                                    )
-                                                  }
-                                                }}
-                                                disabled={!channelKey}
-                                              >
-                                                <Copy className='mr-2 h-4 w-4' />
-                                                {t('Copy')}
-                                              </Button>
-                                            </div>
-                                          </div>
-                                          <Input
-                                            readOnly
-                                            value={channelKey ?? ''}
-                                            placeholder={t(
-                                              'Hidden — verify to reveal'
                                             )}
-                                            className='font-mono'
-                                          />
-                                        </div>
-                                      )}
-                                      <FormMessage />
-                                    </FormItem>
-                                  )
+                                          </div>
+                                        </FormDescription>
+                                        {isEditing && canRevealChannelKey && (
+                                          <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
+                                            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                              <div>
+                                                <p className='text-sm font-medium'>
+                                                  {t('Current key')}
+                                                </p>
+                                                <p className='text-muted-foreground text-xs'>
+                                                  {t(
+                                                    'Verification required to reveal the saved key.'
+                                                  )}
+                                                </p>
+                                              </div>
+                                              <div className='flex items-center gap-2'>
+                                                <Button
+                                                  type='button'
+                                                  variant='outline'
+                                                  size='sm'
+                                                  onClick={handleRevealKey}
+                                                  disabled={
+                                                    isChannelKeyLoading ||
+                                                    verificationState.loading
+                                                  }
+                                                >
+                                                  {isChannelKeyLoading ||
+                                                  verificationState.loading ? (
+                                                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                                  ) : (
+                                                    <Eye className='mr-2 h-4 w-4' />
+                                                  )}
+                                                  {t('Reveal key')}
+                                                </Button>
+                                                <Button
+                                                  type='button'
+                                                  variant='ghost'
+                                                  size='sm'
+                                                  onClick={async () => {
+                                                    if (channelKey) {
+                                                      await copyToClipboard(
+                                                        channelKey
+                                                      )
+                                                    }
+                                                  }}
+                                                  disabled={!channelKey}
+                                                >
+                                                  <Copy className='mr-2 h-4 w-4' />
+                                                  {t('Copy')}
+                                                </Button>
+                                              </div>
+                                            </div>
+                                            <Input
+                                              readOnly
+                                              value={channelKey ?? ''}
+                                              placeholder={t(
+                                                'Hidden — verify to reveal'
+                                              )}
+                                              className='font-mono'
+                                            />
+                                          </div>
+                                        )}
+                                        <FormMessage />
+                                      </FormItem>
+                                    )
                                   }}
                                 />
                               )}
@@ -3082,9 +3328,10 @@ export function ChannelMutateDrawer({
                                     codexCredentialActionError ||
                                     (codexCredentialResponse?.success === false
                                       ? codexCredentialResponse.message
-                                      : codexCredentialQueryError instanceof Error
-                                        ? codexCredentialQueryError.message
-                                        : undefined)
+                                      : undefined) ||
+                                    (codexCredentialQueryError instanceof Error
+                                      ? codexCredentialQueryError.message
+                                      : undefined)
                                   }
                                   hasSavedChannel={Boolean(
                                     isEditing && channelId
@@ -3093,9 +3340,7 @@ export function ChannelMutateDrawer({
                                   isLoading={isCodexCredentialLoading}
                                   isRefreshing={isCodexCredentialRefreshing}
                                   isProbing={isCodexCredentialProbing}
-                                  isRegenerating={
-                                    isCodexCredentialRegenerating
-                                  }
+                                  isRegenerating={isCodexCredentialRegenerating}
                                   onRefresh={handleRefreshCodexCredential}
                                   onProbe={handleProbeCodexCredential}
                                   onRegenerate={handleStartCodexRegeneration}
@@ -4731,14 +4976,23 @@ export function ChannelMutateDrawer({
       />
 
       <CodexRegenerateDialog
-        open={codexRegenerateDialogOpen}
+        key={channelId ?? 'unsaved'}
+        open={open && codexRegenerateDialogOpen}
         channelName={
           codexCredentialResponse?.data?.channel_name ||
           currentName ||
           'OpenAI - Codex'
         }
-        onOpenChange={setCodexRegenerateDialogOpen}
-        onComplete={handleCompleteCodexRegeneration}
+        deviceAuthorization={
+          codexCancellationBlocked ? undefined : codexDeviceAuthorization
+        }
+        deviceStartError={codexCredentialActionError}
+        isStarting={isCodexCredentialRegenerating}
+        isCancelling={isCodexCancellationInFlight}
+        onOpenChange={handleCodexRegenerateDialogOpenChange}
+        onExpireDevice={handleExpireCodexDeviceAuthorization}
+        onPollDevice={handlePollCodexDeviceAuthorization}
+        onRestartDevice={handleStartCodexRegeneration}
       />
     </>
   )

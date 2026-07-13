@@ -85,6 +85,7 @@ ALLOWLIST=(
   '/root/.cache/pip|root|regenerable-package-cache|directory'
   '/root/.cache/node-gyp|root|regenerable-package-cache|directory'
   '/var/lib/snapd/cache|root|regenerable-package-cache|directory'
+  '/var/lib/apt/lists|root|regenerable-package-cache|directory'
   '/home/ubuntu/.bun/install/cache|ubuntu|regenerable-package-cache|directory'
 )
 

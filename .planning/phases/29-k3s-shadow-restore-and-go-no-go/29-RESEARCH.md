@@ -8,11 +8,14 @@
 
 As decisoes abaixo substituem as recomendacoes anteriores conflitantes deste documento:
 
-- origem live para backup: PostgreSQL do Podman pela porta host `8745`; o PgBouncer em `6432` e usado para cruzar identidade/invariantes, nao como origem do dump;
+- origem live para backup: PostgreSQL 17 nativo do host em `127.0.0.1:8745`, cluster `/var/lib/postgresql/17/main`, administrado pela unit `postgresql@17-main`; o PgBouncer em `10.11.1.11:6432` e usado para cruzar identidade/invariantes, nao como origem do dump;
+- runtime legado: o PostgreSQL Podman contem `DBRouterAiAtius` vazio e nunca e fonte de backup ou restore;
+- backup e restore: `pg_dump` 17 direto do host, target PostgreSQL 17 k3s integralmente limpo, restore em transacao unica e retry apenas apos `no-go` explicito arquivado;
+- evidencia: `cleanup.json` e historico e cluster-bound, enquanto o preflight sempre revalida cinco minutos do estado atual; `bootstrap.json` deve estar fresco, cluster-bound e vinculado ao hash atual dos manifests;
 - transporte shadow: `ClusterIP`, alcancavel diretamente pelo Apache/host conforme auditoria live; nenhuma reserva de NodePort ou regra de firewall adicional faz parte da Phase 29;
 - estabilidade de DiskPressure: `DiskPressure=False` e taint ausente por cinco minutos continuos, alem de pelo menos 20 GiB recuperados e alvo de 25% livre.
 
-Toda mencao posterior a NodePort como recomendacao deve ser lida como historico de pesquisa superado por este addendum, pelo `29-CONTEXT.md` e pelo audit live.
+Qualquer referência a NodePort neste documento descreve apenas uma alternativa rejeitada; o contrato executável da Phase 29 usa exclusivamente ClusterIP.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -45,9 +48,9 @@ O estado live é **NO-GO para aplicar o shadow agora**: `atius-srv-1` está `Rea
 
 Os manifests e scripts da Phase 22 não estão implementation-ready para a decisão locked: nenhum dos três workloads tem `nodeSelector`/required affinity para `atius-srv-1`; não há toleration, mas **não se deve adicionar toleration de DiskPressure como “correção”**; o apply sobe router junto com um Postgres vazio antes do restore; o smoke aceita sucesso parcial sem token; o Service é `ClusterIP`, sem endpoint host estável para Apache; e os PVCs herdam `local-path` com reclaim `Delete`. [VERIFIED: `k8s/router-ai-atius/*` e `scripts/k3s-router-*`] [CITED: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/] [CITED: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/]
 
-O backup citado está fora desta worktree, no checkout principal, e o SQL tem apenas 643 bytes. Isso exige substituição por backup novo e validação estrutural antes de qualquer restore; tamanho isolado não prova corrupção, mas não sustenta um gate de produção. [VERIFIED: filesystem read-only e SHA-256 do artefato]
+O backup citado está fora desta worktree, no checkout principal, e o SQL tem apenas 643 bytes. Isso exige substituição por backup novo criado por `pg_dump` 17 diretamente do PostgreSQL 17 nativo do host. O PostgreSQL Podman contém `DBRouterAiAtius` vazio e não pode participar como fonte; o PgBouncer `10.11.1.11:6432` é somente cross-check. Tamanho isolado não prova corrupção, mas o artefato antigo não sustenta um gate de produção. [VERIFIED: verdade live corrigida + filesystem read-only]
 
-**Primary recommendation:** Planejar Phase 29 em gates fail-closed: aliviar DiskPressure de forma sustentável → gerar/verificar novo backup → pinning rígido de todos os pods em `atius-srv-1` → subir somente Postgres → restaurar e validar → subir Redis/router shadow → smoke autenticado completo via `ClusterIP` diretamente alcancavel pelo host → decisão formal; Phase 30 só inicia com todos os gates verdes. [VERIFIED: síntese de repo + auditoria live] [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
+**Primary recommendation:** Planejar Phase 29 em gates fail-closed: aliviar DiskPressure de forma sustentável → revalidar cinco minutos do estado atual → produzir com `pg_dump` 17 e verificar backup do PostgreSQL 17 host → gerar bootstrap fresco vinculado aos manifests → pinning rígido dos pods em `atius-srv-1` → subir somente PostgreSQL 17 → provar target integralmente limpo → restaurar em transação única e validar → subir Redis/router shadow → smoke autenticado completo via `ClusterIP` diretamente alcançável pelo host → decisão formal; retry do restore só após no-go explícito e Phase 30 só inicia com todos os gates verdes. [VERIFIED: síntese de repo + auditoria live] [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
 
 ## Architectural Responsibility Map
 
@@ -55,7 +58,7 @@ O backup citado está fora desta worktree, no checkout principal, e o SQL tem ap
 |---|---|---|---|
 | Pinning de todos os pods | Orquestração k3s | Node `atius-srv-1` | Scheduler deve impor hostname; preferência não basta. [CITED: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/] |
 | Restore de produção | Database / Storage | Orquestração k3s | Postgres deve estar isolado do app até o restore e a validação terminarem. [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
-| Shadow endpoint | API / Backend | Host networking | Service expõe o router sem alterar Apache público. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport] |
+| Shadow endpoint | API / Backend | Host networking | Service ClusterIP expõe o router ao host sem alterar Apache público. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/] |
 | Cutover Apache | Host edge | Service k3s | Apache preserva TLS/paths e troca somente os upstreams Go (`/v1`, `/api`, `/health`, catch-all). [VERIFIED: `/etc/apache2/sites-enabled/router.atius.com.br-le-ssl.conf`] |
 | Rollback | Host edge | Podman | Primeiro restaura Apache; Podman permanece ativo e validável durante soak. [VERIFIED: `docs/K3S-MIGRATION.md` e scripts de rollback] |
 | Persistência | local-path no srv1 | Backup externo | PVC local não é HA e acompanha o nó; backup é a proteção real. [CITED: https://kubernetes.io/docs/concepts/storage/volumes/#local] |
@@ -75,7 +78,7 @@ O backup citado está fora desta worktree, no checkout principal, e o SQL tem ap
 ## Project Constraints (from AGENTS.md)
 
 - Toda tarefa pesada deve usar no máximo 20% da CPU total; no host de 4 vCPU, máximo 0.8 CPU. Builds/testes pesados usam `scripts/podman-admin.sh`. [VERIFIED: `AGENTS.md`]
-- Em k3s, cada pod normal deve pedir e limitar `500m`; o Redis atual usa `250m` e precisa ser alinhado antes da execução. [VERIFIED: `AGENTS.md` + `redis.yaml`]
+- Em k3s, cada container dos Pods gerenciados deve pedir e limitar exatamente `500m`; a validação de manifests deve falhar para qualquer valor diferente. [VERIFIED: `AGENTS.md` + gate atual]
 - Produção deve permanecer Go-only, sem `model-detailed`; `/v1/models` mantém root `{"data":[...]}` sem campos internos. [VERIFIED: `AGENTS.md`]
 - `embedding-gte-v1` permanece governado pelo router Go e deve retornar dimensão 768. [VERIFIED: `AGENTS.md`]
 - Nenhum segredo pode entrar em repo, docs, logs ou chat; HashiCorp Vault é a fonte autoritativa. [VERIFIED: `AGENTS.md`]
@@ -90,7 +93,7 @@ O backup citado está fora desta worktree, no checkout principal, e o SQL tem ap
 | Componente | Versão/estado | Purpose | Why Standard |
 |---|---|---|---|
 | k3s | v1.35.5+k3s1 | Scheduler, Service, StatefulSet, PVC | Runtime live do cluster. [VERIFIED: `k3s --version`] |
-| PostgreSQL image | `postgres:15-alpine` | DB shadow/target | Já fixado no manifest; restore por `psql`. [VERIFIED: `postgres.yaml`] |
+| PostgreSQL target | imagem por digest, major 17 obrigatória | DB shadow/target | O script e a evidência devem rejeitar target que não reporte `server_version_num` 17; restore pelo `psql` do próprio Pod PG17. [VERIFIED: manifest + contrato live] |
 | Redis image | `redis:7-alpine` | Cache shadow | Já fixado, efêmero no shadow. [VERIFIED: `redis.yaml`] |
 | Apache | 2.4.58 | TLS e edge público | Edge live atual; não introduzir Ingress. [VERIFIED: `apache2ctl -v` + vhost live] |
 | Podman | 4.9.3 | Produção/rollback durante soak | Runtime atual preservado até decisão final. [VERIFIED: `podman --version` + CONTEXT] |
@@ -99,8 +102,8 @@ O backup citado está fora desta worktree, no checkout principal, e o SQL tem ap
 
 | Ferramenta | Versão | Purpose | When to Use |
 |---|---|---|---|
-| `pg_dump` | 17.10 | Criar backup lógico | Antes do restore; cliente 17 pode dump de server 15, sujeito à validação do comando real. [VERIFIED: host CLI] |
-| `psql` | 18.4 | Restore plain SQL | Usar `-X --set ON_ERROR_STOP=on`. [VERIFIED: host CLI] [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
+| `pg_dump` | 17.x | Criar backup lógico | Executar diretamente no host contra o PostgreSQL 17 canônico em `127.0.0.1:8745`; rejeitar outra major. [VERIFIED: verdade live] |
+| `psql` | 17.x no Pod target | Restore plain SQL | Usar `-X --set ON_ERROR_STOP=on --single-transaction` no PostgreSQL 17 k3s. [VERIFIED: contrato do restore] [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
 | curl | 8.5.0 | Smokes HTTP | Shadow e público. [VERIFIED: host CLI] |
 | Python | 3.12.3 | Assertions JSON/embeddings | Script de smoke existente. [VERIFIED: host CLI + scripts] |
 
@@ -108,8 +111,8 @@ O backup citado está fora desta worktree, no checkout principal, e o SQL tem ap
 
 | Instead of | Could Use | Tradeoff |
 |---|---|---|
-| NodePort fixo | Ingress | Fora do escopo e cluster não tem IngressClass. [VERIFIED: locked decision + live cluster] |
-| NodePort fixo | `kubectl port-forward` | Útil apenas para diagnóstico; processo efêmero não é upstream de produção durável. [ASSUMED] |
+| ClusterIP | Ingress | Fora do escopo e cluster não tem IngressClass; a auditoria live já provou host → Service. [VERIFIED: locked decision + live cluster] |
+| ClusterIP | NodePort/hostPort/port-forward | Exposição adicional ou processo efêmero sem necessidade; o endpoint shadow permanece declarativo e interno. [VERIFIED: locked decision] |
 | local-path | Storage distribuído | Melhor HA, mas expande escopo; decisão atual exige mesmo host e rollback por backup. [ASSUMED] |
 
 **Installation:** nenhuma dependência externa deve ser instalada na Phase 29; usar componentes já disponíveis. [VERIFIED: environment audit]
@@ -132,13 +135,16 @@ backup novo + checksum
 namespace + config + Secret + Postgres/PVC (pinados srv1)
         |
         v
-restore psql -- ON_ERROR_STOP --> validação estrutural/contagens
+prova target PG17 integralmente limpo
+        |
+        v
+restore psql -- ON_ERROR_STOP --single-transaction --> validação estrutural/contagens
         | falha -> apagar/recriar target shadow somente; NO-GO
         v
 Redis + Router/PVC (pinados srv1)
         |
         v
-Service NodePort fixo --> smoke direto 10.11.1.11:<nodePort>
+Service ClusterIP --> smoke direto do host no spec.clusterIP:3000
         | falha -> NO-GO, Apache continua 127.0.0.1:3000
         v
 GO Phase 29 --> Phase 30: backup vhost -> retarget Apache -> public smoke
@@ -153,9 +159,9 @@ restore vhost -> reload Apache -> smoke Podman
 k8s/router-ai-atius/
 ├── namespace.yaml
 ├── configmap.yaml
-├── postgres.yaml       # pinned srv1, PVC protected
+├── postgres.yaml       # PostgreSQL 17 pinned srv1, PVC protected
 ├── redis.yaml          # pinned srv1
-└── router.yaml         # pinned srv1, fixed NodePort
+└── router.yaml         # pinned srv1, Service ClusterIP
 scripts/
 ├── k3s-router-preflight.sh
 ├── k3s-router-backup.sh
@@ -182,32 +188,30 @@ Não adicionar toleration para `node.kubernetes.io/disk-pressure`; isso permitir
 
 ### Pattern 2: Restore before application start
 
-**What:** aplicar namespace/config/secret/Postgres primeiro; aguardar readiness; restaurar em DB alvo limpo com `psql -X --set ON_ERROR_STOP=on`; validar; somente depois aplicar Redis/router. [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
+**What:** aplicar namespace/config/secret/PostgreSQL 17 primeiro; aguardar readiness; provar que o schema target está integralmente limpo; restaurar atomicamente com `psql -X --set ON_ERROR_STOP=on --single-transaction`; validar; somente depois aplicar Redis/router. Uma nova tentativa só pode ocorrer com opt-in explícito sobre evidência anterior `no-go`, arquivada antes do retry. [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
 
 ```bash
 # Source: PostgreSQL official docs; valores vêm do Secret/Vault em runtime
-psql -X --set ON_ERROR_STOP=on -d DBRouterAiAtius < DBRouterAiAtius.sql
+psql -X --set ON_ERROR_STOP=on --single-transaction -d DBRouterAiAtius < DBRouterAiAtius.sql
 ```
 
 O restore deve registrar checksum do dump, server/client versions, exit code, schema/tables esperados e contagens/invariantes não sensíveis. [ASSUMED]
 
 ### Pattern 3: Stable shadow endpoint
 
-**What:** Service `NodePort` com porta explícita livre, target `3000`, e Apache Phase 30 apontando para `http://10.11.1.11:<nodePort>`. NodePort é exposto em cada node por padrão; firewall/policy deve limitar acesso e o backend só é aprovado se o endpoint do srv1 tiver endpoints locais. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport]
+**What:** Service `ClusterIP`, porta `3000`, resolvido do objeto live e acessado diretamente pelo host para o smoke shadow. A auditoria live já provou host → rede de Services; não criar Ingress, NodePort, hostPort, port-forward persistente nem regra de firewall nesta fase. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/]
 
 ```yaml
 # Source: Kubernetes official docs
 spec:
-  type: NodePort
-  externalTrafficPolicy: Local
+  type: ClusterIP
   ports:
     - name: http
       port: 3000
       targetPort: http
-      nodePort: 33000 # escolher porta livre dentro do range configurado
 ```
 
-O planner deve verificar o range real e firewall antes de fixar `33000`; ela estava livre na inspeção local, mas disponibilidade é temporal. [VERIFIED: `ss` read-only em 2026-07-12] [ASSUMED]
+O gate deve ler `spec.clusterIP`, exigir EndpointSlice local/Ready e executar o smoke contra esse endereço sem alterar o Apache público. [VERIFIED: auditoria live + decisão vinculante]
 
 ### Pattern 4: PVC protection
 
@@ -227,7 +231,7 @@ O planner deve verificar o range real e firewall antes de fixar `33000`; ela est
 |---|---|---|---|
 | Scheduling | script que move pods após start | nodeSelector/required affinity | Scheduler aplica invariant antes de bind. [CITED: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/] |
 | Restore error detection | grep de logs | `psql -X --set ON_ERROR_STOP=on` | Falha com exit não-zero em erro SQL. [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
-| Edge shadow | túnel shell persistente | Service NodePort | Endpoint declarativo e estável. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport] |
+| Edge shadow | túnel shell persistente ou exposição adicional | Service ClusterIP | Endpoint declarativo, interno e já alcançável pelo host. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/] |
 | Secret storage | `.env` no repo | Vault → temporary env/stdin → Kubernetes Secret | Política do projeto proíbe persistência de segredo. [VERIFIED: `AGENTS.md`] |
 
 **Key insight:** o cutover não é um único apply; é uma cadeia de provas reversíveis, e cada gate deve impedir automaticamente o próximo estágio. [ASSUMED]
@@ -236,7 +240,8 @@ O planner deve verificar o range real e firewall antes de fixar `33000`; ela est
 
 | Category | Items Found | Action Required |
 |---|---|---|
-| Stored data | Postgres Podman ativo; backup antigo de 643 bytes fora da worktree; PVC target ainda inexistente. [VERIFIED: repo principal + cluster] | Novo dump, checksum, restore staged e validação de invariantes. |
+| Stored data canônica | PostgreSQL 17 host em `127.0.0.1:8745`, cluster `/var/lib/postgresql/17/main`, unit `postgresql@17-main`; PgBouncer `10.11.1.11:6432` para cross-check; backup antigo de 643 bytes fora da worktree; PVC target ainda inexistente. [VERIFIED: verdade live + repo principal + cluster] | `pg_dump` 17 direto do host, checksum, restore atômico em target PG17 integralmente limpo e validação de invariantes. |
+| Stored data legada | PostgreSQL Podman com `DBRouterAiAtius` vazio. [VERIFIED: verdade live] | Excluir de toda seleção de origem; nunca consultar para backup ou restore. |
 | Live service config | Apache live aponta Go paths e catch-all para `127.0.0.1:3000`; docs continuam em `127.0.0.1:3003`. [VERIFIED: live vhost] | Phase 30 troca apenas regras do router; não tocar docs/assets. |
 | OS-registered state | `container-router-ai-atius.service` é rollback; k3s é system service. [VERIFIED: repo docs/live inspection] | Manter Podman ativo durante soak; não restartar no shadow. |
 | Secrets/env vars | Secret namespace não existe; valores reais devem vir do Vault. [VERIFIED: live cluster + AGENTS] | Criar fora do git, sem imprimir valores; remover arquivo temporário com segurança. |
@@ -250,7 +255,7 @@ O planner deve verificar o range real e firewall antes de fixar `33000`; ela est
 
 ### Pitfall 2: Restore parcial parecer sucesso
 
-**What goes wrong:** `psql` continua após erro por padrão. **Avoid:** `-X --set ON_ERROR_STOP=on`, target limpo e invariantes pós-restore. [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
+**What goes wrong:** `psql` continua após erro por padrão ou deixa estado parcial. **Avoid:** provar target integralmente limpo, usar `-X --set ON_ERROR_STOP=on --single-transaction`, validar invariantes pós-restore e bloquear retry que não parta de no-go explícito arquivado. [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
 
 ### Pitfall 3: PVC deletado junto com namespace
 
@@ -302,8 +307,8 @@ scripts/k3s-router-smoke.sh
 | Old Approach | Current Approach | When Changed | Impact |
 |---|---|---|---|
 | Metrics unavailable | Metrics live (`kubectl top`) | confirmado 2026-07-12 | Remove blocker de observabilidade, não DiskPressure. [VERIFIED: live cluster] |
-| ClusterIP sem host endpoint | NodePort fixo para Apache | recomendação Phase 29 | Torna shadow/cutover explícitos sem Ingress. [CITED: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport] |
-| Apply all-at-once | Restore staged | recomendação Phase 29 | Impede app contra DB vazio. [VERIFIED: current script gap] |
+| Suposição de que ClusterIP não era acessível pelo host | ClusterIP resolvido live e acessado diretamente | auditoria Phase 29 | Evita exposição adicional e mantém Apache intacto. [VERIFIED: auditoria live] |
+| Apply all-at-once | Restore staged e atômico em target integralmente limpo | recomendação Phase 29 | Impede app contra DB vazio e evita estado parcial. [VERIFIED: contrato corrigido] |
 
 **Deprecated/outdated:** “Metrics API not available” no CONTEXT está desatualizado; métricas estavam disponíveis nesta pesquisa. [VERIFIED: `kubectl top nodes`]
 
@@ -311,18 +316,21 @@ scripts/k3s-router-smoke.sh
 
 | # | Claim | Section | Risk if Wrong |
 |---|---|---|---|
-| A1 | `kubectl port-forward` não deve ser endpoint de produção durável. | Alternatives | Baixo; NodePort continua recomendado por ser declarativo. |
+| A1 | `kubectl port-forward` não deve ser endpoint durável. | Alternatives | Baixo; ClusterIP já é declarativo e alcançável pelo host. |
 | A2 | Storage distribuído é fora do escopo da Phase 29. | Alternatives | Médio; usuário pode optar por expandir escopo. |
-| A3 | Fixar NodePort 33000 será aceitável após checar range/firewall. | Pattern 3 | Médio; pode haver política de rede/port range distinta. |
-| A4 | Invariantes de contagem/objetos devem ser definidos para validar restore. | Pattern 2 | Alto; sem critérios, restore pode passar incompleto. |
+| A3 | Invariantes de contagem/objetos devem ser definidos para validar restore. | Pattern 2 | Alto; sem critérios, restore pode passar incompleto. |
 
 ## Open Questions — RESOLVED
 
-1. **RESOLVED — origem exata dos dados de producao:** o backup fresco sai diretamente do PostgreSQL do Podman pela porta host `8745`, database `DBRouterAiAtius`. O PgBouncer em `10.1.1.1:6432` serve para cruzar identidade, user/version e invariantes nao sensiveis; nao e a origem do dump. O backup antigo permanece invalido como gate.
+1. **RESOLVED — origem exata dos dados de producao:** o backup fresco sai com `pg_dump` 17 diretamente do PostgreSQL 17 nativo do host em `127.0.0.1:8745`, database `DBRouterAiAtius`, cluster `/var/lib/postgresql/17/main`, unit `postgresql@17-main`. O PgBouncer em `10.11.1.11:6432` serve para cruzar identidade, user/version e invariantes nao sensiveis; nao e a origem do dump. O backup antigo permanece invalido como gate.
+
+   O PostgreSQL Podman possui `DBRouterAiAtius` vazio e nunca e fonte.
 
 2. **RESOLVED — transporte shadow:** usar somente o `ClusterIP` do Service `router-ai-atius`. A auditoria live provou conectividade host → rede de Services; nao selecionar NodePort, nao abrir firewall, nao usar Ingress/hostPort e nao alterar Apache na Phase 29.
 
 3. **RESOLVED — janela de estabilidade:** exigir `DiskPressure=False` e ausencia de `node.kubernetes.io/disk-pressure` por cinco minutos continuos, amostrados no maximo a cada 30 segundos, depois de recuperar pelo menos 20 GiB e atingir alvo de pelo menos 25% livre.
+
+4. **RESOLVED — validade das evidencias:** `cleanup.json` registra reclaim historico e deve ser do cluster atual; o preflight nao cria JSON proprio e sempre revalida cinco minutos do estado atual. `bootstrap.json` deve ser do cluster atual, ter no maximo uma hora e corresponder ao hash corrente dos manifests. `backup.json` e `restore.json` registram backup/restore, com restore atomico, target limpo e retry somente de no-go explicito arquivado.
 
 ## Environment Availability
 
@@ -334,7 +342,7 @@ scripts/k3s-router-smoke.sh
 | IngressClass | ingress | ✗ | — | nao necessario; host alcanca ClusterIP diretamente |
 | Apache | Phase 30 edge | ✓ | 2.4.58 | rollback vhost |
 | Podman | rollback | ✓ | 4.9.3 | — |
-| pg_dump/psql | backup/restore | ✓ | 17.10 / 18.4 | container CLI version-matched |
+| pg_dump/psql | backup/restore | ✓ | pg_dump 17 host / psql 17 target | rejeitar major divergente |
 | curl/Python/jq | smokes | ✓ | 8.5.0 / 3.12.3 / 1.7 | — |
 
 [VERIFIED: live environment audit]
@@ -396,8 +404,8 @@ scripts/k3s-router-smoke.sh
 | Pattern | STRIDE | Standard Mitigation |
 |---|---|---|
 | Secret vazado em env/temp/log | Information Disclosure | Vault, arquivo mode 0600 quando inevitável, cleanup e nunca `set -x`. [VERIFIED: AGENTS] |
-| NodePort exposto à rede inteira | Information Disclosure / DoS | firewall allowlist e teste pelo Apache host. [ASSUMED] |
-| Restore sobre DB incorreto | Tampering | namespace/DSN assertion, target limpo, ON_ERROR_STOP e invariantes. [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
+| Endpoint shadow exposto indevidamente | Information Disclosure / DoS | manter Service ClusterIP e provar EndpointSlice local/Ready; nenhuma exposição adicional. [VERIFIED: decisão vinculante] |
+| Restore sobre DB incorreto ou parcial | Tampering | origem host PG17, target PG17 integralmente limpo, transação única, ON_ERROR_STOP, retry somente de no-go arquivado e invariantes. [CITED: https://www.postgresql.org/docs/current/backup-dump.html] |
 | PVC apagado | Tampering / DoS | reclaim Retain e backup externo verificado. [CITED: https://kubernetes.io/docs/tasks/administer-cluster/change-pv-reclaim-policy/] |
 | Supply-chain por tag `latest` | Tampering | pin de digest arm64 aprovado. [ASSUMED] |
 
@@ -411,7 +419,7 @@ scripts/k3s-router-smoke.sh
 - https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ — taints/tolerations.
 - https://kubernetes.io/docs/concepts/storage/storage-classes/#volume-binding-mode — delayed binding.
 - https://kubernetes.io/docs/concepts/storage/persistent-volumes/#reclaiming — reclaim behavior.
-- https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport — NodePort.
+- https://kubernetes.io/docs/concepts/services-networking/service/ — ClusterIP e Services.
 - https://www.postgresql.org/docs/current/backup-dump.html — dump/restore fail-closed.
 
 ### Secondary (MEDIUM confidence)
@@ -420,7 +428,7 @@ scripts/k3s-router-smoke.sh
 
 ### Tertiary (LOW confidence)
 
-- Assumptions A1–A4 e controles de firewall/supply-chain que ainda exigem decisão/validação live.
+- Assumptions A1–A3 e controle de supply-chain que ainda exige validação live.
 
 ## Metadata
 

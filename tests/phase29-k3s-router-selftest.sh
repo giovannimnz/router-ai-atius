@@ -30,6 +30,10 @@ expect_fail apply-gate scripts/k3s-router-apply-shadow.sh --live --cleanup-evide
 expect_fail cleanup-evidence-path env PHASE29_EXECUTE=1 PHASE29_CLEANUP_CONFIRM=DELETE_ONLY_LITERAL_ALLOWLIST scripts/k3s-router-cleanup.sh --live --evidence-dir "$tmp/outside-root"
 scripts/k3s-router-cleanup.sh --self-test
 scripts/k3s-router-preflight.sh --self-test
+grep -Fq "evidence_cluster_ok \"\$cleanup\"" scripts/k3s-router-preflight.sh ||
+  fail 'cleanup evidence is not treated as historical cluster-bound evidence'
+grep -Fq "evidence_fresh_ok \"\$bootstrap\"" scripts/k3s-router-preflight.sh ||
+  fail 'bootstrap evidence freshness is not enforced'
 scripts/k3s-router-bootstrap.sh --self-test
 scripts/k3s-router-apply-shadow.sh --self-test
 echo "phase29 k3s router self-tests: PASS"

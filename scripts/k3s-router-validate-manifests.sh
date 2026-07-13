@@ -99,6 +99,12 @@ if not re.fullmatch(r"ghcr\.io/giovannimnz/router-ai-atius@sha256:[0-9a-f]{64}",
 if container.get("imagePullPolicy") != "Never":
     raise SystemExit("router imagePullPolicy must be Never for the imported image")
 
+postgres = workloads["router-ai-atius-postgres"]
+postgres_container = postgres["spec"]["template"]["spec"]["containers"][0]
+approved_postgres = "docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d"
+if postgres_container.get("image") != approved_postgres:
+    raise SystemExit("PostgreSQL image must use the approved PostgreSQL 17 arm64 digest")
+
 for group in docs.values():
     for doc in group:
         if doc.get("kind") == "Ingress":

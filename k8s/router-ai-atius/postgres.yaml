@@ -62,7 +62,7 @@ spec:
                     values: ["true"]
       containers:
         - name: postgres
-          image: docker.io/library/postgres:15-alpine
+          image: docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432

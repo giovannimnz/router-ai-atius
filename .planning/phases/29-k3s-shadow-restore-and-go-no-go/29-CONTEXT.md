@@ -21,6 +21,16 @@ o trafego publico.
   bind, antes de qualquer etapa destrutiva.
 - O apply deve ser estagiado: namespace/config/secret/PostgreSQL; restore e
   validacao; Redis; router. O router nao pode iniciar contra banco vazio.
+- A fonte canonica de `DBRouterAiAtius` e o PostgreSQL 17 nativo do host em
+  `127.0.0.1:8745`, cluster `/var/lib/postgresql/17/main`, administrado por
+  `postgresql@17-main`. O PgBouncer em `10.11.1.11:6432` serve somente para
+  cross-check de identidade e invariantes; o PostgreSQL Podman esta vazio e
+  nunca pode ser origem de backup ou restore.
+- O backup deve usar `pg_dump` 17 diretamente contra o PostgreSQL 17 do host e
+  o restore deve terminar em PostgreSQL 17 no k3s.
+- O target k3s deve ser provadamente integralmente limpo antes da importacao. O
+  restore e atomico, falha no primeiro erro e so admite retry apos um `no-go`
+  explicito, preservando a evidencia anterior.
 - Secrets reais sao criados fora do Git a partir das fontes operacionais atuais;
   nenhum valor pode aparecer em logs, evidencias, planos ou commits.
 - A imagem deve ser imutavel e importada no containerd do k3s; e proibido usar
@@ -30,6 +40,10 @@ o trafego publico.
   bloqueio tecnico comprovado.
 - O smoke e o go gate sao fail-closed: token ausente, endpoint nao autenticado,
   restore incompleto ou evidencia ausente resultam em no-go.
+- A evidencia de cleanup e historica, mas deve pertencer ao cluster atual. Cada
+  preflight revalida por cinco minutos o estado atual de espaco, DiskPressure e
+  taint. A evidencia de bootstrap deve estar fresca, pertencer ao cluster atual
+  e corresponder exatamente ao hash dos manifests usados na execucao.
 - Antes de aposentar Podman, o CLIAnything deve possuir backend k3s validado para
   operacao do banco sem dependencia de `podman exec`.
 
@@ -44,6 +58,10 @@ o trafego publico.
 - O trafego publico continua no Podman via Apache em `127.0.0.1:3000`.
 - O backup antigo citado no planejamento nao e suficiente; a fase exige dump
   fresco e validado antes do restore.
+- Operacoes pesadas permanecem limitadas a no maximo 20% da CPU do host; cada
+  container dos Pods gerenciados deve pedir e limitar exatamente `500m` de CPU.
+  Secrets continuam vindo do Vault sem valores em arquivos versionados ou
+  evidencias.
 
 ## Definicao de Sucesso
 

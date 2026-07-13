@@ -139,9 +139,19 @@ if container.get("imagePullPolicy") != "Never":
 
 postgres = workloads["router-ai-atius-postgres"]
 postgres_container = postgres["spec"]["template"]["spec"]["containers"][0]
-approved_postgres = "docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d"
+approved_postgres = "docker.io/library/postgres@sha256:5530681ea5d3e2ed4ce396f9b5cb443efbac6baf2a8a19c0c0635e40ae7eadce"
 if postgres_container.get("image") != approved_postgres:
     raise SystemExit("PostgreSQL image must use the approved PostgreSQL 17 arm64 digest")
+if postgres_container.get("command") != ["/bin/bash", "-ec"]:
+    raise SystemExit("PostgreSQL must generate the canonical pt_BR.UTF-8 locale before startup")
+postgres_argv = "\n".join(postgres_container.get("args", []))
+if "localedef -i pt_BR" not in postgres_argv or "exec docker-entrypoint.sh postgres" not in postgres_argv:
+    raise SystemExit("PostgreSQL locale bootstrap or entrypoint contract is missing")
+postgres_env = {item.get("name"): item for item in postgres_container.get("env", [])}
+if postgres_env.get("LANG", {}).get("value") != "pt_BR.UTF-8":
+    raise SystemExit("PostgreSQL LANG must stay pt_BR.UTF-8")
+if postgres_env.get("POSTGRES_INITDB_ARGS", {}).get("value") != "--locale-provider=libc --locale=pt_BR.UTF-8":
+    raise SystemExit("PostgreSQL initdb locale must stay pt_BR.UTF-8/libc")
 
 redis = workloads["router-ai-atius-redis"]
 redis_container = redis["spec"]["template"]["spec"]["containers"][0]

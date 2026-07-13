@@ -116,7 +116,7 @@ run_sequential_lineage_case() {
 
 run_sequential_lineage_case
 
-grep -Fq 'image: docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d' k8s/router-ai-atius/postgres.yaml ||
+grep -Fq 'image: docker.io/library/postgres@sha256:5530681ea5d3e2ed4ce396f9b5cb443efbac6baf2a8a19c0c0635e40ae7eadce' k8s/router-ai-atius/postgres.yaml ||
   fail 'k3s target PostgreSQL image is not pinned by digest'
 grep -Fq 'cpu: 500m' k8s/router-ai-atius/postgres.yaml ||
   fail 'PostgreSQL pod does not retain the 500m CPU contract'

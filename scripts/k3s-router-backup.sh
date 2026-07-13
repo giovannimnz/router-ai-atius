@@ -22,6 +22,7 @@ postgres_millicores=""
 postgres_quota_restored=false
 postgres_quota_lock_fd=""
 postgres_quota_lock_root="$HOME/.local/state/router-ai-atius/phase29"
+postgres_runtime_quota_drop_in="/run/systemd/system.control/${postgres_unit}.d/50-CPUQuota.conf"
 postgres_unit_before='{}'
 postgres_unit_applied='{}'
 postgres_unit_restored='{}'
@@ -128,6 +129,7 @@ set_postgres_runtime_quota() {
 }
 
 reset_postgres_runtime_quota() {
+  local expected_drop_in
   if [ -n "$quota_test_state" ]; then
     printf '%s\n' 'CPUQuota=' >> "$quota_test_state/set-property.calls"
     tr ' ' '\n' < "$quota_test_state/DropInPaths" |
@@ -138,6 +140,14 @@ reset_postgres_runtime_quota() {
     cp "$quota_test_state/effective_cpu_max_before" "$quota_test_state/effective_cpu_max"
   else
     sudo -n systemctl set-property --runtime "$postgres_unit" CPUQuota= >/dev/null
+    if sudo -n test -e "$postgres_runtime_quota_drop_in"; then
+      expected_drop_in=$'# This is a drop-in unit file extension, created via "systemctl set-property"\n# or an equivalent operation. Do not edit.\n[Service]\nCPUQuota='
+      [ "$(sudo -n cat "$postgres_runtime_quota_drop_in")" = "$expected_drop_in" ] ||
+        die 'runtime quota drop-in changed before cleanup'
+      sudo -n rm -- "$postgres_runtime_quota_drop_in"
+      sudo -n rmdir --ignore-fail-on-non-empty "$(dirname "$postgres_runtime_quota_drop_in")"
+      sudo -n systemctl daemon-reload >/dev/null
+    fi
   fi
 }
 
@@ -402,7 +412,7 @@ WITH selected AS (
   FROM pg_database d JOIN pg_tablespace t ON t.oid = d.dattablespace
   WHERE d.datname = current_database()
 ), acl AS (
-  SELECT COALESCE(jsonb_agg(value ORDER BY value), '[]'::jsonb) AS values
+  SELECT COALESCE(jsonb_agg(value::text ORDER BY value::text), '[]'::jsonb) AS values
   FROM selected d LEFT JOIN LATERAL unnest(d.datacl) value ON true WHERE value IS NOT NULL
 ), labels AS (
   SELECT COALESCE(jsonb_agg(jsonb_build_object('provider',provider,'label',label) ORDER BY provider,label), '[]'::jsonb) AS values
@@ -413,7 +423,7 @@ SELECT jsonb_build_object(
   'name', d.datname,
   'owner', pg_get_userbyid(d.datdba),
   'tablespace', d.tablespace_name,
-  'properties', to_jsonb(d) - ARRAY['oid','datdba','dattablespace','datfrozenxid','datminmxid','datacl','tablespace_name'],
+  'properties', to_jsonb(d) - ARRAY['oid','datdba','dattablespace','datfrozenxid','datminmxid','datacl','datcollversion','tablespace_name'],
   'acl', acl.values,
   'comment', obj_description(d.oid,'pg_database'),
   'security_labels', labels.values
@@ -733,5 +743,9 @@ jq -n \
   '{status:"go",generated_at:$generated_at,generated_at_epoch:$generated_at_epoch,source:{kind:"host-postgresql",host:$source_host,port:$source_port,server_addr:$server_addr,database:$database,user:$database_user,server_version:$server_version,server_version_num:$server_version_num,data_directory:$data_directory,systemd_unit:$postgres_unit,backend_unit_matched:true},pgbouncer_crosscheck:{host:$pgbouncer_host,port:$pgbouncer_port,matched:true},pg_dump_version:$pg_dump_version,cpu_max:$cpu_max,cpu:{client_cpu_max:$cpu_max,postgres_cpu_max:$postgres_cpu_max,client_millicores:$client_millicores,postgres_millicores:$postgres_millicores,aggregate_millicores:$aggregate_millicores,postgres_quota_temporarily_applied:$postgres_quota_temporarily_applied,postgres_quota_restored:$postgres_quota_restored,unit_state:{before:$postgres_unit_before,applied:$postgres_unit_applied,restored:$postgres_unit_restored}},dump:{path:"db/DBRouterAiAtius.sql",size_bytes:$dump_size_bytes,sha256:$dump_sha256,structurally_valid:true,subscriptions_included:false,owners_included:true,acl_included:true},database_inventory:{format:"phase29-database-inventory-v2",path:"db/DBRouterAiAtius.inventory",schema_ddl_path:"db/DBRouterAiAtius.schema.sql",schema_ddl_sha256:$schema_ddl_sha256,size_bytes:$inventory_size_bytes,sha256:$inventory_sha256,source_backup_matched:true,target_equality_required:true,sanitized:true},invariants:{public_tables:$table_count,channels:$channels,users:$users,tokens:$tokens,subscriptions:$subscriptions}}' \
   > "$backup_dir/backup.json"
 chmod 600 "$backup_dir/backup.json" "$dump" "$checksum_file" "$inventory" "$schema_ddl"
+if [ -e "$evidence_dir/backup.json" ] || [ -L "$evidence_dir/backup.json" ]; then
+  die 'canonical backup evidence already exists'
+fi
+ln "$backup_dir/backup.json" "$evidence_dir/backup.json"
 success=true
 echo "K3S_BACKUP_DIR=$backup_dir"

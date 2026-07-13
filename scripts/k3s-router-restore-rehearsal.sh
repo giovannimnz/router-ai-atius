@@ -18,9 +18,12 @@ original_args=("$@")
 restore_started=false
 restore_evidence=""
 retry_no_go=false
+replace_go=false
+replace_go_target=false
 retry_prior_evidence=""
 retry_prior_sha256=""
 retry_source_evidence=""
+lineage_prior_status=""
 tmp=""
 active_pid=""
 restore_lock_fd=""
@@ -308,7 +311,7 @@ WITH selected AS (
   FROM pg_database d JOIN pg_tablespace t ON t.oid = d.dattablespace
   WHERE d.datname = current_database()
 ), acl AS (
-  SELECT COALESCE(jsonb_agg(value ORDER BY value), '[]'::jsonb) AS values
+  SELECT COALESCE(jsonb_agg(value::text ORDER BY value::text), '[]'::jsonb) AS values
   FROM selected d LEFT JOIN LATERAL unnest(d.datacl) value ON true WHERE value IS NOT NULL
 ), labels AS (
   SELECT COALESCE(jsonb_agg(jsonb_build_object('provider',provider,'label',label) ORDER BY provider,label), '[]'::jsonb) AS values
@@ -319,7 +322,7 @@ SELECT jsonb_build_object(
   'name', d.datname,
   'owner', pg_get_userbyid(d.datdba),
   'tablespace', d.tablespace_name,
-  'properties', to_jsonb(d) - ARRAY['oid','datdba','dattablespace','datfrozenxid','datminmxid','datacl','tablespace_name'],
+  'properties', to_jsonb(d) - ARRAY['oid','datdba','dattablespace','datfrozenxid','datminmxid','datacl','datcollversion','tablespace_name'],
   'acl', acl.values,
   'comment', obj_description(d.oid,'pg_database'),
   'security_labels', labels.values
@@ -607,12 +610,24 @@ prepare_restore_slot() {
   if [ ! -f "$prior_path" ] || [ -L "$prior_path" ]; then die 'canonical prior evidence missing or symlinked'; fi
   [ "$(sha256sum "$prior_path" | awk '{print $1}')" = "$prior_sha" ] || die 'canonical prior evidence checksum mismatch'
   case "$prior_status" in
-    go) die 'target already has a successful restore; repetition is forbidden' ;;
+    go)
+      $replace_go || die 'target already has a successful restore; use --replace-go for an explicit fresh rehearsal'
+      [ "${PHASE29_RESTORE_REPLACE_CONFIRM:-}" = REPLACE_STALE_SHADOW_RESTORE ] ||
+        die 'missing exact successful-restore replacement confirmation'
+      replace_go_target=true
+      ;;
     in-progress) die 'target has an unresolved in-progress restore; manual reconciliation required' ;;
     no-go) ;;
     *) die 'canonical target state has an invalid status' ;;
   esac
-  $retry_no_go || die 'canonical no-go requires explicit --retry-no-go'
+  if [ "$prior_status" = no-go ]; then
+    $retry_no_go || die 'canonical no-go requires explicit --retry-no-go'
+    [ "${PHASE29_RESTORE_REPLACE_CONFIRM:-}" = REPLACE_STALE_SHADOW_RESTORE ] ||
+      die 'missing exact no-go target reset confirmation'
+    replace_go_target=true
+  elif $retry_no_go; then
+    die '--retry-no-go cannot replace a successful restore'
+  fi
   if [ -e "$restore_evidence" ] && [ "$restore_evidence" != "$prior_path" ]; then
     die 'new evidence path already contains an unrelated restore record'
   fi
@@ -621,22 +636,24 @@ prepare_restore_slot() {
   retry_prior_sha256="$prior_sha"
   retry_source_evidence="$prior_path"
   retry_prior_evidence="pending:$prior_epoch"
+  lineage_prior_status="$prior_status"
 }
 
 create_restore_evidence() {
-  local cluster_uid="$1" started_at generated_at_epoch next archive prior_epoch
+  local cluster_uid="$1" started_at generated_at_epoch next archive prior_epoch archive_status
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   generated_at_epoch="$(date +%s)"
   next="$(mktemp "$evidence_dir/.restore.next.XXXXXX")"
   chmod 600 "$next"
   if [[ "$retry_prior_evidence" == pending:* ]]; then
     prior_epoch="${retry_prior_evidence#pending:}"
-    archive="$(mktemp "$evidence_dir/restore.no-go.$prior_epoch.XXXXXX.json")"
+    archive_status="${lineage_prior_status:-no-go}"
+    archive="$(mktemp "$evidence_dir/restore.$archive_status.$prior_epoch.XXXXXX.json")"
     chmod 600 "$archive"
     cp --preserve=mode,timestamps "$retry_source_evidence" "$archive"
     [ "$(sha256sum "$archive" | awk '{print $1}')" = "$retry_prior_sha256" ] || die 'retry archive checksum mismatch'
     retry_prior_evidence="$(basename "$archive")"
-    write_target_state no-go "$archive" || die 'failed to preserve canonical no-go retry lineage'
+    write_target_state "$archive_status" "$archive" || die 'failed to preserve canonical restore lineage'
   else
     retry_prior_evidence=""
   fi
@@ -784,10 +801,12 @@ self_test() {
   retry_no_go=false
   if (prepare_restore_slot) 2>/dev/null; then die 'existing no-go evidence was accepted without explicit retry'; fi
   retry_no_go=true
+  PHASE29_RESTORE_REPLACE_CONFIRM=REPLACE_STALE_SHADOW_RESTORE; export PHASE29_RESTORE_REPLACE_CONFIRM
   retry_evidence="$tmp/retry-evidence"; mkdir -m 700 "$retry_evidence"
   evidence_dir="$retry_evidence"
   prepare_restore_slot
   create_restore_evidence cluster-test
+  unset PHASE29_RESTORE_REPLACE_CONFIRM
   retry_archive="$retry_evidence/$retry_prior_evidence"
   if [ ! -f "$retry_archive" ] || [ "$(jq -r '.status' "$retry_evidence/restore.json")" != in-progress ]; then
     die 'no-go retry did not archive prior evidence'
@@ -826,6 +845,7 @@ while [ "$#" -gt 0 ]; do
     --cleanup-evidence) cleanup_evidence="${2:?}"; shift ;;
     --bootstrap-evidence) bootstrap_evidence="${2:?}"; shift ;;
     --retry-no-go) retry_no_go=true ;;
+    --replace-go) replace_go=true ;;
     --self-test-signal) signal_self_test; exit 0 ;;
     --self-test) self_test; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -873,6 +893,17 @@ pod_json="$(sudo -n k3s kubectl -n "$namespace" get pods -l app.kubernetes.io/na
 pod="$(jq -r '.items[0].metadata.name' <<< "$pod_json")"
 [ "$(jq -r '.items[0].spec.nodeName' <<< "$pod_json")" = atius-srv-1 ] || die 'PostgreSQL pod is outside atius-srv-1'
 jq -e '.items[0].status.containerStatuses | length == 1 and all(.ready == true)' <<< "$pod_json" >/dev/null || die 'PostgreSQL pod is not Ready'
+
+if $replace_go_target; then
+  run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
+    dropdb --force -U "$database_user" "$database"
+  run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
+    createdb -U "$database_user" -O "$database_user" --template=template0 --locale=pt_BR.UTF-8 "$database"
+  # shellcheck disable=SC2016
+  run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
+    psql -X --set ON_ERROR_STOP=on -U "$database_user" -d postgres -c \
+    'DO $phase29$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\''postgres'\'') THEN CREATE ROLE postgres NOLOGIN; END IF; END $phase29$;'
+fi
 
 target_version="$(sudo -n k3s kubectl -n "$namespace" exec "$pod" -- psql -X --set ON_ERROR_STOP=on -U "$database_user" -d "$database" -Atc "select current_setting('server_version_num')")"
 [[ "$target_version" =~ ^17[0-9]{4}$ ]] || die 'k3s target is not PostgreSQL 17'

@@ -62,12 +62,23 @@ spec:
                     values: ["true"]
       containers:
         - name: postgres
-          image: docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d
+          image: docker.io/library/postgres@sha256:5530681ea5d3e2ed4ce396f9b5cb443efbac6baf2a8a19c0c0635e40ae7eadce
           imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              localedef -i pt_BR -c -f UTF-8 -A /usr/share/locale/locale.alias pt_BR.UTF-8
+              exec docker-entrypoint.sh postgres
           ports:
             - containerPort: 5432
               name: postgres
           env:
+            - name: LANG
+              value: pt_BR.UTF-8
+            - name: POSTGRES_INITDB_ARGS
+              value: --locale-provider=libc --locale=pt_BR.UTF-8
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:

@@ -237,7 +237,7 @@ validate_service_json() {
   ' "$file" >/dev/null || die "$expected_name Service is not strict ClusterIP"
 }
 
-validate_endpointslice_json() {
+endpointslice_matches_workload() {
   local file="$1" service="$2" pod_name="$3" pod_uid="$4" pod_ip="$5"
   jq -e --arg service "$service" --arg pod_name "$pod_name" --arg pod_uid "$pod_uid" --arg pod_ip "$pod_ip" '
     .items | length >= 1 and
@@ -246,10 +246,15 @@ validate_endpointslice_json() {
     all(.[].endpoints[]?;
       .conditions.ready == true and .nodeName == "atius-srv-1" and
       .addresses == [$pod_ip] and
-      .targetRef.apiVersion == "v1" and .targetRef.kind == "Pod" and
+      (.targetRef.apiVersion // "v1") == "v1" and .targetRef.kind == "Pod" and
       .targetRef.namespace == "router-ai-atius" and
       .targetRef.name == $pod_name and .targetRef.uid == $pod_uid)
-  ' "$file" >/dev/null || die "$service EndpointSlice is not bound to the validated pod UID/IP"
+  ' "$file" >/dev/null
+}
+
+validate_endpointslice_json() {
+  endpointslice_matches_workload "$@" ||
+    die "$2 EndpointSlice is not bound to the validated pod UID/IP"
 }
 
 workload_snapshot() {
@@ -307,15 +312,23 @@ workload_identity() {
 
 service_snapshot() {
   local service="$1" port="$2" service_file="$3" slice_file="$4" workload_file="$5" app="$6"
-  local pod_name pod_uid pod_ip
-  kube -n "$namespace" get service "$service" -o json > "$service_file"
-  validate_service_json "$service_file" "$service" "$port" "$app"
-  pod_name="$(jq -r '.items[0].metadata.name' "$workload_file")"
-  pod_uid="$(jq -r '.items[0].metadata.uid' "$workload_file")"
-  pod_ip="$(jq -r '.items[0].status.podIP' "$workload_file")"
-  kube -n "$namespace" get endpointslices.discovery.k8s.io \
-    -l "kubernetes.io/service-name=$service" -o json > "$slice_file"
-  validate_endpointslice_json "$slice_file" "$service" "$pod_name" "$pod_uid" "$pod_ip"
+  local pod_name pod_uid pod_ip expected_image
+  expected_image="$(jq -r '.items[0].spec.containers[0].image' "$workload_file")"
+  for _ in $(seq 1 60); do
+    workload_snapshot "$app" "$expected_image" "$workload_file"
+    kube -n "$namespace" get service "$service" -o json > "$service_file"
+    validate_service_json "$service_file" "$service" "$port" "$app"
+    pod_name="$(jq -r '.items[0].metadata.name' "$workload_file")"
+    pod_uid="$(jq -r '.items[0].metadata.uid' "$workload_file")"
+    pod_ip="$(jq -r '.items[0].status.podIP' "$workload_file")"
+    kube -n "$namespace" get endpointslices.discovery.k8s.io \
+      -l "kubernetes.io/service-name=$service" -o json > "$slice_file"
+    if endpointslice_matches_workload "$slice_file" "$service" "$pod_name" "$pod_uid" "$pod_ip"; then
+      return 0
+    fi
+    sleep 1
+  done
+  die "$service EndpointSlice did not converge to the validated pod UID/IP within 60 seconds"
 }
 
 capture_apply_runtime_snapshot() (
@@ -523,7 +536,7 @@ self_test() {
   jq '.spec.ports[0].nodePort=32000' "$service" > "$test_dir/bad-service.json"
   if (validate_service_json "$test_dir/bad-service.json" router-ai-atius 3000) 2>/dev/null; then die 'NodePort was accepted'; fi
   slices="$test_dir/slices.json"
-  jq -n '{items:[{metadata:{labels:{"kubernetes.io/service-name":"router-ai-atius"}},endpoints:[{addresses:["10.42.0.9"],conditions:{ready:true},nodeName:"atius-srv-1",targetRef:{apiVersion:"v1",kind:"Pod",namespace:"router-ai-atius",name:"router-abc",uid:"pod-uid"}}]}]}' > "$slices"
+  jq -n '{items:[{metadata:{labels:{"kubernetes.io/service-name":"router-ai-atius"}},endpoints:[{addresses:["10.42.0.9"],conditions:{ready:true},nodeName:"atius-srv-1",targetRef:{kind:"Pod",namespace:"router-ai-atius",name:"router-abc",uid:"pod-uid"}}]}]}' > "$slices"
   validate_endpointslice_json "$slices" router-ai-atius router-abc pod-uid 10.42.0.9
   jq '.items[0].endpoints[0].conditions.ready=false' "$slices" > "$test_dir/bad-slices.json"
   if (validate_endpointslice_json "$test_dir/bad-slices.json" router-ai-atius router-abc pod-uid 10.42.0.9) 2>/dev/null; then die 'unready EndpointSlice was accepted'; fi

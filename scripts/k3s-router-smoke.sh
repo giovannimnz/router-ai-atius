@@ -275,7 +275,7 @@ validate_endpointslice_json() {
     all(.[].endpoints[]?;
       .conditions.ready == true and .nodeName == "atius-srv-1" and
       .addresses == [$pod_ip] and
-      .targetRef.apiVersion == "v1" and .targetRef.kind == "Pod" and
+      (.targetRef.apiVersion // "v1") == "v1" and .targetRef.kind == "Pod" and
       .targetRef.namespace == "router-ai-atius" and
       .targetRef.name == $pod_name and .targetRef.uid == $pod_uid)
   ' "$file" >/dev/null || die 'router EndpointSlice is not bound to the validated pod UID/IP'
@@ -765,7 +765,7 @@ self_test() {
   jq '.workloads.postgres | .pod.uid="replacement-postgres"' "$apply_file" > "$test_dir/replaced-postgres.json"
   if (validate_workload_chain postgres "$test_dir/replaced-postgres.json") 2>/dev/null; then die 'replacement PostgreSQL pod was accepted'; fi
   slices="$test_dir/slices.json"
-  jq -n '{items:[{metadata:{labels:{"kubernetes.io/service-name":"router-ai-atius"}},endpoints:[{addresses:["10.42.0.9"],conditions:{ready:true},nodeName:"atius-srv-1",targetRef:{apiVersion:"v1",kind:"Pod",namespace:"router-ai-atius",name:"router-abc",uid:"pod-uid"}}]}]}' > "$slices"
+  jq -n '{items:[{metadata:{labels:{"kubernetes.io/service-name":"router-ai-atius"}},endpoints:[{addresses:["10.42.0.9"],conditions:{ready:true},nodeName:"atius-srv-1",targetRef:{kind:"Pod",namespace:"router-ai-atius",name:"router-abc",uid:"pod-uid"}}]}]}' > "$slices"
   validate_endpointslice_json "$slices" "$test_dir/pods.json"
   jq '.items[0].endpoints[0].nodeName="atius-srv-2"' "$slices" > "$test_dir/wrong-node.json"
   if (validate_endpointslice_json "$test_dir/wrong-node.json" "$test_dir/pods.json") 2>/dev/null; then die 'wrong EndpointSlice node was accepted'; fi

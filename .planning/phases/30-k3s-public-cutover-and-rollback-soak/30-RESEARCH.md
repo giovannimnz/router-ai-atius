@@ -47,9 +47,9 @@ A Phase 30 deve ser planejada como duas mudanças pequenas, ordenadas e reversí
 
 O cutover deve falhar fechado se a Phase 29 não entregar `GO` com ClusterIPs estáveis, EndpointSlices prontos, restore validado, imagem imutável, PVs `Retain`, smoke shadow completo e backend k3s do CLIAnything. O `tools/clianything.py` desta worktree aceita apenas `CLIANYTHING_DB_BACKEND=host|podman`; portanto o planner não pode declarar operação k3s pronta sem a extensão/validação entregue pela Phase 29. [VERIFIED: `30-CONTEXT.md`, artefatos Phase 29 e `tools/clianything.py:28-34,166-176`]
 
-O soak não pode ser “observar e ver”: deve registrar baseline imediatamente antes do cutover, amostrar a cada 5 minutos, executar smokes sintéticos a cada 15 minutos, durar no mínimo 24 horas e reverter por qualquer falha crítica definida abaixo. A duração e frequências são recomendações operacionais ainda não fixadas pelo usuário. [ASSUMED]
+O soak não pode ser “observar e ver”: deve registrar baseline imediatamente antes do cutover, durar no mínimo 30 minutos, amostrar a cada 60 segundos, executar matriz sintética completa a cada 5 minutos e reverter por qualquer falha crítica definida abaixo. O gate bloqueante exige >=30 amostras e >=6 matrizes; 24 horas permanece como monitoramento pós-operação recomendado. [RESOLVED: autorização do usuário 2026-07-13]
 
-**Recomendação primária:** planejar `preflight → backup/checksums → PgBouncer repoint/reload/DB smoke → Apache retarget/configtest/graceful reload/public smoke → soak objetivo → aprovação humana → stop/disable/remove containers Podman sem apagar artefatos`; qualquer falha restaura primeiro Apache e depois PgBouncer, com smoke de rollback completo. [VERIFIED: síntese de constraints, repo e configuração live] [CITED: https://httpd.apache.org/docs/2.4/stopping.html] [CITED: https://www.pgbouncer.org/usage.html]
+**Recomendação primária resolvida:** executar `preflight → backup/checksums → PgBouncer repoint/reload/DB smoke → Apache retarget/configtest/graceful reload/public smoke → soak objetivo de 30 minutos → retirement autônomo após PASS → stop/disable/remove containers Podman sem apagar artefatos`; qualquer falha restaura primeiro Apache e depois PgBouncer, com smoke de rollback completo. [VERIFIED: autorização do usuário + constraints + configuração live] [CITED: https://httpd.apache.org/docs/2.4/stopping.html] [CITED: https://www.pgbouncer.org/usage.html]
 
 ## Architectural Responsibility Map
 
@@ -130,10 +130,10 @@ Apache router rules only: 127.0.0.1:3000 -> ROUTER_CLUSTER_IP:3000
                  | configtest + graceful reload + public smoke matrix
                  | falha -> restore vhost -> configtest/reload -> public Podman smoke
                  v
-       [24h soak; sample 5m; smoke 15m] [ASSUMED]
+       [30m soak; sample 60s; matriz 5m] [RESOLVED]
                  | crítico -> rollback Apache -> rollback PgBouncer
                  v
-      [aprovação humana de permanência]
+      [PASS checksummed; retirement autônomo]
                  |
                  v
  stop/disable Podman user units -> remove containers/pod only
@@ -300,7 +300,7 @@ Os scripts precisam ser parametrizados/validados para cobrir explicitamente `/v1
 | Storage | 15 min | PVC Bound, PV Retain, uso sem crescimento anômalo | PVC/PV não Bound, read-only/fs error, livre <20% [ASSUMED] |
 | Eventos | 5 min | sem Warning novo relevante | FailedMount, FailedScheduling, Evicted, Unhealthy recorrente [ASSUMED] |
 | PgBouncer/DB | 5 min | nova conexão/query via 6432; backend k3s | query falha, backend volta a 8745 sem rollback, pool errors [ASSUMED] |
-| Duração | contínua | mínimo 24h e aprovação humana | qualquer gate crítico [ASSUMED] |
+| Duração | 60s/300s | mínimo bloqueante de 30 minutos, >=30 amostras e >=6 matrizes; retirement autônomo após PASS | qualquer gate crítico [RESOLVED: autorização do usuário 2026-07-13] |
 
 ## State of the Art
 
@@ -316,28 +316,27 @@ Os scripts precisam ser parametrizados/validados para cobrir explicitamente `/v1
 
 | # | Claim | Section | Risk if Wrong |
 |---|---|---|---|
-| A1 | Soak mínimo de 24h, sampling 5m e smoke 15m. | Summary/Soak | Alto; usuário deve confirmar janela operacional. |
+| A1 | RESOLVED — soak bloqueante de 30 minutos, amostra a cada 60s e matriz a cada 300s; 24h fica como monitoramento prolongado pós-operação. | Summary/Soak | Resolvido por autorização explícita do usuário em 2026-07-13. |
 | A2 | Atomic replacement via candidato no mesmo filesystem é o padrão de implementação. | Pattern 2 | Médio; permissões/tooling host podem exigir variante. |
 | A3 | Thresholds de restart/latência/erros propostos são aceitáveis. | Soak | Alto; baseline real pode exigir ajuste. |
 | A4 | Validação offline/candidato do PgBouncer pode ser feita sem listener conflitante. | Pattern 3 | Médio; comando exato deve ser provado no plano/execução. |
 | A5 | SSE deve exigir múltiplos eventos e terminal válido. | Pitfall 4 | Baixo; contrato exato depende do modelo/provider escolhido. |
 
-## Open Questions
+## Open Questions — RESOLVED
 
-1. **Qual janela de soak e retenção dos artefatos é aprovada?**
-   - What we know: critérios precisam ser objetivos; artefatos devem ser preservados por período definido. [VERIFIED: CONTEXT]
-   - What's unclear: duração não foi fixada.
-   - Recommendation: usar 24h de soak e 7 dias de retenção como defaults sujeitos a checkpoint humano. [ASSUMED]
+1. **RESOLVED — janela de soak e retenção dos artefatos.**
+   - Decisão: soak bloqueante de 30 minutos, com pelo menos 30 amostras de 60 segundos e 6 matrizes completas de 5 minutos. [VERIFIED: autorização do usuário 2026-07-13]
+   - Decisão: imagens, volumes, dumps, checksums e unit files de rollback permanecem preservados por no mínimo 7 dias; não há descarte automático. [VERIFIED: autorização do usuário 2026-07-13]
+   - Decisão: monitoramento de 24h é pós-operação recomendado e documentado, não gate bloqueante do retirement. [VERIFIED: autorização do usuário 2026-07-13]
 
-2. **Qual modelo ativo deve representar cada smoke pago?**
+2. **RESOLVED — qual modelo ativo deve representar cada smoke pago?**
    - What we know: non-stream, stream e Responses são obrigatórios; provider errors precisam ser classificados. [VERIFIED: user constraint]
-   - What's unclear: catálogo ativo no momento do cutover.
-   - Recommendation: Phase 29 GO deve registrar modelos aprovados; Phase 30 consome essa lista sem hard-code stale. [VERIFIED: fail-closed dependency]
+   - Decisão: Phase 29 GO registra os modelos aprovados e Phase 30 consome essa lista sem hard-code temporal; ausência da lista é NO-GO. [VERIFIED: fail-closed dependency]
 
-3. **Quais units/containers Podman existem no instante da aposentadoria?**
+3. **RESOLVED — quais units/containers Podman serão aposentados?**
    - What we know: `container-router-ai-atius.service` é canônico; Postgres/Redis/pod podem ter units separadas. [VERIFIED: repo]
-   - What's unclear: inventário live futuro.
-   - Recommendation: gerar inventário T-0 e exigir allowlist explícita; nunca usar wildcard destrutivo. [ASSUMED]
+   - Decisão: gerar inventário T-0 live, derivar allowlist explícita e exigir igualdade antes de stop/disable/remove; nunca usar wildcard destrutivo. [VERIFIED: autorização de retirement autônomo]
+   - Decisão: após PASS checksummed do soak, o agente executa retirement autonomamente até o fim, sem checkpoint humano. [VERIFIED: autorização do usuário 2026-07-13]
 
 ## Environment Availability
 
@@ -380,7 +379,7 @@ Os scripts precisam ser parametrizados/validados para cobrir explicitamente `/v1
 
 - **Per task commit:** syntax/static tests e fixture de configuração; nenhuma mutação live. [ASSUMED]
 - **Per wave merge:** preflight/candidate validation read-only. [ASSUMED]
-- **Phase gate:** public smoke completo + soak aprovado + rollback evidence + checkpoint humano antes de retirement. [VERIFIED: CONTEXT]
+- **Phase gate:** public smoke completo + soak checksummed PASS de 30 minutos + rollback evidence; retirement autônomo em seguida, sem checkpoint humano. [RESOLVED: autorização do usuário 2026-07-13]
 
 ### Wave 0 Gaps
 
@@ -435,7 +434,7 @@ Os scripts precisam ser parametrizados/validados para cobrir explicitamente `/v1
 
 ### Tertiary (LOW confidence)
 
-- Assumptions A1–A5 sobre duração, thresholds e detalhes de implementação ainda sujeitos a checkpoint/validação.
+- A1 está resolvida por autorização explícita; A2–A5 continuam sujeitas à validação automatizada live, sem checkpoint humano.
 
 ## Metadata
 

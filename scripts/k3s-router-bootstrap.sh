@@ -45,11 +45,17 @@ unset POSTGRES_PASSWORD REDIS_PASSWORD SESSION_SECRET
 source_ref="$(podman inspect router-ai-atius --format '{{.Config.Image}}')"; [ -n "$source_ref" ] || die 'source image reference missing'
 source_image="$(podman image inspect "$source_ref" --format '{{.Id}}')"; [ -n "$source_image" ] || die 'source image ID missing'
 arch="$(podman image inspect "$source_ref" --format '{{.Architecture}}')"; [ "$arch" = arm64 ] || die "source image is $arch, not arm64"
-digest="$(podman image inspect "$source_ref" --format '{{.Digest}}' | sed 's/^sha256://')"; [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || die 'source digest unavailable'
-immutable="ghcr.io/giovannimnz/router-ai-atius@sha256:$digest"; archive="$tmp/router.tar"
+podman_digest="$(podman image inspect "$source_ref" --format '{{.Digest}}')"; [[ "$podman_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die 'source digest unavailable'
+archive="$tmp/router.tar"
 podman save -o "$archive" "$source_ref"; archive_sha="$(sha256sum "$archive" | awk '{print $1}')"; sudo -n k3s ctr -n k8s.io images import "$archive" >/dev/null
+containerd_source='ghcr.io/giovannimnz/router-ai-atius:latest'
+sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq "$containerd_source" || die 'source image reference not imported'
+digest="$(sudo -n k3s ctr -n k8s.io images ls | awk -v ref="$containerd_source" '$1 == ref {print $3}')"
+if [ "$(grep -c . <<< "$digest")" -ne 1 ] || [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  die 'containerd manifest digest unavailable or ambiguous'
+fi
+immutable="ghcr.io/giovannimnz/router-ai-atius@$digest"
 sed -i -E "s#image: ghcr.io/giovannimnz/router-ai-atius@sha256:[^[:space:]]+#image: $immutable#" k8s/router-ai-atius/router.yaml
-sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq 'ghcr.io/giovannimnz/router-ai-atius:latest' || die 'source image reference not imported'
 sudo -n k3s ctr -n k8s.io images tag --force 'ghcr.io/giovannimnz/router-ai-atius:latest' "$immutable" >/dev/null
 sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq "$immutable" || die 'exact immutable reference not found in containerd'
 cpu="$(cpu_max_value)"; read -r q p <<< "$cpu"; if [ "$q" = max ] || [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $cpu"; fi
@@ -59,10 +65,10 @@ generated_at_epoch="$(date +%s)"
 if [ -e "$evidence_dir/bootstrap.json" ] || [ -L "$evidence_dir/bootstrap.json" ]; then die 'bootstrap evidence already exists'; fi
 (set -o noclobber; : > "$evidence_dir/bootstrap.json") 2>/dev/null || die 'cannot create bootstrap evidence safely'
 jq -n --arg source_image_id "$source_image" --arg archive_sha256 "$archive_sha" \
-  --arg manifest_digest "sha256:$digest" --arg image_ref "$immutable" --arg cpu_max "$cpu" \
+  --arg podman_digest "$podman_digest" --arg manifest_digest "$digest" --arg image_ref "$immutable" --arg cpu_max "$cpu" \
   --arg manifest_sha256 "$manifest_hash" --arg cluster_uid "$cluster_uid" \
   --argjson generated_at_epoch "$generated_at_epoch" \
-  '{status:"go",exclusive_node:"atius-srv-1",secret_keys:"POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET",source_image_id:$source_image_id,archive_sha256:$archive_sha256,manifest_digest:$manifest_digest,image_ref:$image_ref,digest_match:true,cpu_max:$cpu_max,manifest_sha256:$manifest_sha256,cluster_uid:$cluster_uid,generated_at_epoch:$generated_at_epoch}' \
+  '{status:"go",exclusive_node:"atius-srv-1",secret_keys:"POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET",source_image_id:$source_image_id,podman_digest:$podman_digest,archive_sha256:$archive_sha256,manifest_digest:$manifest_digest,image_ref:$image_ref,digest_match:true,cpu_max:$cpu_max,manifest_sha256:$manifest_sha256,cluster_uid:$cluster_uid,generated_at_epoch:$generated_at_epoch}' \
   > "$evidence_dir/bootstrap.json"
 chmod 600 "$evidence_dir/bootstrap.json"
 echo 'bootstrap live: PASS'

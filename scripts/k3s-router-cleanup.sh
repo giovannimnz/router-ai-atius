@@ -210,8 +210,14 @@ for record in "${ALLOWLIST[@]}"; do
     [ "$(stat -c %U "$path")" = "$owner" ] || die "owner mismatch $path"
     [ -d "$path" ] || die "not a directory $path"
   fi
-  [ "$(findmnt -rn -o TARGET -T "$path" | tail -1)" = / ] || die "unexpected mount for $path"
-  if findmnt -rn -o TARGET | grep -Fxq "$path"; then die "path is a mountpoint: $path"; fi
+  if [ "$owner" = root ]; then
+    mount_target="$(sudo -n findmnt -rn -o TARGET -T "$path" | tail -1)"
+    if sudo -n findmnt -rn -o TARGET | grep -Fxq "$path"; then die "path is a mountpoint: $path"; fi
+  else
+    mount_target="$(findmnt -rn -o TARGET -T "$path" | tail -1)"
+    if findmnt -rn -o TARGET | grep -Fxq "$path"; then die "path is a mountpoint: $path"; fi
+  fi
+  [ "$mount_target" = / ] || die "unexpected mount for $path"
   assert_no_open_descendants "$path"
   if [ "$owner" = root ]; then bytes="$(sudo -n du -sb "$path" | awk '{print $1}')"; else bytes="$(du -sb "$path" | awk '{print $1}')"; fi
   assert_no_open_descendants "$path"

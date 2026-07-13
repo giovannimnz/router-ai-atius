@@ -4,6 +4,16 @@
 **Domain:** Migração stateful Podman → k3s, restore rehearsal, shadow traffic e gates operacionais
 **Confidence:** HIGH
 
+## Checker Resolution Addendum — 2026-07-13
+
+As decisoes abaixo substituem as recomendacoes anteriores conflitantes deste documento:
+
+- origem live para backup: PostgreSQL do Podman pela porta host `8745`; o PgBouncer em `6432` e usado para cruzar identidade/invariantes, nao como origem do dump;
+- transporte shadow: `ClusterIP`, alcancavel diretamente pelo Apache/host conforme auditoria live; nenhuma reserva de NodePort ou regra de firewall adicional faz parte da Phase 29;
+- estabilidade de DiskPressure: `DiskPressure=False` e taint ausente por cinco minutos continuos, alem de pelo menos 20 GiB recuperados e alvo de 25% livre.
+
+Toda mencao posterior a NodePort como recomendacao deve ser lida como historico de pesquisa superado por este addendum, pelo `29-CONTEXT.md` e pelo audit live.
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
@@ -37,7 +47,7 @@ Os manifests e scripts da Phase 22 não estão implementation-ready para a decis
 
 O backup citado está fora desta worktree, no checkout principal, e o SQL tem apenas 643 bytes. Isso exige substituição por backup novo e validação estrutural antes de qualquer restore; tamanho isolado não prova corrupção, mas não sustenta um gate de produção. [VERIFIED: filesystem read-only e SHA-256 do artefato]
 
-**Primary recommendation:** Planejar Phase 29 em gates fail-closed: aliviar DiskPressure de forma sustentável → gerar/verificar novo backup → pinning rígido de todos os pods em `atius-srv-1` → subir somente Postgres → restaurar e validar → subir Redis/router shadow → smoke autenticado completo via NodePort fixo → decisão formal; Phase 30 só inicia com todos os gates verdes. [VERIFIED: síntese de repo + live cluster] [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
+**Primary recommendation:** Planejar Phase 29 em gates fail-closed: aliviar DiskPressure de forma sustentável → gerar/verificar novo backup → pinning rígido de todos os pods em `atius-srv-1` → subir somente Postgres → restaurar e validar → subir Redis/router shadow → smoke autenticado completo via `ClusterIP` diretamente alcancavel pelo host → decisão formal; Phase 30 só inicia com todos os gates verdes. [VERIFIED: síntese de repo + auditoria live] [CITED: https://www.postgresql.org/docs/current/backup-dump.html]
 
 ## Architectural Responsibility Map
 
@@ -306,22 +316,13 @@ scripts/k3s-router-smoke.sh
 | A3 | Fixar NodePort 33000 será aceitável após checar range/firewall. | Pattern 3 | Médio; pode haver política de rede/port range distinta. |
 | A4 | Invariantes de contagem/objetos devem ser definidos para validar restore. | Pattern 2 | Alto; sem critérios, restore pode passar incompleto. |
 
-## Open Questions
+## Open Questions — RESOLVED
 
-1. **Qual é a origem exata e completa dos dados de produção?**
-   - What we know: runtime docs citam PgBouncer externo, enquanto manifests criam Postgres interno; backup encontrado é mínimo. [VERIFIED: docs + artifact]
-   - What's unclear: se o dump capturou o DB real e quais invariantes provam completude.
-   - Recommendation: bloquear execução até novo backup do DSN live, com validação não sensível.
+1. **RESOLVED — origem exata dos dados de producao:** o backup fresco sai diretamente do PostgreSQL do Podman pela porta host `8745`, database `DBRouterAiAtius`. O PgBouncer em `10.1.1.1:6432` serve para cruzar identidade, user/version e invariantes nao sensiveis; nao e a origem do dump. O backup antigo permanece invalido como gate.
 
-2. **Qual NodePort e regra de firewall serão aprovados?**
-   - What we know: 33000 estava livre e NodePort padrão é 30000–32767. [VERIFIED: live `ss`] [CITED: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport]
-   - What's unclear: range configurado e exposição aceitável.
-   - Recommendation: validar API config/firewall e reservar explicitamente antes do apply.
+2. **RESOLVED — transporte shadow:** usar somente o `ClusterIP` do Service `router-ai-atius`. A auditoria live provou conectividade host → rede de Services; nao selecionar NodePort, nao abrir firewall, nao usar Ingress/hostPort e nao alterar Apache na Phase 29.
 
-3. **Qual janela define DiskPressure “estável”?**
-   - What we know: condição e loop de eviction estavam ativos. [VERIFIED: live cluster]
-   - What's unclear: duração operacional exigida.
-   - Recommendation: planner deve definir gate temporal explícito; sugestão inicial de 30–60 min é [ASSUMED].
+3. **RESOLVED — janela de estabilidade:** exigir `DiskPressure=False` e ausencia de `node.kubernetes.io/disk-pressure` por cinco minutos continuos, amostrados no maximo a cada 30 segundos, depois de recuperar pelo menos 20 GiB e atingir alvo de pelo menos 25% livre.
 
 ## Environment Availability
 
@@ -330,7 +331,7 @@ scripts/k3s-router-smoke.sh
 | k3s | cluster apply/read | ✓ | 1.35.5+k3s1 | — |
 | Metrics API | capacity gate | ✓ | live | — |
 | local-path | PVC | ✓ | default, WaitForFirstConsumer/Delete | backup + Retain |
-| IngressClass | ingress | ✗ | — | NodePort + Apache |
+| IngressClass | ingress | ✗ | — | nao necessario; host alcanca ClusterIP diretamente |
 | Apache | Phase 30 edge | ✓ | 2.4.58 | rollback vhost |
 | Podman | rollback | ✓ | 4.9.3 | — |
 | pg_dump/psql | backup/restore | ✓ | 17.10 / 18.4 | container CLI version-matched |
@@ -340,7 +341,7 @@ scripts/k3s-router-smoke.sh
 
 **Missing dependencies with no fallback:** capacidade saudável do `atius-srv-1`; é blocker operacional, não binário ausente. [VERIFIED: live cluster]
 
-**Missing dependencies with fallback:** IngressClass; usar NodePort + Apache conforme decisão locked. [VERIFIED: live cluster]
+**Missing dependencies with fallback:** nenhuma para exposicao shadow; IngressClass nao e necessario porque o host alcanca ClusterIP diretamente. [VERIFIED: auditoria live + decisao locked]
 
 ## Validation Architecture
 
@@ -373,7 +374,7 @@ scripts/k3s-router-smoke.sh
 - [ ] assertions de node pinning para os três workloads.
 - [ ] smoke exigir token e embeddings; “skipped” nunca é GO.
 - [ ] backup verifier (checksum, SQL parse/restore e invariantes).
-- [ ] NodePort fixo + verificação de firewall/endpoints locais.
+- [ ] ClusterIP resolvido e alcancavel diretamente do host, com EndpointSlice local/Ready e sem exposicao adicional.
 - [ ] run evidence/go-no-go artifact definido pelo planner.
 
 [VERIFIED: gap analysis of current repo]

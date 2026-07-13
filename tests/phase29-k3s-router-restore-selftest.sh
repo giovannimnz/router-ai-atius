@@ -12,6 +12,25 @@ fail() {
 scripts/k3s-router-backup.sh --self-test
 scripts/k3s-router-restore-rehearsal.sh --self-test
 
+run_quota_lock_case() {
+  local first second shared_home pid
+  first="$(mktemp -d)"; second="$(mktemp -d)"; shared_home="$(mktemp -d)"
+  env HOME="$shared_home" PHASE29_QUOTA_TEST_DIR="$first" \
+    scripts/k3s-router-backup.sh --self-test-quota-lock >/dev/null 2>&1 &
+  pid=$!
+  for _ in $(seq 1 50); do [ -f "$first/ready" ] && break; sleep 0.02; done
+  [ -f "$first/ready" ] || fail 'PostgreSQL quota lock holder did not become ready'
+  if env HOME="$shared_home" PHASE29_QUOTA_TEST_DIR="$second" timeout 2 \
+    scripts/k3s-router-backup.sh --self-test-quota-lock >/dev/null 2>&1; then
+    fail 'concurrent backup acquired the same PostgreSQL quota window'
+  fi
+  kill -TERM "$pid"
+  if wait "$pid"; then fail 'PostgreSQL quota lock holder exited successfully after TERM'; fi
+  rm -rf "$first" "$second" "$shared_home"
+}
+
+run_quota_lock_case
+
 run_signal_case() {
   local signal="$1" stubborn="${2:-0}" signal_dir signal_pid active_pgid alive
   signal_dir="$(mktemp -d)"
@@ -119,6 +138,29 @@ grep -Fq '.status = "no-go"' scripts/k3s-router-restore-rehearsal.sh ||
   fail 'restore failure does not persist no-go evidence'
 grep -Fq 'DROP SCHEMA public RESTRICT' scripts/k3s-router-restore-rehearsal.sh ||
   fail 'restore does not prove the entire public schema is clean'
+for catalog in pg_database pg_db_role_setting pg_seclabel pg_namespace pg_extension pg_largeobject_metadata pg_publication pg_event_trigger pg_subscription pg_foreign_data_wrapper pg_foreign_server pg_user_mapping pg_default_acl pg_cast pg_language pg_transform pg_am; do
+  grep -Fq "$catalog" scripts/k3s-router-restore-rehearsal.sh ||
+    fail "restore clean probe omits $catalog"
+done
+grep -Fq "validate_database_inventory_match \"\$source_inventory\" \"\$source_schema_ddl\" \"\$target_inventory\" \"\$target_schema_ddl\"" scripts/k3s-router-restore-rehearsal.sh ||
+  fail 'restore does not require source/target database-wide inventory equality'
+if rg -n 'systemctl[[:space:]]+revert' scripts/k3s-router-backup.sh >/dev/null; then
+  fail 'backup cleanup must never use systemctl revert'
+fi
+grep -Fq "systemctl set-property --runtime \"\$postgres_unit\" CPUQuota=40%" scripts/k3s-router-backup.sh ||
+  fail 'backup does not apply the PostgreSQL quota with systemctl set-property --runtime'
+grep -Fq "systemctl set-property --runtime \"\$postgres_unit\" CPUQuota=" scripts/k3s-router-backup.sh ||
+  fail 'backup does not reset the runtime quota with an empty supported property assignment'
+grep -Fq 'pre-existing runtime quota was accepted' scripts/k3s-router-backup.sh ||
+  fail 'backup self-test does not functionally reject a pre-existing runtime quota'
+if rg -n 'sudo -n rm .*systemd|/run/systemd/system\.control.*rm|CPUQuotaPeriodSec' scripts/k3s-router-backup.sh >/dev/null; then
+  fail 'backup performs direct systemd drop-in cleanup or changes CPUQuotaPeriodSec'
+fi
+grep -Fq 'phase29-database-inventory-v2' scripts/k3s-router-backup.sh ||
+  fail 'backup does not produce the versioned database-wide inventory v2'
+for state in owners acl comments security_labels pg_db_role_setting schema_ddl; do
+  grep -Fq "$state" scripts/k3s-router-backup.sh || fail "database inventory omits $state"
+done
 grep -Fq -- '--retry-no-go' scripts/k3s-router-restore-rehearsal.sh ||
   fail 'restore has no controlled retry path after no-go evidence'
 

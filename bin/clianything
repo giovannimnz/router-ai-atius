@@ -1,2 +1,388 @@
-#!/usr/bin/env sh
-exec python3 /home/ubuntu/GitHub/containers/router-ai-atius/tools/clianything.py "$@"
+#!/usr/bin/env python3
+"""Backend-selecting launcher for the router-ai-atius operational CLI."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+from types import ModuleType
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CLI_PATH = REPO_ROOT / "tools" / "clianything.py"
+K3S_NAMESPACE = "router-ai-atius"
+K3S_POSTGRES_LABEL = "app.kubernetes.io/name=router-ai-atius-postgres"
+K3S_POSTGRES_STATEFULSET = "router-ai-atius-postgres"
+K3S_POSTGRES_CONTAINER = "postgres"
+K3S_NODE = "atius-srv-1"
+BACKENDS = {"host", "podman", "k3s"}
+K3S_READ_ONLY_COMMANDS = {
+    "status",
+    "resources",
+    "schema",
+    "list",
+    "get",
+    "export",
+    "query",
+    "providers",
+    "embeddings",
+    "models",
+    "logs",
+}
+READ_ONLY_TABLE_COLUMNS = {
+    "pg_catalog.pg_class": frozenset({"oid", "relkind", "relname"}),
+    "public.abilities": frozenset({"channel_id", "enabled", "id", "model", "priority", "weight"}),
+    "public.channels": frozenset(
+        {"base_url", "id", "models", "name", "priority", "status", "type", "weight"}
+    ),
+    "public.models": frozenset(
+        {"created_at", "deleted_at", "id", "model_name", "status", "updated_at"}
+    ),
+}
+READ_ONLY_SHOW_SETTINGS = frozenset({"search_path", "transaction_read_only"})
+SQL_IDENTIFIER = r"[a-z_][a-z0-9_]*"
+
+
+class LauncherError(RuntimeError):
+    pass
+
+
+def parse_launcher_args(argv: list[str]) -> tuple[str | None, bool, list[str]]:
+    backend: str | None = None
+    read_only = False
+    forwarded: list[str] = []
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--backend":
+            if backend is not None:
+                raise LauncherError("--backend foi informado mais de uma vez")
+            index += 1
+            if index >= len(argv):
+                raise LauncherError("--backend exige host, podman ou k3s")
+            backend = argv[index].lower()
+        elif arg.startswith("--backend="):
+            if backend is not None:
+                raise LauncherError("--backend foi informado mais de uma vez")
+            backend = arg.split("=", 1)[1].lower()
+        elif arg == "--read-only":
+            if read_only:
+                raise LauncherError("--read-only foi informado mais de uma vez")
+            read_only = True
+        else:
+            forwarded.append(arg)
+        index += 1
+
+    if backend is not None and backend not in BACKENDS:
+        raise LauncherError("backend invalido: use host, podman ou k3s")
+    return backend, read_only, forwarded
+
+
+def kubectl_postgres_pods() -> dict:
+    command = [
+        "sudo",
+        "-n",
+        "k3s",
+        "kubectl",
+        "-n",
+        K3S_NAMESPACE,
+        "get",
+        "pods",
+        "-l",
+        K3S_POSTGRES_LABEL,
+        "-o",
+        "json",
+    ]
+    try:
+        proc = subprocess.run(
+            command,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise LauncherError("sudo/k3s nao esta disponivel") from exc
+    if proc.returncode != 0:
+        raise LauncherError("falha ao consultar pods PostgreSQL no k3s")
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise LauncherError("inventario de pods PostgreSQL retornou JSON invalido") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise LauncherError("inventario de pods PostgreSQL tem formato invalido")
+    return payload
+
+
+def resolve_k3s_postgres_pod(payload: dict | None = None) -> str:
+    items = (payload if payload is not None else kubectl_postgres_pods()).get("items", [])
+    if len(items) != 1:
+        raise LauncherError(f"esperado exatamente um pod PostgreSQL; encontrados {len(items)}")
+
+    pod = items[0]
+    metadata = pod.get("metadata", {})
+    spec = pod.get("spec", {})
+    status = pod.get("status", {})
+    name = metadata.get("name")
+    labels = metadata.get("labels", {})
+    owners = metadata.get("ownerReferences", [])
+    containers = spec.get("containers", [])
+    container_statuses = status.get("containerStatuses", [])
+    conditions = status.get("conditions", [])
+
+    if not isinstance(name, str) or not name:
+        raise LauncherError("pod PostgreSQL sem nome valido")
+    if metadata.get("namespace") != K3S_NAMESPACE:
+        raise LauncherError("pod PostgreSQL fora do namespace router-ai-atius")
+    if labels.get("app.kubernetes.io/name") != K3S_POSTGRES_STATEFULSET:
+        raise LauncherError("pod PostgreSQL sem label canonico")
+    if metadata.get("deletionTimestamp"):
+        raise LauncherError("pod PostgreSQL esta sendo removido")
+    if not any(
+        owner.get("apiVersion") == "apps/v1"
+        and owner.get("kind") == "StatefulSet"
+        and owner.get("name") == K3S_POSTGRES_STATEFULSET
+        and owner.get("controller") is True
+        for owner in owners
+    ):
+        raise LauncherError("pod PostgreSQL nao pertence ao StatefulSet canonico")
+    if spec.get("nodeName") != K3S_NODE:
+        raise LauncherError("pod PostgreSQL nao esta no node atius-srv-1")
+    if [container.get("name") for container in containers].count(K3S_POSTGRES_CONTAINER) != 1:
+        raise LauncherError("pod PostgreSQL nao possui container postgres unico")
+    if status.get("phase") != "Running" or not any(
+        condition.get("type") == "Ready" and condition.get("status") == "True"
+        for condition in conditions
+    ):
+        raise LauncherError("pod PostgreSQL nao esta Ready")
+    if not any(
+        container.get("name") == K3S_POSTGRES_CONTAINER and container.get("ready") is True
+        for container in container_statuses
+    ):
+        raise LauncherError("container postgres nao esta Ready")
+    return name
+
+
+def podman_postgres_exists() -> bool:
+    if shutil.which("podman") is None:
+        return False
+    container = os.environ.get("CLIANYTHING_DB_CONTAINER", "postgres")
+    proc = subprocess.run(
+        ["podman", "ps", "--format", "{{.Names}}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return proc.returncode == 0 and container in proc.stdout.splitlines()
+
+
+def k3s_postgres_exists() -> bool:
+    try:
+        return bool(kubectl_postgres_pods()["items"])
+    except LauncherError:
+        return False
+
+
+def choose_backend(requested: str | None) -> str:
+    env_backend = os.environ.get("CLIANYTHING_DB_BACKEND")
+    if requested is not None:
+        return requested
+    if env_backend:
+        selected = env_backend.lower()
+        if selected not in BACKENDS:
+            raise LauncherError("CLIANYTHING_DB_BACKEND invalido: use host, podman ou k3s")
+        return selected
+    if podman_postgres_exists() and k3s_postgres_exists():
+        raise LauncherError("Podman e k3s estao disponiveis; informe --backend podman ou --backend k3s")
+    return "host"
+
+
+def load_cli() -> ModuleType:
+    os.environ.setdefault("CLIANYTHING_ROOT", str(REPO_ROOT))
+    loader = SourceFileLoader("clianything_runtime", str(CLI_PATH))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    if spec is None:
+        raise LauncherError(f"nao foi possivel carregar {CLI_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    loader.exec_module(module)
+    return module
+
+
+def configure_k3s(cli: ModuleType, pod: str) -> None:
+    cli.DB_BACKEND = "k3s"
+
+    def psql_base_cmd(binary: str) -> list[str]:
+        if binary != "psql":
+            raise cli.CliError("backend k3s permite somente psql read-only")
+        search_path = getattr(cli, "K3S_SESSION_SEARCH_PATH", "pg_catalog,public")
+        return [
+            "sudo",
+            "-n",
+            "k3s",
+            "kubectl",
+            "-n",
+            K3S_NAMESPACE,
+            "exec",
+            "-i",
+            pod,
+            "-c",
+            K3S_POSTGRES_CONTAINER,
+            "--",
+            "sh",
+            "-c",
+            f'exec env PGOPTIONS="-c default_transaction_read_only=on -c search_path={search_path} '
+            '-c statement_timeout=30000" '
+            'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@"',
+            "clianything-psql",
+        ]
+
+    def cmd_status(args) -> None:
+        rows = [
+            {
+                "check": "pod",
+                "target": f"{K3S_NAMESPACE}/{pod}",
+                "status": "ok",
+                "detail": f"Ready node={K3S_NODE} container={K3S_POSTGRES_CONTAINER}",
+            }
+        ]
+        try:
+            db_rows = cli.run_psql_json("select current_database() as database, current_user as db_user")
+            rows.append(
+                {
+                    "check": "db",
+                    "target": cli.DB_NAME,
+                    "status": "ok",
+                    "detail": cli.format_scalar(db_rows),
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - status reports a sanitized diagnostic.
+            rows.append(
+                {
+                    "check": "db",
+                    "target": cli.DB_NAME,
+                    "status": "fail",
+                    "detail": cli.redact_text(str(exc)),
+                }
+            )
+        cli.print_table(rows)
+        if getattr(args, "strict", False) and any(row["status"] != "ok" for row in rows):
+            raise cli.StrictStatusError("Status estrito falhou: banco k3s indisponivel")
+
+    cli.psql_base_cmd = psql_base_cmd
+    cli.cmd_status = cmd_status
+
+
+def configure_read_only_query(cli: ModuleType) -> None:
+    cli.K3S_SESSION_SEARCH_PATH = "pg_catalog"
+
+    def ensure_read_only(sql: str) -> None:
+        if re.search(r"/\*|\*/|--", sql):
+            raise cli.CliError("comments nao sao permitidos em query --read-only")
+        if '"' in sql:
+            raise cli.CliError("identificadores quoted nao sao permitidos em query --read-only")
+        if "'" in sql or "$" in sql:
+            raise cli.CliError("literals textuais nao sao permitidos em query --read-only")
+        if "::" in sql or re.search(r"\bcast\s*\(", sql, flags=re.I):
+            raise cli.CliError("casts nao sao permitidos em query --read-only")
+
+        statement = sql.strip()
+        if statement.endswith(";"):
+            statement = statement[:-1].rstrip()
+        if not statement or ";" in statement:
+            raise cli.CliError("query --read-only aceita exatamente uma instrucao SQL")
+        normalized = re.sub(r"\s+", " ", statement).lower()
+
+        if normalized == "select 1":
+            return
+        show_match = re.fullmatch(rf"show (?P<setting>{SQL_IDENTIFIER})", normalized)
+        if show_match:
+            if show_match.group("setting") in READ_ONLY_SHOW_SETTINGS:
+                return
+            raise cli.CliError("setting nao allowlisted para query --read-only")
+
+        count_match = re.fullmatch(
+            rf"select pg_catalog\.count\(\*\) from "
+            rf"(?P<table>{SQL_IDENTIFIER}\.{SQL_IDENTIFIER})",
+            normalized,
+        )
+        if count_match:
+            table = count_match.group("table")
+            if table in READ_ONLY_TABLE_COLUMNS:
+                return
+            raise cli.CliError("tabela nao allowlisted para query --read-only")
+
+        if "(" in normalized or ")" in normalized:
+            raise cli.CliError(
+                "parenteses nao sao permitidos salvo pg_catalog.count(*) em query --read-only"
+            )
+        if re.search(r"[=<>+*/%!~^|&]", normalized):
+            raise cli.CliError("operadores nao sao permitidos em query --read-only")
+
+        select_match = re.fullmatch(
+            rf"select (?P<columns>{SQL_IDENTIFIER}(?:\s*,\s*{SQL_IDENTIFIER})*) "
+            rf"from (?P<table>{SQL_IDENTIFIER}\.{SQL_IDENTIFIER})"
+            rf"(?: order by (?P<order>{SQL_IDENTIFIER})(?: (?P<direction>asc|desc))?)?"
+            rf"(?: limit (?P<limit>[1-9][0-9]{{0,3}}))?",
+            normalized,
+        )
+        if not select_match:
+            raise cli.CliError("query --read-only esta fora da grammar allowlisted")
+
+        table = select_match.group("table")
+        allowed_columns = READ_ONLY_TABLE_COLUMNS.get(table)
+        if allowed_columns is None:
+            raise cli.CliError("tabela nao allowlisted para query --read-only")
+        columns = [column.strip() for column in select_match.group("columns").split(",")]
+        rejected_columns = [column for column in columns if column not in allowed_columns]
+        order_column = select_match.group("order")
+        if order_column and order_column not in allowed_columns:
+            rejected_columns.append(order_column)
+        if rejected_columns:
+            raise cli.CliError(
+                "coluna nao allowlisted para query --read-only: " + rejected_columns[0]
+            )
+        limit = select_match.group("limit")
+        if limit and int(limit) > 1000:
+            raise cli.CliError("limit maximo para query --read-only e 1000")
+
+    cli.ensure_read_only = ensure_read_only
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        requested, read_only, forwarded = parse_launcher_args(list(sys.argv[1:] if argv is None else argv))
+        backend = choose_backend(requested)
+        command = forwarded[0] if forwarded else None
+        help_requested = "-h" in forwarded or "--help" in forwarded
+
+        if read_only and command != "query":
+            raise LauncherError("--read-only e valido somente para query")
+        if backend == "k3s" and not help_requested:
+            if command not in K3S_READ_ONLY_COMMANDS:
+                raise LauncherError(f"comando {command or '<ausente>'} e incompativel com o backend k3s read-only")
+            if command == "query" and not read_only:
+                raise LauncherError("query no backend k3s exige --read-only")
+
+        os.environ["CLIANYTHING_DB_BACKEND"] = "host" if backend == "k3s" else backend
+        cli = load_cli()
+        if backend == "k3s" and not help_requested:
+            configure_k3s(cli, resolve_k3s_postgres_pod())
+        if read_only and not help_requested:
+            configure_read_only_query(cli)
+        return cli.main(forwarded)
+    except LauncherError as exc:
+        print(f"erro: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

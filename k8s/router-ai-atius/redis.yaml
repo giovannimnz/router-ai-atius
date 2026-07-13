@@ -24,6 +24,8 @@ metadata:
     app.kubernetes.io/part-of: atius-router
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: router-ai-atius-redis
@@ -43,14 +45,24 @@ spec:
                     values: ["true"]
       containers:
         - name: redis
-          image: docker.io/library/redis:7-alpine
+          image: docker.io/library/redis@sha256:084f4bcb3fedf990ba43d26774f58ed4697a2c044156544ac4717934ad1d57c8
           imagePullPolicy: IfNotPresent
-          args:
+          command:
             - sh
-            - -c
-            - exec redis-server --appendonly no --requirepass "$REDIS_PASSWORD"
+            - -ceu
+          args:
+            - |
+              umask 077
+              case "$REDISCLI_AUTH" in
+                ''|*[!A-Za-z0-9._~+/=-]*) exit 1 ;;
+              esac
+              install -d -m 0700 /run/redis
+              printf 'appendonly no\nrequirepass "%s"\n' "$REDISCLI_AUTH" > /run/redis/redis.conf
+              chmod 0600 /run/redis/redis.conf
+              unset REDISCLI_AUTH
+              exec redis-server /run/redis/redis.conf
           env:
-            - name: REDIS_PASSWORD
+            - name: REDISCLI_AUTH
               valueFrom:
                 secretKeyRef:
                   name: router-ai-atius-secrets
@@ -63,7 +75,7 @@ spec:
               command:
                 - sh
                 - -c
-                - redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
+                - redis-cli ping | grep -qx PONG
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
@@ -71,7 +83,7 @@ spec:
               command:
                 - sh
                 - -c
-                - redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
+                - redis-cli ping | grep -qx PONG
             initialDelaySeconds: 20
             periodSeconds: 20
           resources:
@@ -84,6 +96,12 @@ spec:
           volumeMounts:
             - name: redis-tmp
               mountPath: /data
+            - name: redis-config
+              mountPath: /run/redis
       volumes:
         - name: redis-tmp
           emptyDir: {}
+        - name: redis-config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

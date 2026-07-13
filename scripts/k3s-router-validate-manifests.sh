@@ -23,6 +23,18 @@ import sys
 
 import yaml
 
+
+def cpu_millicores(value):
+    if isinstance(value, int):
+        return value * 1000
+    if not isinstance(value, str):
+        raise ValueError("CPU value must be a string or integer")
+    if value.endswith("m") and value[:-1].isdigit():
+        return int(value[:-1])
+    if value.isdigit():
+        return int(value) * 1000
+    raise ValueError(f"unsupported CPU value: {value}")
+
 root = pathlib.Path(sys.argv[1])
 docs = {}
 for name in ("namespace", "configmap", "postgres", "redis", "router"):
@@ -65,12 +77,38 @@ for name, doc in workloads.items():
             raise SystemExit(f"{name} contains forbidden {forbidden}")
     if "preferredDuringSchedulingIgnoredDuringExecution" in pod.get("affinity", {}).get("nodeAffinity", {}):
         raise SystemExit(f"{name} contains preferred node affinity")
-    for container in pod.get("containers", []):
+    containers = pod.get("containers", [])
+    init_containers = pod.get("initContainers", [])
+    if not containers:
+        raise SystemExit(f"{name} must define at least one regular container")
+    request_total = 0
+    limit_total = 0
+    for container in [*containers, *init_containers]:
+        image = container.get("image", "")
+        if not re.fullmatch(r"[^@]+@sha256:[0-9a-f]{64}", image):
+            raise SystemExit(f"{name}/{container.get('name')} image must use an exact digest")
         if any("hostPort" in port for port in container.get("ports", [])):
             raise SystemExit(f"{name} contains hostPort")
         resources = container.get("resources", {})
-        if resources.get("requests", {}).get("cpu") != "500m" or resources.get("limits", {}).get("cpu") != "500m":
-            raise SystemExit(f"{name} must request and limit exactly 500m CPU")
+        request = resources.get("requests", {}).get("cpu")
+        limit = resources.get("limits", {}).get("cpu")
+        try:
+            request_cpu = cpu_millicores(request)
+            limit_cpu = cpu_millicores(limit)
+        except ValueError as exc:
+            raise SystemExit(f"{name}/{container.get('name')} {exc}") from exc
+        if request_cpu != limit_cpu:
+            raise SystemExit(f"{name}/{container.get('name')} CPU requests must equal limits")
+        request_total += request_cpu
+        limit_total += limit_cpu
+    if request_total != limit_total or request_total > 500:
+        raise SystemExit(
+            f"{name} total pod CPU must have requests=limits and stay at or below 500m"
+        )
+
+for name in ("router-ai-atius", "router-ai-atius-redis"):
+    if workloads[name]["spec"].get("strategy") != {"type": "Recreate"}:
+        raise SystemExit(f"{name} must use Recreate to avoid an unschedulable surge pod")
 
 pvcs = {}
 services = {}
@@ -104,6 +142,29 @@ postgres_container = postgres["spec"]["template"]["spec"]["containers"][0]
 approved_postgres = "docker.io/library/postgres@sha256:b797483593b82cbea9a7ee41c88f324a90d10d9c2504d40e755d91c75456366d"
 if postgres_container.get("image") != approved_postgres:
     raise SystemExit("PostgreSQL image must use the approved PostgreSQL 17 arm64 digest")
+
+redis = workloads["router-ai-atius-redis"]
+redis_container = redis["spec"]["template"]["spec"]["containers"][0]
+approved_redis = "docker.io/library/redis@sha256:084f4bcb3fedf990ba43d26774f58ed4697a2c044156544ac4717934ad1d57c8"
+if redis_container.get("image") != approved_redis:
+    raise SystemExit("Redis image must use the approved Redis 7 arm64 digest")
+redis_env = {item.get("name"): item for item in redis_container.get("env", [])}
+if set(redis_env) != {"REDISCLI_AUTH"}:
+    raise SystemExit("Redis must expose only REDISCLI_AUTH from the Secret")
+if redis_env["REDISCLI_AUTH"].get("valueFrom", {}).get("secretKeyRef", {}) != {
+    "name": "router-ai-atius-secrets",
+    "key": "REDIS_PASSWORD",
+}:
+    raise SystemExit("Redis REDISCLI_AUTH must come from the canonical Secret key")
+argv = [*redis_container.get("command", []), *redis_container.get("args", [])]
+if any("--requirepass" in item or "redis-cli -a" in item for item in argv):
+    raise SystemExit("Redis password must not be passed in server or probe argv")
+if "chmod 0600 /run/redis/redis.conf" not in "\n".join(argv):
+    raise SystemExit("Redis must generate a mode 0600 config before startup")
+for probe_name in ("readinessProbe", "livenessProbe"):
+    probe = redis_container.get(probe_name, {}).get("exec", {}).get("command", [])
+    if not any("redis-cli ping" in item for item in probe) or any(" -a" in item for item in probe):
+        raise SystemExit(f"Redis {probe_name} must use REDISCLI_AUTH without -a")
 
 for group in docs.values():
     for doc in group:

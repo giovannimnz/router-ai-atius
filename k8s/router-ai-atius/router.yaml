@@ -9,6 +9,7 @@ metadata:
   annotations:
     router.atius.com.br/storage-warning: "local-path is single-node, RWO, reclaim Delete, and not HA"
 spec:
+  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:
@@ -34,10 +35,18 @@ spec:
         app.kubernetes.io/name: router-ai-atius
         app.kubernetes.io/part-of: atius-router
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: atius.com.br/router-ai-atius-node
+                    operator: In
+                    values: ["true"]
       containers:
         - name: router-ai-atius
-          image: ghcr.io/giovannimnz/router-ai-atius:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/giovannimnz/router-ai-atius@sha256:a0e0dc9fe66330ca615c36592b6d21c09bfb4a5a05d65a4e0f9b9c2c8e3e2ab9
+          imagePullPolicy: Never
           ports:
             - containerPort: 3000
               name: http

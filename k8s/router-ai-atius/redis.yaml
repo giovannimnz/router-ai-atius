@@ -33,6 +33,14 @@ spec:
         app.kubernetes.io/name: router-ai-atius-redis
         app.kubernetes.io/part-of: atius-router
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: atius.com.br/router-ai-atius-node
+                    operator: In
+                    values: ["true"]
       containers:
         - name: redis
           image: docker.io/library/redis:7-alpine
@@ -68,10 +76,10 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: 250m
+              cpu: 500m
               memory: 256Mi
             limits:
-              cpu: 250m
+              cpu: 500m
               memory: 512Mi
           volumeMounts:
             - name: redis-tmp

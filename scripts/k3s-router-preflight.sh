@@ -1,47 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
-
-section() {
-  printf '\n== %s ==\n' "$1"
+mode=dry-run; stable_seconds="${PHASE29_REQUIRE_STABLE_SECONDS:-300}"; cleanup=""; bootstrap=""
+die() { echo "preflight failed: $*" >&2; exit 1; }
+quota_ok() { local q p; read -r q p <<< "$1"; if [ "$q" = max ] || [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $1"; fi; }
+free_space_ok() { local free_percent="$1"; [ "$free_percent" -ge 25 ] || die 'root filesystem is below 25% free'; }
+evidence_identity_ok() {
+  local file="$1" now generated expected_uid
+  now="$(date +%s)"; generated="$(jq -r '.generated_at_epoch' "$file")"
+  if [ "$generated" -gt "$now" ] || [ $((now - generated)) -gt 3600 ]; then die "$file is stale or future-dated"; fi
+  expected_uid="$(sudo -n k3s kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')"
+  [ "$(jq -r '.cluster_uid' "$file")" = "$expected_uid" ] || die "$file belongs to another cluster"
 }
-
-run_or_warn() {
-  local desc="$1"
-  shift
-  if ! "$@"; then
-    printf 'WARN: %s failed\n' "$desc" >&2
-    return 0
-  fi
-}
-
-section "graphify status"
-node "$HOME/.codex/gsd-core/bin/gsd-tools.cjs" graphify status
-
-section "router status"
-bin/clianything status
-
-section "providers"
-bin/clianything providers --all
-
-section "podman pod ps"
-podman pod ps
-
-section "podman ps"
-podman ps --filter pod=atius-ai-router --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
-
-section "k3s nodes"
-sudo -n k3s kubectl get nodes -o wide
-
-section "k3s top nodes"
-run_or_warn "metrics API unavailable" sudo -n k3s kubectl top nodes
-
-section "k3s storage"
-sudo -n k3s kubectl get storageclass,pv,pvc -A -o wide
-
-section "k3s ingress"
-sudo -n k3s kubectl get ingressclass,ingress -A -o wide
-
-section "k3s events"
-sudo -n k3s kubectl get events -A --sort-by=.lastTimestamp | tail -120 || true
+while [ "$#" -gt 0 ]; do case "$1" in
+  --live) mode=live;;
+  --require-cleanup-evidence) cleanup="${2:?}"; shift;;
+  --require-bootstrap-evidence) bootstrap="${2:?}"; shift;;
+  --self-test) quota_ok '80000 100000'; quota_ok '40000 50000'; free_space_ok 25; if (free_space_ok 24) 2>/dev/null; then die 'free space below 25% accepted'; fi; if (quota_ok '80001 100000') 2>/dev/null; then die 'quota above 800m accepted'; fi; if (quota_ok 'max 100000') 2>/dev/null; then die 'unbounded quota accepted'; fi; echo 'preflight self-test: PASS'; exit 0;;
+  *) die "unknown argument: $1";; esac; shift; done
+scripts/k3s-router-validate-manifests.sh
+[ "$mode" = live ] || { echo 'preflight dry-run: PASS (no host/cluster command executed)'; exit 0; }
+[ "${PHASE29_LIVE:-0}" = 1 ] || die '--live requires PHASE29_LIVE=1'
+[ "$stable_seconds" -ge 300 ] || die 'stability window must be >=300s'
+quota_ok "$(cat /sys/fs/cgroup/cpu.max)"
+if [ -n "$cleanup" ]; then
+  [ -f "$cleanup" ] || die 'cleanup evidence missing'
+  [ ! -L "$cleanup" ] || die 'cleanup evidence cannot be a symlink'
+  evidence_identity_ok "$cleanup"
+  jq -e '(.status == "pending-stability" or .status == "go") and .reclaimed_bytes >= 21474836480 and .free_percent >= 25' "$cleanup" >/dev/null || die 'cleanup evidence is not eligible for stability check'
+  quota_ok "$(jq -r '.cpu_max' "$cleanup")"
+fi
+if [ -n "$bootstrap" ]; then
+  [ -f "$bootstrap" ] || die 'bootstrap evidence missing'
+  [ ! -L "$bootstrap" ] || die 'bootstrap evidence cannot be a symlink'
+  evidence_identity_ok "$bootstrap"
+  jq -e '.status == "go" and .exclusive_node == "atius-srv-1" and .secret_keys == "POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET" and .digest_match == true' "$bootstrap" >/dev/null || die 'bootstrap evidence invalid'
+  manifest_hash="$(sha256sum k8s/router-ai-atius/*.yaml | sha256sum | awk '{print $1}')"
+  [ "$(jq -r '.manifest_sha256' "$bootstrap")" = "$manifest_hash" ] || die 'bootstrap evidence does not match manifests'
+  nodes="$(sudo -n k3s kubectl get nodes -l atius.com.br/router-ai-atius-node=true -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+  [ "$nodes" = atius-srv-1 ] || die 'dedicated label is not exclusive'
+  keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secrets -o jsonpath='{range $k,$v := .data}{$k}{"\n"}{end}' | sort | paste -sd, -)"
+  [ "$keys" = 'POSTGRES_PASSWORD,REDIS_PASSWORD,SESSION_SECRET' ] || die 'live Secret key contract differs'
+  image="$(python3 -c 'import yaml; d=list(yaml.safe_load_all(open("k8s/router-ai-atius/router.yaml"))); print(next(x for x in d if x and x.get("kind")=="Deployment")["spec"]["template"]["spec"]["containers"][0]["image"])')"
+  sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq "$image" || die 'exact router image reference is absent from containerd'
+fi
+free_percent=$((100 - $(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')))
+free_space_ok "$free_percent"
+end=$((SECONDS + stable_seconds))
+while [ "$SECONDS" -lt "$end" ]; do
+  free_percent=$((100 - $(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')))
+  free_space_ok "$free_percent"
+  j="$(sudo -n k3s kubectl get node atius-srv-1 -o json)"
+  jq -e 'any(.status.conditions[]; .type == "DiskPressure" and .status == "False")' <<< "$j" >/dev/null || die 'DiskPressure is not False'
+  jq -e 'all(.spec.taints[]?; .key != "node.kubernetes.io/disk-pressure")' <<< "$j" >/dev/null || die 'DiskPressure taint present'
+  sleep 30
+done
+free_percent=$((100 - $(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')))
+free_space_ok "$free_percent"
+if [ -n "$cleanup" ]; then
+  tmp="${cleanup}.tmp"
+  jq --argjson seconds "$stable_seconds" '.status = "go" | .stable_seconds = $seconds' "$cleanup" > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$cleanup"
+fi
+echo 'preflight live: PASS'

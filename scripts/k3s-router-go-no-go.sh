@@ -410,9 +410,19 @@ storage.sort(key=lambda row: row["pvc"])
 apply_storage = sorted(apply.get("pvs", []), key=lambda row: row.get("pvc", ""))
 if storage != apply_storage:
     raise SystemExit("live PVC/PV map differs from shadow apply")
-namespace_pvs = [item for item in pvs if item.get("spec", {}).get("claimRef", {}).get("namespace") == "router-ai-atius"]
-if len(namespace_pvs) != 2 or {item.get("metadata", {}).get("name") for item in namespace_pvs} != {item["pv"] for item in storage}:
-    raise SystemExit("namespace PV binding set is not exact")
+expected_claim_refs = {(row["pvc"], row["pvc_uid"]) for row in storage}
+namespace_pvs = [
+    item for item in pvs
+    if (
+        item.get("spec", {}).get("claimRef", {}).get("namespace") == "router-ai-atius"
+        and (
+            item.get("spec", {}).get("claimRef", {}).get("name"),
+            item.get("spec", {}).get("claimRef", {}).get("uid"),
+        ) in expected_claim_refs
+    )
+]
+if len(namespace_pvs) != len(storage) or {item.get("metadata", {}).get("name") for item in namespace_pvs} != {item["pv"] for item in storage}:
+    raise SystemExit("current namespace PV binding set is not exact")
 
 result = {"schema_version": 1, "manifest_sha256": manifest_hash, "shadow_apply_sha256": sha(apply_path),
           "smoke_sha256": sha(smoke_path), "workloads": workloads, "services": service_map,
@@ -432,7 +442,7 @@ live_cluster_checks() {
     free_percent=$((free_bytes * 100 / total_bytes))
     if ! jq -e '
       any(.status.conditions[]; .type == "DiskPressure" and .status == "False") and
-      all(.spec.taints // []; .key != "node.kubernetes.io/disk-pressure")
+      all(.spec.taints[]?; .key != "node.kubernetes.io/disk-pressure")
     ' <<< "$node_json" >/dev/null || [ "$free_bytes" -lt 34359738368 ] || [ "$free_percent" -lt 25 ]; then
       fail_gate live-stability 'DiskPressure, taint, <32GiB free, or <25% free observed'; break
     fi
@@ -486,10 +496,11 @@ live_cluster_checks() {
   pvs="$(sudo -n k3s kubectl get pv -o json 2>/dev/null || printf '{"items":[]}')"
   claims="$(jq -c '[.items[] | {uid:.metadata.uid,pv:.spec.volumeName,phase:.status.phase}]' <<< "$pvcs")"
   if jq -e --argjson claims "$claims" '
+    . as $pvdoc |
     ($claims | length) >= 2 and all($claims[]; .phase == "Bound" and (.uid | length) > 0 and (.pv | length) > 0) and
-    all($claims[] as $claim; any(.items[];
+    all($claims[]; . as $claim | any($pvdoc.items[];
       .metadata.name == $claim.pv and .spec.persistentVolumeReclaimPolicy == "Retain" and
-      .spec.claimRef.uid == $claim.uid))
+      (.spec.claimRef.uid // "") == $claim.uid))
   ' <<< "$pvs" >/dev/null; then pass_gate live-pv-retain 'every namespace PVC is bound to its claim UID with PV Retain'
   else fail_gate live-pv-retain 'one or more PVC/PV claim UID or Retain checks failed'; fi
 

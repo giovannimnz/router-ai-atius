@@ -62,9 +62,9 @@ coverage:
         ref: shellcheck, bash -n and git diff --check
         status: pass
     human_judgment: false
-duration: 25min
+duration: 1 session
 completed: 2026-07-13
-status: implementation_complete_pending_live
+status: live_no_go_blocked_by_disk_free_percent
 ---
 
 # Phase 29 Plan 04: GO/NO-GO e rollback Summary
@@ -73,10 +73,18 @@ status: implementation_complete_pending_live
 
 ## Resultado
 
-A implementação do Plan 29-04 está concluída e validada somente com fixtures
-leves. Nenhum comando live, deploy, build ou commit foi executado. Portanto não
-existe `decision.json` operacional desta execução, os requirements não foram
-marcados como completos e a Phase 30 continua bloqueada.
+O Plan 29-04 foi executado live no run canonico
+`~/.local/state/router-ai-atius/phase29/run-20260713T144606Z`.
+
+O shadow k3s ficou operacional em `atius-srv-1`, o apply publicou
+`shadow-apply.json`, o smoke estrito publicou `smoke.json` e o agregador
+produziu decisao formal `no-go`.
+
+O bloqueio remanescente nao e mais de implementacao nem de identidade live:
+todos os gates passaram, exceto `live-stability`, porque o host ficou com
+`37966614528` bytes livres, mas apenas `18%` de disco livre. O contrato da
+Phase 29 exige simultaneamente `>=32 GiB` e `>=25%` livre por cinco minutos.
+Logo, a Phase 30 permanece bloqueada por capacidade real do host.
 
 ## Implementado
 
@@ -102,11 +110,19 @@ marcados como completos e a Phase 30 continua bloqueada.
   de Vault sem valores, CPU <=20%, evidências e interpretação de GO/NO-GO.
   Procedimentos de cutover e aposentadoria Podman foram removidos para a Phase
   30.
+- Correcoes adicionais apos o primeiro run live:
+  - `scripts/k3s-router-smoke.sh` importa `re` no coletor Python embutido usado
+    pelo snapshot canonico, eliminando o `NameError` que impedia a publicacao do
+    apply.
+  - `scripts/k3s-router-go-no-go.sh` passou a validar PVs correntes por
+    `claim UID`, ignorando historicos `Released` preservados por `Retain`, e
+    corrigiu dois filtros `jq` que causavam falso erro durante o gate live.
 
 ## Verificação executada
 
 - `bash tests/phase29-k3s-router-restore-selftest.sh` — PASS.
 - `bash tests/phase29-k3s-router-go-no-go-selftest.sh` — PASS.
+- `bash tests/phase29-k3s-router-smoke-selftest.sh` — PASS.
 - `bash -n` nos três scripts e dois selftests do escopo — PASS.
 - `shellcheck -x` nos três scripts e dois selftests do escopo — PASS.
 - `git diff --check` nos sete arquivos autorizados — PASS; os três arquivos
@@ -116,18 +132,33 @@ marcados como completos e a Phase 30 continua bloqueada.
   retargetado, vhost falso, route duplicado/ausente, controller/PVC/EndpointSlice
   extra, owner UID quebrado, divergência smoke workload/image/storage e
   substituição de pod no mapa live.
+- Execução live:
+  - `k3s-router-apply-shadow.sh --live --stage runtime` — PASS.
+  - `k3s-router-smoke.sh --strict` — PASS.
+  - `k3s-router-go-no-go.sh --live` — `no-go` valido.
+  - `decision-rerun-20260713T1245.json` registrou apenas `live-stability` como
+    gate vermelho; `live-pv-retain`, `live-identity-map`, `live-images`,
+    `live-clusterip`, `live-placement`, `rollback` e demais gates ficaram PASS.
 
 ## Commits
 
-Nenhum. O usuário proibiu commits nesta execução.
+Ainda nao criados neste resumo. O branch de trabalho contem apenas fixes de
+tooling e atualizacoes de planejamento/documentacao.
 
 ## Desvios do plano
 
-### Restrição explícita do usuário
+### Live no-go legitimo
 
-Os verifies live do PLAN não foram executados. Não houve acesso live ao cluster,
-Podman ou Apache, nem atualização de STATE/ROADMAP/requirements. A implementação
-foi validada exclusivamente por selftests leves e análise estática.
+O no-go final nao vem mais de bug em script nem de inconsistencia do shadow.
+Ele vem exclusivamente do contrato de estabilidade da fase:
+
+- livre atual em `/`: `37966614528` bytes, acima do minimo absoluto de `32 GiB`;
+- percentual livre atual: `18%`, abaixo do minimo de `25%`;
+- node `atius-srv-1`: `DiskPressure=False`, sem taint, label exclusivo e Pods
+  shadow em `500m`.
+
+Portanto o proximo trabalho nao e de aplicacao/router; e de capacidade/higiene
+de disco no host antes de um novo `go/no-go`.
 
 ### Dependência Wave 3 preservada
 
@@ -137,11 +168,15 @@ identidade ou cadeia divergente.
 
 ## Decisão operacional
 
-**Não emitida.** Ausência de execução live significa `phase30_authorized=false`
-por contrato. O próximo passo autorizado é corrigir/verificar a Wave 3 em seu
-escopo proprietário e, somente com autorização live separada, executar os
-comando 29-04 documentado para produzir `rollback-<run_id>.json`,
-`live-identity-<run_id>.json` e `decision.json`.
+**Emitida: `no-go` valido.**
+
+- Arquivo final limpo: `decision-rerun-20260713T1245.json`
+- `phase30_authorized=false`
+- unico blocker: `live-stability`
+
+O proximo passo autorizado e recuperar capacidade ate `>=25%` livre no host e
+reexecutar somente o gate 29-04 sobre o run atual ou um novo run, sem tocar no
+edge publico antes disso.
 
 ## Known Stubs
 
@@ -151,9 +186,9 @@ não fluem para UI nem simulam evidência operacional.
 ## Self-Check: PASSED
 
 - Todos os sete arquivos do escopo existem.
-- Selftests e verificações estáticas passaram.
-- Nenhuma claim de decisão live ou commit foi feita.
+- Selftests, apply live, smoke live e decisao live passaram no formato esperado.
+- Nenhuma claim de GO foi feita; o artefato final permanece `no-go`.
 
 ---
 *Phase: 29-k3s-shadow-restore-and-go-no-go*
-*Implementation completed: 2026-07-13; live decision pending explicit authorization*
+*Implementation and live execution completed: 2026-07-13; final status is no-go blocked only by disk free percent*

@@ -143,23 +143,23 @@ Runbook: docs/PODMAN.md
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
 | v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (preparation package only; no public cutover) |
-| v2.16 | K3s shadow, cutover, and planning hygiene | 🚧 in progress — Phase 31 done; 29/30 pending |
+| v2.16 | K3s shadow, cutover, and planning hygiene | 🚧 in progress — Phase 29 executada live com no-go por `live-stability`; Phase 30 bloqueada |
 | v2.17 | Codex OAuth lifecycle and upstream auth diagnostics | ✅ done 2026-07-12 — Router-owned OAuth, probe, refresh e smokes completos |
 
 ## Next actions
 
 1. **Phase 29 — k3s shadow, restore, and go/no-go**:
-   - preencher secrets do namespace `router-ai-atius`
-   - executar restore rehearsal e shadow deploy real
-   - rodar smoke local/sombra e registrar go/no-go
+   - status live atual: `shadow-apply.json` PASS, `smoke.json` PASS, `decision-rerun-20260713T1245.json` = `no-go`
+   - blocker unico: host `/` com `37966614528` bytes livres, mas apenas `18%` livre; o gate exige `>=32 GiB` e `>=25%`
+   - proximo rerun da decisao so faz sentido apos higienizacao/capacidade no host
 2. **Optional handoff v2.12 Phase 21 — feat-pt-native-pr**:
    - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
    - Validar o diff contra `upstream/main`
    - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
 3. **Phase 30 — public cutover and rollback soak**:
-   - mover Apache apenas se a Phase 29 produzir go real
-   - validar smoke publico completo
-   - manter Podman como rollback durante soak
+   - bloqueada mecanicamente enquanto a Phase 29 nao produzir `go` real
+   - nao mover Apache nem PgBouncer com o `no-go` atual
+   - manter Podman como rollback e producao publica
 4. **Podman runtime guardrail**:
    - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
    - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
@@ -213,8 +213,8 @@ Runbook: docs/PODMAN.md
 - [Phase 28 planning]: v2.14 should own branch/worktree hygiene and mainline reconciliation; v2.15 should own Phases 22 and 23 as deferred platform/runtime work.
 - [Phase 22]: k3s migration is now documented and tooled, but public cutover remains manual and blocked by restore/shadow evidence plus current cluster constraints.
 - [Phase 23]: the long-context harness is validated locally/static with the 1M cost gate preserved; new paid live runs remain operator-triggered only.
-- [Phase 29]: real k3s shadow deployment, restore rehearsal, and go/no-go should live in a new phase, not be treated as already completed work from Phase 22.
-- [Phase 30]: public Apache cutover should stay separate from shadow validation and remain rollback-first.
+- [Phase 29]: o shadow k3s real, restore rehearsal, apply, smoke e go/no-go foram executados live em 2026-07-13; o estado final atual e `no-go` exclusivo por `live-stability` (`18%` livre no host).
+- [Phase 30]: public Apache cutover stays separate from shadow validation, remains rollback-first, and is currently blocked by the Phase 29 no-go.
 - [Phase 31]: current `.planning/` health debt is real but historical; fix it in a dedicated hygiene phase instead of mixing it into runtime work.
 - [Phase 31]: legacy directories and `FORK_MIGRATION.md` were archived into `.planning/milestones/legacy-planning-archive-20260709`, and `validate.health` is now healthy.
 - [Phase 32]: Codex channel type `57` needs a dedicated OAuth lifecycle UI; generic `Base URL` and `API Key` surfaces are regressions for this fork.
@@ -252,7 +252,7 @@ Runbook: docs/PODMAN.md
 See: `.planning/PROJECT.md` (updated 2026-07-12)
 
 **Core value:** Keep the router operational and upstream-compatible while making every change traceable to a narrow, validated plan.
-**Current focus:** Milestone v2.17 complete; next operational track remains Phase 29 k3s shadow/restore/go-no-go.
+**Current focus:** Resolver capacidade do host para rerodar apenas o gate final da Phase 29; a cadeia shadow/apply/smoke ja esta validada.
 
 ## Operator Next Steps
 

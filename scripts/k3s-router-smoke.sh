@@ -323,6 +323,7 @@ capture_runtime_snapshot() {
   python3 - "$snapshot_dir" "$output" <<'PY'
 import json
 import pathlib
+import re
 import sys
 
 source, output = map(pathlib.Path, sys.argv[1:])

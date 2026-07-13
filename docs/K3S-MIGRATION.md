@@ -14,6 +14,15 @@ Enquanto a decisão final não for `go`:
   `127.0.0.1:3000`;
 - a Phase 30 permanece bloqueada.
 
+Estado live atual em `2026-07-13`:
+
+- `shadow-apply.json` e `smoke.json` foram publicados com `PASS`;
+- a decisão formal mais recente ficou `no-go`;
+- o único gate vermelho é `live-stability`, porque o host está com
+  `37966614528` bytes livres, porém só `18%` de espaço livre total;
+- nenhum tráfego público foi movido, e Podman continua como produção e
+  rollback.
+
 O shadow usa exclusivamente Service `ClusterIP`. A auditoria do host provou
 acesso à rede de Services, portanto NodePort, Ingress e `hostPort` não fazem
 parte deste contrato. Qualquer um deles resulta em `no-go`.

@@ -18,8 +18,8 @@ Keep the router operational and upstream-compatible while making every change tr
 
 ### Active
 
-- [ ] Phase 29: executar restore rehearsal e shadow deployment k3s com decisão formal de go/no-go.
-- [ ] Phase 30: realizar cutover público somente após go da Phase 29, com rollback e soak explícitos.
+- [ ] Phase 29: shadow/apply/smoke e decisão formal já executados live; resta liberar capacidade do host até `>=25%` livre para converter o `no-go` atual em novo gate elegível.
+- [ ] Phase 30: realizar cutover público somente após `go` real da Phase 29; atualmente bloqueada pelo `live-stability` da Phase 29.
 - [ ] Phase 21: hand off the already-implemented PT-BR native lane through one clean upstream PR branch.
 - [ ] Phase 21: keep the upstream PR candidate free of `.planning`, Graphify, Obsidian, runtime, DB/catalog, Podman, provider-routing, or Atius-only content.
 
@@ -31,7 +31,7 @@ Keep the router operational and upstream-compatible while making every change tr
 
 ## Context
 
-The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Production currently uses rootless Podman and the canonical host PostgreSQL/PgBouncer path. Phase 32 shipped the durable Codex OAuth lifecycle; the next runtime track is the k3s shadow/restore gate in Phase 29.
+The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Production currently uses rootless Podman and the canonical host PostgreSQL/PgBouncer path. Phase 32 shipped the durable Codex OAuth lifecycle; Phase 29 now has live shadow/apply/smoke evidence, but the final decision remains `no-go` while `/` stays below `25%` free on `atius-srv-1`.
 
 The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implementation must start from a clean worktree or branch based on current `upstream/main`.
 
@@ -59,4 +59,4 @@ The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implem
 | Validacao live deve confirmar o DSN efetivo do runtime | Bancos homonimos local e canonico podem produzir evidencia divergente | Validated in Phase 32 |
 
 ---
-*Last updated: 2026-07-12 after Phase 32 OAuth lifecycle completion.*
+*Last updated: 2026-07-13 after Phase 29 live no-go validation.*

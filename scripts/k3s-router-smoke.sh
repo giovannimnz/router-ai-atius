@@ -351,7 +351,7 @@ def metadata(obj, label):
 
 
 apps = {
-    "router": ("Deployment", "router-ai-atius", "router"),
+    "router": ("Deployment", "router-ai-atius", "router-ai-atius"),
     "redis": ("Deployment", "router-ai-atius-redis", "redis"),
     "postgres": ("StatefulSet", "router-ai-atius-postgres", "postgres"),
 }
@@ -721,7 +721,7 @@ self_test() {
      images:{router:{reference:("example@sha256:"+("a"*64)),digest:("sha256:"+("a"*64)),runtime_digest:("sha256:"+("a"*64)),runtime_image_id:("example@sha256:"+("a"*64)),exact:true},
        redis:{reference:("redis@sha256:"+("b"*64)),digest:("sha256:"+("b"*64)),runtime_digest:("sha256:"+("b"*64)),runtime_image_id:("redis@sha256:"+("b"*64)),exact:true},
        postgres:{reference:("postgres@sha256:"+("c"*64)),digest:("sha256:"+("c"*64)),runtime_digest:("sha256:"+("c"*64)),runtime_image_id:("postgres@sha256:"+("c"*64)),exact:true}},
-     workloads:{router:{app:"router-ai-atius",controller:{kind:"Deployment",name:"router-ai-atius",uid:"deployment-uid"},pod_owner:{name:"router-rs",uid:"rs-uid"},pod:{name:"router-abc",uid:"pod-uid",ip:"10.42.0.9"},container:{name:"router",image_ref:("example@sha256:"+("a"*64)),image_id:("example@sha256:"+("a"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}},
+     workloads:{router:{app:"router-ai-atius",controller:{kind:"Deployment",name:"router-ai-atius",uid:"deployment-uid"},pod_owner:{name:"router-rs",uid:"rs-uid"},pod:{name:"router-abc",uid:"pod-uid",ip:"10.42.0.9"},container:{name:"router-ai-atius",image_ref:("example@sha256:"+("a"*64)),image_id:("example@sha256:"+("a"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}},
        redis:{app:"router-ai-atius-redis",controller:{kind:"Deployment",name:"router-ai-atius-redis",uid:"redis-deployment-uid"},pod_owner:{name:"redis-rs",uid:"redis-rs-uid"},pod:{name:"redis-abc",uid:"redis-pod-uid",ip:"10.42.0.10"},container:{name:"redis",image_ref:("redis@sha256:"+("b"*64)),image_id:("redis@sha256:"+("b"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}},
        postgres:{app:"router-ai-atius-postgres",controller:{kind:"StatefulSet",name:"router-ai-atius-postgres",uid:"postgres-sts-uid"},pod_owner:{name:"router-ai-atius-postgres",uid:"postgres-sts-uid"},pod:{name:"router-ai-atius-postgres-0",uid:"postgres-pod-uid",ip:"10.42.0.11"},container:{name:"postgres",image_ref:("postgres@sha256:"+("c"*64)),image_id:("postgres@sha256:"+("c"*64)),resources:{requests_cpu:"500m",limits_cpu:"500m"}}}},
      pvs:[
@@ -755,7 +755,7 @@ self_test() {
   validate_service_json "$service"
   jq '.spec.type="NodePort"' "$service" > "$test_dir/nodeport.json"
   if (validate_service_json "$test_dir/nodeport.json") 2>/dev/null; then die 'NodePort was accepted'; fi
-  jq -n '{items:[{metadata:{name:"router-abc",uid:"pod-uid",labels:{"app.kubernetes.io/name":"router-ai-atius"},ownerReferences:[{controller:true,kind:"ReplicaSet",name:"router-rs",uid:"rs-uid"}]},spec:{nodeName:"atius-srv-1",containers:[{name:"router",image:("example@sha256:"+("a"*64)),resources:{requests:{cpu:"500m"},limits:{cpu:"500m"}}}]},status:{phase:"Running",podIP:"10.42.0.9",conditions:[{type:"Ready",status:"True"}],containerStatuses:[{ready:true,imageID:("example@sha256:"+("a"*64))}]}}]}' > "$test_dir/pods.json"
+  jq -n '{items:[{metadata:{name:"router-abc",uid:"pod-uid",labels:{"app.kubernetes.io/name":"router-ai-atius"},ownerReferences:[{controller:true,kind:"ReplicaSet",name:"router-rs",uid:"rs-uid"}]},spec:{nodeName:"atius-srv-1",containers:[{name:"router-ai-atius",image:("example@sha256:"+("a"*64)),resources:{requests:{cpu:"500m"},limits:{cpu:"500m"}}}]},status:{phase:"Running",podIP:"10.42.0.9",conditions:[{type:"Ready",status:"True"}],containerStatuses:[{ready:true,imageID:("example@sha256:"+("a"*64))}]}}]}' > "$test_dir/pods.json"
   validate_workload_json "$test_dir/pods.json" router-ai-atius "example@sha256:$(printf 'a%.0s' {1..64})"
   jq '.workloads.router' "$apply_file" > "$test_dir/router-identity.json"
   validate_workload_chain router "$test_dir/router-identity.json"

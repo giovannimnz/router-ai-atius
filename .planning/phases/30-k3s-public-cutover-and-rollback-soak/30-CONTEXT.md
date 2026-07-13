@@ -1,33 +1,48 @@
-# Phase 30 Context
+# Contexto da Phase 30
 
-## Objective
+## Objetivo
 
-Perform the public cutover only after Phase 29 has produced a real go decision.
+Transferir o trafego publico do runtime Podman para a stack k3s validada e fixa
+em `atius-srv-1`, observar o comportamento durante o soak e, se todos os gates
+passarem, aposentar definitivamente o runtime Podman de producao preservando
+artefatos de rollback.
 
-This phase owns:
+## Gate Obrigatorio
 
-- Apache retarget to the k3s backend
-- public smoke validation
-- rollback decision and execution if needed
-- soak window with Podman still available as rollback
+Nao iniciar enquanto a Phase 29 nao entregar:
 
-## Hard Gate
+- `DiskPressure=False` e taint ausente de forma estavel;
+- backup fresco e restore real validados;
+- PostgreSQL, Redis e router pinados em `atius-srv-1`;
+- smoke shadow autenticado fail-closed;
+- imagem imutavel, PVC/PV protegidos e backend k3s do CLIAnything validado;
+- decisao formal `GO` com hashes, endpoints e procedimentos de rollback.
 
-Do not start unless Phase 29 has:
+## Decisoes Vinculantes
 
-- real shadow rollout evidence
-- real restore rehearsal evidence
-- real smoke evidence
-- explicit go/no-go decision
+- O Apache deve trocar apenas os upstreams do router atualmente em
+  `127.0.0.1:3000`; rotas de docs/assets em `127.0.0.1:3003` permanecem intactas.
+- O destino sera o `ClusterIP` persistente do Service validado na Phase 29. O IP
+  exato e o checksum da configuracao devem entrar na evidencia de cutover.
+- Antes da troca, criar backups do vhost, banco, estado k3s, estado Podman e
+  configuracoes auxiliares afetadas; validar sintaxe Apache antes e depois.
+- Smoke publico deve cobrir health, catalogo de modelos e chamadas autenticadas
+  non-stream/stream nos contratos relevantes, distinguindo falha interna de
+  falha do upstream.
+- O soak deve ter checks periodicos, criterio objetivo de rollback e registro de
+  disponibilidade, Pods, restarts, eventos, armazenamento e resposta publica.
+- Qualquer gate critico falho reverte imediatamente o Apache para Podman e exige
+  smoke de rollback antes de encerrar a tentativa.
+- Com soak aprovado, Podman deixa de ser runtime de producao: units/containers
+  sao desabilitados e removidos de forma controlada. Imagens, volumes, dumps e
+  checksums necessarios ao rollback permanecem preservados pelo periodo definido.
+- Nao implementar nem configurar Headroom nesta fase.
 
-## Success Definition
+## Definicao de Sucesso
 
-Either:
-
-- public traffic moves to k3s and survives the defined soak checks
-
-or:
-
-- Apache is restored to Podman and rollback checks pass
-
-with full evidence captured.
+- trafego publico servido pelo k3s fixo em `atius-srv-1`;
+- soak completo sem regressao critica;
+- Podman aposentado como runtime ativo, sem eliminar a capacidade documentada de
+  rollback;
+- operacao, monitoramento, backup/restore e CLIAnything funcionando no k3s;
+- evidencias, documentacao em portugues, commits e push concluidos.

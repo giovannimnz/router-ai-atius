@@ -75,6 +75,7 @@ ALLOWLIST=(
   '/tmp/codex-electron42-inspect|ubuntu|orphaned-build-dir|directory'
   '/tmp/codex-e42-investigate|ubuntu|orphaned-build-dir|directory'
   '/tmp/tmp.Nb54exSNDH|ubuntu|orphaned-build-dir|directory'
+  '/tmp/tmp.qUhPWFdMZF|ubuntu|orphaned-build-dir|directory'
   '/home/ubuntu/.cache/router-ai-atius|ubuntu|regenerable-project-cache|directory'
   '/home/ubuntu/.cache/camoufox|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/uv|ubuntu|regenerable-package-cache|directory'

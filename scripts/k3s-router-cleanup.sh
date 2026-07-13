@@ -78,7 +78,6 @@ ALLOWLIST=(
   '/tmp/tmp.qUhPWFdMZF|ubuntu|orphaned-build-dir|directory'
   '/home/ubuntu/.cache/router-ai-atius|ubuntu|regenerable-project-cache|directory'
   '/home/ubuntu/.cache/camoufox|ubuntu|regenerable-package-cache|directory'
-  '/home/ubuntu/.cache/uv|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/chrome-devtools-mcp|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/typescript|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/mozilla|ubuntu|regenerable-package-cache|directory'

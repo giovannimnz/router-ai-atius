@@ -233,13 +233,8 @@ for record in "${ALLOWLIST[@]}"; do
   assert_no_open_descendants "$path"
   if [ "$owner" = root ]; then bytes="$(sudo -n du -sb "$path" | awk '{print $1}')"; else bytes="$(du -sb "$path" | awk '{print $1}')"; fi
   assert_no_open_descendants "$path"
-  if [ "$owner" = root ]; then
-    sudo -n chmod -R u+w "$path"
-    sudo -n rm -rf -- "$path"
-  else
-    chmod -R u+w "$path"
-    rm -rf -- "$path"
-  fi
+  sudo -n chmod -R u+w "$path"
+  sudo -n rm -rf -- "$path"
   [ ! -e "$path" ] || die "path still exists after removal: $path"
   removed_sum=$((removed_sum + bytes))
   printf '{"path":"%s","owner":"%s","policy":"%s","bytes":%s}\n' "$path" "$owner" "$policy" "$bytes" >> "$items"

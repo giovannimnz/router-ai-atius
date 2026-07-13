@@ -42,11 +42,12 @@ keys="$(sudo -n k3s kubectl -n router-ai-atius get secret router-ai-atius-secret
 rm -f "$env_file"
 unset POSTGRES_PASSWORD REDIS_PASSWORD SESSION_SECRET
 
-source_image="$(podman inspect router-ai-atius --format '{{.Image}}')"; [ -n "$source_image" ] || die 'source image missing'
-arch="$(podman image inspect "$source_image" --format '{{.Architecture}}')"; [ "$arch" = arm64 ] || die "source image is $arch, not arm64"
-digest="$(podman image inspect "$source_image" --format '{{.Digest}}' | sed 's/^sha256://')"; [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || die 'source digest unavailable'
+source_ref="$(podman inspect router-ai-atius --format '{{.Config.Image}}')"; [ -n "$source_ref" ] || die 'source image reference missing'
+source_image="$(podman image inspect "$source_ref" --format '{{.Id}}')"; [ -n "$source_image" ] || die 'source image ID missing'
+arch="$(podman image inspect "$source_ref" --format '{{.Architecture}}')"; [ "$arch" = arm64 ] || die "source image is $arch, not arm64"
+digest="$(podman image inspect "$source_ref" --format '{{.Digest}}' | sed 's/^sha256://')"; [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || die 'source digest unavailable'
 immutable="ghcr.io/giovannimnz/router-ai-atius@sha256:$digest"; archive="$tmp/router.tar"
-podman save -o "$archive" "$source_image"; archive_sha="$(sha256sum "$archive" | awk '{print $1}')"; sudo -n k3s ctr -n k8s.io images import "$archive" >/dev/null
+podman save -o "$archive" "$source_ref"; archive_sha="$(sha256sum "$archive" | awk '{print $1}')"; sudo -n k3s ctr -n k8s.io images import "$archive" >/dev/null
 sed -i -E "s#image: ghcr.io/giovannimnz/router-ai-atius@sha256:[^[:space:]]+#image: $immutable#" k8s/router-ai-atius/router.yaml
 sudo -n k3s ctr -n k8s.io images ls -q | grep -Fxq 'ghcr.io/giovannimnz/router-ai-atius:latest' || die 'source image reference not imported'
 sudo -n k3s ctr -n k8s.io images tag --force 'ghcr.io/giovannimnz/router-ai-atius:latest' "$immutable" >/dev/null

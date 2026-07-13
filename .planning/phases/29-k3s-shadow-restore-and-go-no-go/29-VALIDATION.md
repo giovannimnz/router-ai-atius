@@ -19,7 +19,7 @@ Wave 0 acontece dentro das primeiras tarefas de cada plano antes da mutacao live
 | ID | Artefato | Instrumentacao exigida | Prova minima |
 |---|---|---|---|
 | W0-01 | `scripts/k3s-router-cleanup.sh` | allowlist literal, `--live`, bytes before/after, JSON sanitizado | rejeita glob/path fora da lista/prune/volumes/backups e falha abaixo dos gates de disco |
-| W0-02 | `scripts/k3s-router-preflight.sh` | `--live`, estabilidade atual configuravel e consumo de evidencias | nao cria artefato proprio; revalida por cinco minutos e promove `cleanup.json` cluster-bound a `go`, falhando com DiskPressure/taint/espaco/quota divergentes |
+| W0-02 | `scripts/k3s-router-preflight.sh` | `--live`, estabilidade atual configuravel e consumo de evidencias | nao cria artefato proprio; revalida por cinco minutos com pelo menos 32 GiB livres e promove `cleanup.json` cluster-bound a `go`, falhando com DiskPressure/taint/espaco/quota divergentes |
 | W0-03 | `scripts/k3s-router-bootstrap.sh` | label pós-estabilidade, Vault→Secret por tmpfs, imagem Podman→containerd | `bootstrap.json` fresco, cluster-bound e manifest-bound; key names exatas, temporario removido, label exclusivo e digests concordantes |
 | W0-04 | `scripts/k3s-router-restore-rehearsal.sh` | restore PostgreSQL 17 atomico, fail-closed e enumeracao PVC UID→PV | target integralmente limpo, `ON_ERROR_STOP` + transacao unica, readback Retain antes do import e estado canonico global permitindo retry somente de `restore.json` no-go arquivado |
 | W0-05 | `bin/clianything` | backend k3s explicito | status/query read-only no pod unico Ready, sem `podman exec` |

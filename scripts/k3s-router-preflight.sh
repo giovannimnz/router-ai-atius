@@ -5,7 +5,8 @@ mode=dry-run; stable_seconds="${PHASE29_REQUIRE_STABLE_SECONDS:-300}"; cleanup="
 die() { echo "preflight failed: $*" >&2; exit 1; }
 cpu_max_value() { local cgroup file; cgroup="$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)"; file="/sys/fs/cgroup${cgroup}/cpu.max"; [ -r "$file" ] || die "cpu.max unavailable for cgroup $cgroup"; cat "$file"; }
 quota_ok() { local q p; read -r q p <<< "$1"; if ! [[ "$q" =~ ^[0-9]+$ ]] || ! [[ "$p" =~ ^[0-9]+$ ]]; then die "cpu.max is malformed: $1"; fi; if [ "$p" -le 0 ] || [ $((q * 10)) -gt $((p * 8)) ]; then die "cpu.max exceeds 800m: $1"; fi; }
-free_space_ok() { local free_percent="$1"; [ "$free_percent" -ge 25 ] || die 'root filesystem is below 25% free'; }
+minimum_free_bytes=34359738368
+free_space_ok() { local free_bytes="$1"; [ "$free_bytes" -ge "$minimum_free_bytes" ] || die 'root filesystem has less than 32 GiB free'; }
 evidence_cluster_ok() {
   local file="$1" expected_uid
   expected_uid="$(sudo -n k3s kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')"
@@ -18,9 +19,10 @@ evidence_fresh_ok() {
   if [ "$generated" -gt "$now" ] || [ $((now - generated)) -gt 3600 ]; then die "$file is stale or future-dated"; fi
 }
 live_state_ok() {
-  local free_percent node_json
-  free_percent=$((100 - $(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')))
-  free_space_ok "$free_percent"
+  local free_bytes node_json
+  free_bytes="$(df -B1 --output=avail / | tail -1 | tr -d ' ')"
+  [[ "$free_bytes" =~ ^[0-9]+$ ]] || die 'root filesystem free bytes are not numeric'
+  free_space_ok "$free_bytes"
   node_json="$(sudo -n k3s kubectl get node atius-srv-1 -o json)"
   jq -e 'any(.status.conditions[]; .type == "DiskPressure" and .status == "False")' <<< "$node_json" >/dev/null || die 'DiskPressure is not False'
   jq -e 'all(.spec.taints[]?; .key != "node.kubernetes.io/disk-pressure")' <<< "$node_json" >/dev/null || die 'DiskPressure taint present'
@@ -29,7 +31,7 @@ while [ "$#" -gt 0 ]; do case "$1" in
   --live) mode=live;;
   --require-cleanup-evidence) cleanup="${2:?}"; shift;;
   --require-bootstrap-evidence) bootstrap="${2:?}"; shift;;
-  --self-test) quota_ok '80000 100000'; quota_ok '40000 50000'; free_space_ok 25; if (free_space_ok 24) 2>/dev/null; then die 'free space below 25% accepted'; fi; if (quota_ok '80001 100000') 2>/dev/null; then die 'quota above 800m accepted'; fi; if (quota_ok 'max 100000') 2>/dev/null; then die 'unbounded quota accepted'; fi; if (quota_ok 'now 100000') 2>/dev/null; then die 'non-numeric quota accepted'; fi; echo 'preflight self-test: PASS'; exit 0;;
+  --self-test) quota_ok '80000 100000'; quota_ok '40000 50000'; free_space_ok 34359738368; if (free_space_ok 34359738367) 2>/dev/null; then die 'free space below 32 GiB accepted'; fi; if (quota_ok '80001 100000') 2>/dev/null; then die 'quota above 800m accepted'; fi; if (quota_ok 'max 100000') 2>/dev/null; then die 'unbounded quota accepted'; fi; if (quota_ok 'now 100000') 2>/dev/null; then die 'non-numeric quota accepted'; fi; echo 'preflight self-test: PASS'; exit 0;;
   *) die "unknown argument: $1";; esac; shift; done
 scripts/k3s-router-validate-manifests.sh
 [ "$mode" = live ] || { echo 'preflight dry-run: PASS (no host/cluster command executed)'; exit 0; }

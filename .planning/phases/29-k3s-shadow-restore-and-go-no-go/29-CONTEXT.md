@@ -14,6 +14,9 @@ o trafego publico.
 - O `DiskPressure` deve ser resolvido por limpeza segura. E proibido mascarar o
   problema com toleration, remover a taint manualmente ou alterar thresholds de
   eviction apenas para permitir o rollout.
+- Depois da limpeza historica aprovada, o preflight corrente exige pelo menos
+  32 GiB livres por amostra; isso substitui a repeticao do alvo percentual sem
+  enfraquecer `DiskPressure=False`, taint e estabilidade de cinco minutos.
 - O gate exige pelo menos 20 GiB de recuperacao segura, alvo de 25% de espaco
   livre, `DiskPressure=False` e ausencia da taint por no minimo cinco minutos.
 - A storage class deve ser explicitamente `local-path`. Os PVCs precisam ficar

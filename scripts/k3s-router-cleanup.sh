@@ -123,7 +123,7 @@ assert_no_open_descendants() {
   set +e
   # Redirects intentionally stay unprivileged in the caller-owned tmpfs files.
   # shellcheck disable=SC2024
-  sudo -n lsof +D "$target" >"$out" 2>"$err"
+  sudo -n lsof -w +D "$target" >"$out" 2>"$err"
   rc=$?
   set -e
   if lsof_result_ok "$rc" "$(stat -c %s "$out")" "$(stat -c %s "$err")"; then

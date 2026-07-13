@@ -36,6 +36,10 @@ Estado live adicional da Phase 30 em `2026-07-13`:
   o arquivo foi repointado para o ClusterIP k3s, mas o backend novo falhou em
   `password authentication failed for user "admin"`, então o mapping voltou
   para `127.0.0.1:8745`.
+- a causa raiz foi fechada no mesmo dia: o role `admin` do k3s estava com
+  segredo SCRAM diferente do host/PgBouncer. Os scripts agora sincronizam o
+  SCRAM exato do host antes do repoint e a restauração da Phase 29 reaplica esse
+  mesmo segredo, em vez de gerar um novo a partir da senha em texto.
 
 O shadow usa exclusivamente Service `ClusterIP`. A auditoria do host provou
 acesso à rede de Services, portanto NodePort, Ingress e `hostPort` não fazem

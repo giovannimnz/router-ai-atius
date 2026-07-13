@@ -904,18 +904,13 @@ if $replace_go_target; then
   run_interruptible sudo -n k3s kubectl -n "$namespace" exec "$pod" -- \
     psql -X --set ON_ERROR_STOP=on -U "$database_user" -d postgres -c \
     'DO $phase29$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '\''postgres'\'') THEN CREATE ROLE postgres NOLOGIN; END IF; END $phase29$;'
-  helper="$HOME/.local/bin/atius-vault-env"
-  [ -x "$helper" ] || die 'Vault helper unavailable for target role synchronization'
-  set +x
-  # shellcheck disable=SC1090
-  source <("$helper" router-ai-atius)
-  [ -n "${POSTGRES_PASSWORD:-}" ] || die 'Vault profile did not provide the database password'
-  case "$POSTGRES_PASSWORD" in *$'\r'*|*$'\n'*) die 'database password contains a forbidden line break' ;; esac
   password_sql="$tmp/admin-password.sql"
-  escaped_password="${POSTGRES_PASSWORD//\'/\'\'}"
+  host_scram_secret="$(sudo -n -u postgres psql --no-psqlrc -d "$database" -Atqc "select rolpassword from pg_authid where rolname='$database_user'")"
+  [[ "$host_scram_secret" == SCRAM-SHA-256\$* ]] || die 'host admin role SCRAM secret unavailable'
+  escaped_password="${host_scram_secret//\'/\'\'}"
   printf "ALTER ROLE %s PASSWORD '%s';\n" "$database_user" "$escaped_password" > "$password_sql"
   chmod 600 "$password_sql"
-  unset POSTGRES_PASSWORD escaped_password
+  unset host_scram_secret escaped_password
   run_interruptible_stdin "$password_sql" sudo -n k3s kubectl -n "$namespace" exec -i "$pod" -- \
     psql -X --set ON_ERROR_STOP=on -U "$database_user" -d postgres >/dev/null
   rm -f "$password_sql"

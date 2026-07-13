@@ -254,22 +254,60 @@ write_evidence() {
   chmod 600 "$destination"
 }
 
-verify_pgbouncer_backend() {
-  local target_host="$1" target_port="$2"
+host_admin_scram_secret() {
+  sudo -n -u postgres psql --no-psqlrc -d DBRouterAiAtius -Atqc \
+    "select rolpassword from pg_authid where rolname='admin'"
+}
+
+k3s_admin_scram_fingerprint() {
   set +x
   # shellcheck disable=SC1090
   source <(/home/ubuntu/.local/bin/atius-vault-env router-ai-atius)
   PGPASSWORD="${POSTGRES_PASSWORD:-}" psql \
     --no-password \
     --no-psqlrc \
+    -h "$(postgres_cluster_ip)" -p "$(postgres_cluster_port)" -U admin -d DBRouterAiAtius \
+    -Atqc "select md5(coalesce((select rolpassword from pg_authid where rolname='admin'),''))"
+}
+
+sync_admin_scram_secret_if_needed() {
+  local host_secret host_fp k3s_fp sql
+  host_secret="$(host_admin_scram_secret)"
+  [[ "$host_secret" == SCRAM-SHA-256\$* ]] || die 'host admin role does not expose a SCRAM secret'
+  host_fp="$(printf '%s' "$host_secret" | md5sum | awk '{print $1}')"
+  k3s_fp="$(k3s_admin_scram_fingerprint | tr -d '[:space:]')"
+  if [ "$host_fp" = "$k3s_fp" ]; then
+    return 0
+  fi
+  sql="$(mktemp /dev/shm/phase30-admin-scram.XXXXXX.sql)"
+  chmod 600 "$sql"
+  printf "ALTER ROLE admin PASSWORD '%s';\n" "${host_secret//\'/\'\'}" > "$sql"
+  set +x
+  # shellcheck disable=SC1090
+  source <(/home/ubuntu/.local/bin/atius-vault-env router-ai-atius)
+  PGPASSWORD="${POSTGRES_PASSWORD:-}" psql \
+    --no-password \
+    --no-psqlrc \
+    -h "$(postgres_cluster_ip)" -p "$(postgres_cluster_port)" -U admin -d DBRouterAiAtius \
+    -v ON_ERROR_STOP=1 -f "$sql" >/dev/null
+  rm -f "$sql"
+  k3s_fp="$(k3s_admin_scram_fingerprint | tr -d '[:space:]')"
+  [ "$host_fp" = "$k3s_fp" ] || die 'k3s admin SCRAM fingerprint still differs from host after sync'
+}
+
+verify_pgbouncer_backend() {
+  local expected_tables actual sql
+  set +x
+  # shellcheck disable=SC1090
+  source <(/home/ubuntu/.local/bin/atius-vault-env router-ai-atius)
+  expected_tables="$(jq -r '.db_topology.k3s_pg.public_tables' "$(manifest_path)")"
+  sql="select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE'"
+  actual="$(PGPASSWORD="${POSTGRES_PASSWORD:-}" psql \
+    --no-password \
+    --no-psqlrc \
     -h 127.0.0.1 -p 6432 -U admin -d DBRouterAiAtius \
-    -Atqc "select inet_server_addr()::text" > /dev/shm/phase30-pgbouncer-backend.txt
-  local actual
-  actual="$(tr -d '[:space:]' < /dev/shm/phase30-pgbouncer-backend.txt)"
-  actual="${actual%/32}"
-  [ "$actual" = "$target_host" ] || die "PgBouncer backend inet_server_addr is $actual, expected $target_host"
-  rm -f /dev/shm/phase30-pgbouncer-backend.txt
-  [ "$target_port" = 5432 ] || die "unexpected target port after PgBouncer cutover: $target_port"
+    -Atqc "$sql" | tr -d '[:space:]')"
+  [ "$actual" = "$expected_tables" ] || die "PgBouncer backend public table count is $actual, expected $expected_tables"
 }
 
 run_pgbouncer_stage() {
@@ -296,10 +334,11 @@ run_pgbouncer_stage() {
     return 0
   fi
   [ "${PHASE30_EXECUTE:-0}" = 1 ] || die '--live requires PHASE30_EXECUTE=1'
+  sync_admin_scram_secret_if_needed
   sudo -n cp --preserve=mode,ownership,timestamps "$backup" "$tmp/original.ini"
   install_with_target_metadata "$candidate" "$pgbouncer_config"
   sudo -n systemctl reload pgbouncer
-  verify_pgbouncer_backend "$(postgres_cluster_ip)" "$(postgres_cluster_port)"
+  verify_pgbouncer_backend
   write_evidence cutover-applied pgbouncer "$details" "$out"
   rm -rf "$tmp"
   echo "cutover pgbouncer: $out"

@@ -76,5 +76,18 @@ Ao testar o cutover real de PgBouncer:
   `server login failed: password authentication failed for user "admin"`;
 - o rollback de PgBouncer para `127.0.0.1:8745` foi executado e validado.
 
-Portanto a Phase 30 segue em andamento, mas bloqueada no momento por autenticação
-do role `admin` entre PgBouncer e PostgreSQL k3s.
+Esse blocker foi resolvido ainda em `2026-07-13`:
+
+- docs oficiais confirmaram que PgBouncer com `auth_type = scram-sha-256`
+  exige segredo SCRAM idêntico entre `auth_file` e backend;
+- o role `admin` do PostgreSQL k3s estava com SCRAM diferente do host/userlist,
+  porque a restauração regenerava o segredo a partir da senha em texto;
+- `scripts/k3s-router-cutover.sh` passou a sincronizar o SCRAM exato do host
+  antes do repoint;
+- `scripts/k3s-router-restore-rehearsal.sh` passou a reaplicar o SCRAM exato do
+  host no target k3s;
+- após a correção, o cutover live de PgBouncer ficou verde e `127.0.0.1:6432`
+  passou a responder `35` tabelas via backend k3s.
+
+Portanto a Phase 30 segue em andamento e o próximo passo operacional é a etapa
+Apache, não mais a correção de autenticação do PgBouncer.

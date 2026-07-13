@@ -81,6 +81,11 @@ ALLOWLIST=(
   '/home/ubuntu/.cache/uv|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/chrome-devtools-mcp|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.cache/typescript|ubuntu|regenerable-package-cache|directory'
+  '/home/ubuntu/.cache/mozilla|ubuntu|regenerable-package-cache|directory'
+  '/home/ubuntu/.cache/BraveSoftware|ubuntu|regenerable-package-cache|directory'
+  '/home/ubuntu/.cache/codex-desktop|ubuntu|regenerable-package-cache|directory'
+  '/home/ubuntu/.cache/gh|ubuntu|regenerable-package-cache|directory'
+  '/home/ubuntu/.cache/helm|ubuntu|regenerable-package-cache|directory'
   '/home/ubuntu/.npm/_cacache|ubuntu|regenerable-package-cache|directory'
   '/root/.npm/_cacache|root|regenerable-package-cache|directory'
   '/root/.cache/puppeteer|root|regenerable-package-cache|directory'
@@ -88,6 +93,7 @@ ALLOWLIST=(
   '/root/.cache/node-gyp|root|regenerable-package-cache|directory'
   '/var/lib/snapd/cache|root|regenerable-package-cache|directory'
   '/var/lib/apt/lists|root|regenerable-package-cache|directory'
+  '/var/cache/apt|root|regenerable-package-cache|directory'
   '/home/ubuntu/.bun/install/cache|ubuntu|regenerable-package-cache|directory'
 )
 

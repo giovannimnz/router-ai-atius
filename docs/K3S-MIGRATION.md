@@ -23,6 +23,20 @@ Estado live atual em `2026-07-13`:
 - nenhum tráfego público foi movido, e Podman continua como produção e
   rollback.
 
+Estado live adicional da Phase 30 em `2026-07-13`:
+
+- `manifest.json` da Phase 30 foi gerado em
+  `~/.local/state/router-ai-atius/phase30/run-20260713T160941Z` com status
+  `READY_WITH_PHASE29_OVERRIDE`;
+- a topologia validada para o cutover é:
+  - host PG17 `DBRouterAiAtius`: `34` tabelas;
+  - k3s PG17 `DBRouterAiAtius`: `35` tabelas;
+  - Podman `postgres` `DBRouterAiAtius`: `0` tabelas;
+- o primeiro teste live de cutover de PgBouncer foi revertido:
+  o arquivo foi repointado para o ClusterIP k3s, mas o backend novo falhou em
+  `password authentication failed for user "admin"`, então o mapping voltou
+  para `127.0.0.1:8745`.
+
 O shadow usa exclusivamente Service `ClusterIP`. A auditoria do host provou
 acesso à rede de Services, portanto NodePort, Ingress e `hostPort` não fazem
 parte deste contrato. Qualquer um deles resulta em `no-go`.

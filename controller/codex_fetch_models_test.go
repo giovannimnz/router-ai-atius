@@ -15,17 +15,14 @@ import (
 )
 
 var expectedCodexFetchModels = []string{
-	"gpt-5.5",
-	"gpt-5.4",
-	"gpt-5.4-mini",
-	"gpt-5.3-codex-spark",
-}
-
-var expectedCodexFallbackModels = append([]string{
 	"gpt-5.6-sol",
 	"gpt-5.6-terra",
 	"gpt-5.6-luna",
-}, expectedCodexFetchModels...)
+	"gpt-5.5",
+	"gpt-5.3-codex-spark",
+}
+
+var expectedCodexFallbackModels = append([]string(nil), expectedCodexFetchModels...)
 
 func TestFetchCodexModelIDsReturnsCanonicalNativeModels(t *testing.T) {
 	models := fetchCodexModelIDs()
@@ -33,6 +30,8 @@ func TestFetchCodexModelIDsReturnsCanonicalNativeModels(t *testing.T) {
 	require.Equal(t, expectedCodexFetchModels, models)
 	assert.NotContains(t, models, "text-embedding-3-small")
 	assert.NotContains(t, models, "gpt-5")
+	assert.NotContains(t, models, "gpt-5.4")
+	assert.NotContains(t, models, "gpt-5.4-mini")
 }
 
 func TestFetchChannelUpstreamModelIDsUsesCanonicalCodexModels(t *testing.T) {
@@ -79,7 +78,7 @@ func TestFetchDynamicCodexModelIDsUsesAccountAwareDiscovery(t *testing.T) {
 		require.Equal(t, "/backend-api/codex/models", r.URL.Path)
 		require.Equal(t, "acct-test", r.Header.Get("chatgpt-account-id"))
 		require.Equal(t, "Bearer access-test", r.Header.Get("Authorization"))
-		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.5"},{"slug":"gpt-5.4"},{"slug":"gpt-5.5"}]}`))
+		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.5"},{"slug":"gpt-5.4"},{"slug":"gpt-5.4","visibility":"hide"},{"slug":"gpt-5.5"}]}`))
 	}))
 	defer server.Close()
 
@@ -92,5 +91,5 @@ func TestFetchDynamicCodexModelIDsUsesAccountAwareDiscovery(t *testing.T) {
 	models, err := fetchDynamicCodexModelIDs(channel)
 
 	require.NoError(t, err)
-	require.Equal(t, []string{"gpt-5.5", "gpt-5.4"}, models)
+	require.Equal(t, []string{"gpt-5.5"}, models)
 }

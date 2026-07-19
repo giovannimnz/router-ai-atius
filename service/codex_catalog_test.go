@@ -2,16 +2,20 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestValidateCodexCandidateUsesListInput(t *testing.T) {
@@ -67,7 +71,7 @@ func TestValidateCodexCandidateDetectsStreamWithoutContentType(t *testing.T) {
 func TestSyncCodexChannelModelsRejectsEmptyPromotion(t *testing.T) {
 	channel := &model.Channel{Id: 5, Models: "gpt-5.4,gpt-5.4-mini"}
 
-	err := syncCodexChannelModels(channel, nil)
+	err := syncCodexChannelModels(channel, nil, false)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty promoted catalog")
@@ -124,17 +128,140 @@ func TestFallbackCodexModelIDsIncludesOfficialGPT56Models(t *testing.T) {
 	assert.Contains(t, fallback, "gpt-5.6-sol")
 	assert.Contains(t, fallback, "gpt-5.6-terra")
 	assert.Contains(t, fallback, "gpt-5.6-luna")
+	assert.NotContains(t, fallback, "gpt-5.4")
+	assert.NotContains(t, fallback, "gpt-5.4-mini")
 }
 
 func TestCodexCatalogCandidateModelIDsCombinesDiscoveryAndCuratedFallback(t *testing.T) {
-	candidates := codexCatalogCandidateModelIDs([]string{"gpt-5.4", "codex-auto-review"})
+	candidates := codexCatalogCandidateModelIDs(
+		[]string{"gpt-5.4", "codex-auto-review"},
+		[]string{"gpt-5.4"},
+	)
 
-	assert.Equal(t, 1, countModelName(candidates, "gpt-5.4"))
+	assert.NotContains(t, candidates, "gpt-5.4")
 	assert.Contains(t, candidates, "codex-auto-review")
 	assert.Contains(t, candidates, "gpt-5.5")
 	assert.Contains(t, candidates, "gpt-5.6-sol")
 	assert.Contains(t, candidates, "gpt-5.6-terra")
 	assert.Contains(t, candidates, "gpt-5.6-luna")
+}
+
+func TestNormalizeCodexDiscoveryResultHidesSlugAcrossDuplicates(t *testing.T) {
+	result := normalizeCodexDiscoveryResult([]codexDiscoveryItem{
+		{Slug: "gpt-5.6-terra", Visibility: "list"},
+		{Slug: "gpt-5.4"},
+		{Slug: "gpt-5.4", Visibility: " HIDE "},
+		{Slug: "gpt-5.5", Visibility: "list"},
+		{Slug: "gpt-5.5"},
+		{Slug: "gpt-5.3", Visibility: "none"},
+		{Slug: "gpt-future", Visibility: "preview"},
+	})
+
+	require.Equal(t, []string{"gpt-5.6-terra", "gpt-5.5"}, result.Models)
+	require.Equal(t, []string{"gpt-5.4", "gpt-5.3", "gpt-future"}, result.Hidden)
+}
+
+func TestDoCodexDiscoveryRequestAcceptsHiddenOnlyCatalog(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/backend-api/codex/models", r.URL.Path)
+		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.4","visibility":"hide"}]}`))
+	}))
+	defer server.Close()
+
+	channel := &model.Channel{
+		Type: constant.ChannelTypeCodex,
+		Key:  `{"access_token":"access-test","account_id":"acct-test"}`,
+	}
+	channel.BaseURL = common.GetPointer(server.URL)
+
+	result, err := doCodexDiscoveryRequest(context.Background(), channel, "0.144.6")
+
+	require.NoError(t, err)
+	assert.Empty(t, result.Models)
+	require.Equal(t, []string{"gpt-5.4"}, result.Hidden)
+}
+
+func TestSyncCodexChannelModelsRemovesAbilitiesForAuthoritativeEmptyCatalog(t *testing.T) {
+	originalDB := model.DB
+	t.Cleanup(func() { model.DB = originalDB })
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
+
+	channel := &model.Channel{
+		Id:     5,
+		Type:   constant.ChannelTypeCodex,
+		Name:   "OpenAI - Codex",
+		Models: "gpt-5.4",
+		Group:  "default",
+		Status: common.ChannelStatusEnabled,
+	}
+	require.NoError(t, db.Create(channel).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group:     "default",
+		Model:     "gpt-5.4",
+		ChannelId: channel.Id,
+		Enabled:   true,
+	}).Error)
+
+	require.NoError(t, syncCodexChannelModels(channel, nil, true))
+
+	var stored model.Channel
+	require.NoError(t, db.First(&stored, channel.Id).Error)
+	assert.Empty(t, stored.Models)
+	var abilityCount int64
+	require.NoError(t, db.Model(&model.Ability{}).Where("channel_id = ?", channel.Id).Count(&abilityCount).Error)
+	assert.Zero(t, abilityCount)
+}
+
+func TestCodexCatalogModelsAfterFailedPromotionRemovesHiddenAndRetiredModels(t *testing.T) {
+	models := codexCatalogModelsAfterFailedPromotion(
+		"gpt-5.4,gpt-5.5,gpt-5.6-terra,internal-preview",
+		[]string{"internal-preview", "gpt-5.4"},
+	)
+
+	assert.Equal(t, []string{"gpt-5.5", "gpt-5.6-terra"}, models)
+}
+
+func TestLegacyCodexSnapshotAndCandidatesCannotReintroduceKnownRetiredModels(t *testing.T) {
+	originalDB := model.DB
+	t.Cleanup(func() { model.DB = originalDB })
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.CodexCatalogSnapshot{}, &model.CodexCatalogCandidate{}))
+
+	snapshotPayload, err := common.Marshal([]codexDiscoveryItem{
+		{Slug: "gpt-5.4"},
+		{Slug: "gpt-5.4-mini"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.CodexCatalogSnapshot{
+		ChannelID:    5,
+		SnapshotHash: "legacy",
+		ModelCount:   2,
+		Snapshot:     string(snapshotPayload),
+		CreatedTime:  1,
+	}).Error)
+	require.NoError(t, db.Create(&[]model.CodexCatalogCandidate{
+		{ChannelID: 5, ModelName: "gpt-5.4", Promoted: true},
+		{ChannelID: 5, ModelName: "gpt-5.4-mini", Promoted: true},
+	}).Error)
+
+	assert.Empty(t, ListCachedCodexDiscoveredModelIDs(5))
+}
+
+func TestDefaultCodexCatalogModelTracksVisibleReplacement(t *testing.T) {
+	policy := defaultCodexCatalogPolicy()
+
+	assert.Equal(t, "gpt-5.6-terra", policy.DefaultModel)
+	assert.NotContains(t, policy.Overrides, "gpt-5.4")
+	assert.NotContains(t, policy.Overrides, "gpt-5.4-mini")
 }
 
 func TestDefaultCodexCatalogPolicyDeniesInternalAutoReviewModel(t *testing.T) {

@@ -39,6 +39,15 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type DollarCostPricePatch = {
+  input: number
+  output: number
+}
+
+export type DollarCostPricePatchResponse = UpdateOptionResponse & {
+  data?: { changed_models: number }
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string
@@ -207,6 +216,8 @@ export type ModelSettings = {
   'grok.violation_deduction_amount': number
   ModelPrice: string
   ModelRatio: string
+  InputPrice: string
+  OutputPrice: string
   CacheRatio: string
   CreateCacheRatio: string
   CompletionRatio: string
@@ -261,6 +272,8 @@ export type BillingSettings = {
   DisplayTokenStatEnabled: boolean
   ModelPrice: string
   ModelRatio: string
+  InputPrice: string
+  OutputPrice: string
   CacheRatio: string
   CreateCacheRatio: string
   CompletionRatio: string

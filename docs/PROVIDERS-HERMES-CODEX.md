@@ -1,5 +1,11 @@
 # Providers, Hermes, Codex e SDKs - router-ai-atius
 
+> Atualizacao canônica em 2026-07-19: o channel `OpenAI - Codex` type `57`
+> publica `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` e
+> `gpt-5.3-codex-spark`. O contrato atual de contexto e billing esta em
+> [OPENAI-CODEX-OAUTH-MODEL-METADATA.md](OPENAI-CODEX-OAUTH-MODEL-METADATA.md)
+> e prevalece sobre snapshots historicos abaixo.
+
 Este documento registra o estado tecnico validado em 2026-06-15 e como alternar entre Atius Router, Anthropic-Compatible e OpenAI-Compatible sem confundir provider ativo com credenciais existentes.
 
 ## Fonte de verdade
@@ -18,7 +24,7 @@ O banco `DBRouterAiAtius` e o frontend usam a tabela `channels` para providers e
 - OpenAI-Compatible:
   - channel `1`, `MiniMax - OpenAI-Compatible`, type `1`, base `https://api.minimax.io`, modelo `MiniMax-M3`.
   - channel `2`, `DeepSeek - OpenAI-Compatible`, type `43`, base `https://api.deepseek.com`, modelos `deepseek-v4-flash`, `deepseek-v4-pro`.
-  - channel `5`, `OpenAI Codex OAuth`, type `57`, OAuth local, modelos `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`.
+  - channel `5`, `OpenAI Codex OAuth`, type `57`, OAuth local, modelos `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.3-codex-spark`.
 - Anthropic-Compatible:
   - channel `3`, `MiniMax - Anthropic-Compatible`, type `14`, base `https://api.minimax.io/anthropic`, modelos `MiniMax-M2.7`, `MiniMax-M2.5`, `MiniMax-M2.5-highspeed`, `MiniMax-M3`.
   - channel `7`, `DeepSeek - Anthropic-Compatible`, type `14`, base `https://api.deepseek.com/anthropic`, modelos `deepseek-v4-flash`, `deepseek-v4-pro`.
@@ -186,6 +192,9 @@ fallback_providers:
 ## Observacoes de compatibilidade
 
 - Hermes v0.16 nao considera `fallback_providers` como lista de strings. Use objetos com `provider` e `model`.
+- O `/v1/models` publica pricing Standard oficial para Sol, Terra, Luna e 5.5 com `input/output` em USD/1M e aliases `prompt/completion` em USD/token. `billing_mode=dollar_cost` indica que o settlement do Router usa os mesmos valores.
+- O collector usa `https://developers.openai.com/api/docs/pricing.md` e as paginas oficiais dos modelos, persiste snapshots completos e faz merge transacional seletivo em `options.InputPrice`, `OutputPrice`, `CacheRatio` e `CreateCacheRatio`. Executa as `04:00 America/Sao_Paulo`, so regrava quando ha mudanca real e conserva o ultimo valor valido quando a fonte falha ou muda de formato. Para limites, cada campo publicado pelo OAuth vence; somente `max_completion_tokens` ausente recebe o valor oficial Standard.
+- A autenticacao upstream permanece OAuth/ChatGPT; plano/credits do ChatGPT e billing USD interno do Router sao controles distintos.
 - A existencia de credenciais em `~/.hermes/auth` ou `data/codex-home/.codex/auth.json` nao significa, sozinha, que o provider esta ativo no router. Confirme sempre via `bin/clianything providers --all`.
 - Em 2026-06-15, `OpenAI Codex OAuth` esta ativo no banco e mapeado para os modelos Codex listados acima.
 - Smoke real validado em 2026-06-15: OpenAI SDK + `gpt-5.5` retorna OK quando `ATIUS_ROUTER_STREAM=1`; sem streaming, o upstream retorna `400 Stream must be set to true`.

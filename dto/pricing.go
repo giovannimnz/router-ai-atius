@@ -93,12 +93,18 @@ type ModelCatalogEntry struct {
 }
 
 type ModelCatalogPricing struct {
-	Input  float64 `json:"input"`
-	Output float64 `json:"output"`
-	Unit   string  `json:"-"`
+	Input             float64  `json:"input"`
+	Output            float64  `json:"output"`
+	CachedInput       *float64 `json:"cached_input,omitempty"`
+	CacheWrite        *float64 `json:"cache_write,omitempty"`
+	Unit              string   `json:"unit,omitempty"`
+	Prompt            float64  `json:"prompt,omitempty"`
+	Completion        float64  `json:"completion,omitempty"`
+	CompatibilityUnit string   `json:"compatibility_unit,omitempty"`
+	Scope             string   `json:"scope,omitempty"`
 }
 
 type ModelContextWindow struct {
-	MaxTokens           int `json:"max_tokens,omitempty"`
+	ContextLength       int `json:"context_length,omitempty"`
 	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
 }

@@ -673,7 +673,7 @@ function PriceSection(props: {
       <section>
         <SectionTitle>{t('Base Price')}</SectionTitle>
         {dynamicSummary.primaryEntries.length > 0 ? (
-          <div className='grid grid-cols-2 gap-2'>
+          <div className='grid grid-cols-1 gap-2'>
             {dynamicSummary.primaryEntries.map((entry) => (
               <div
                 key={entry.key}
@@ -767,7 +767,7 @@ function PriceSection(props: {
   return (
     <section>
       <SectionTitle>{t('Base Price')}</SectionTitle>
-      <div className='grid grid-cols-2 gap-2'>
+      <div className='grid grid-cols-1 gap-2'>
         {primaryPriceTypes.map((item) => (
           <div key={item.type} className='bg-muted/20 rounded-lg border p-3'>
             <div className='text-muted-foreground text-xs'>{item.label}</div>

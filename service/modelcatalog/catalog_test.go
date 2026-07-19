@@ -123,6 +123,7 @@ func TestModelCatalogBuildEntries(t *testing.T) {
 		OwnedBy   string
 		Labels    []string
 		Expr      string
+		HasPrice  bool
 	})
 	for _, entry := range entries {
 		byName[entry.ModelName] = struct {
@@ -131,12 +132,14 @@ func TestModelCatalogBuildEntries(t *testing.T) {
 			OwnedBy   string
 			Labels    []string
 			Expr      string
+			HasPrice  bool
 		}{
 			Source:    entry.PricingSource,
 			Estimated: entry.PricingEstimated,
 			OwnedBy:   entry.OwnedBy,
 			Labels:    entry.SupportedEndpointTypeLabels,
 			Expr:      entry.BillingExpr,
+			HasPrice:  entry.Pricing != nil,
 		}
 	}
 
@@ -144,13 +147,16 @@ func TestModelCatalogBuildEntries(t *testing.T) {
 	require.False(t, byName["gpt-5"].Estimated)
 	require.Equal(t, "openai", byName["gpt-5"].OwnedBy)
 	require.Contains(t, byName["gpt-5"].Labels, "OpenAI-Compatible")
+	require.True(t, byName["gpt-5"].HasPrice)
 
 	require.Equal(t, "missing", byName["zz-missing-model"].Source)
 	require.True(t, byName["zz-missing-model"].Estimated)
+	require.False(t, byName["zz-missing-model"].HasPrice)
 
 	require.Equal(t, "billing_expr", byName["zz-tiered-catalog-model"].Source)
 	require.False(t, byName["zz-tiered-catalog-model"].Estimated)
 	require.NotEmpty(t, byName["zz-tiered-catalog-model"].Expr)
+	require.False(t, byName["zz-tiered-catalog-model"].HasPrice)
 
 	require.Contains(t, byName["zz-embed-custom"].Labels, "Embeddings")
 	require.Equal(t, "anthropic", byName["zz-embed-custom"].OwnedBy)
@@ -164,4 +170,47 @@ func TestModelCatalogEndpointTypeLabelsDeduplicateResponseModes(t *testing.T) {
 	})
 
 	require.Equal(t, []string{"OpenAI-Responses", "OpenAI-Compatible"}, labels)
+}
+
+func TestModelCatalogPricingPublishesExplicitUnit(t *testing.T) {
+	ratio_setting.InitRatioSettings()
+	entry := BuildCatalogEntry(model.Pricing{
+		ModelName:       "gpt-5",
+		ModelRatio:      1.25,
+		CompletionRatio: 4,
+	}, map[string]string{"gpt-5": "openai"})
+	require.NotNil(t, entry.Pricing)
+	require.Equal(t, "usd_per_1m_tokens", entry.Pricing.Unit)
+
+	payload, err := common.Marshal(entry.Pricing)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"input":2.5,"output":10,"unit":"usd_per_1m_tokens"}`, string(payload))
+}
+
+func TestModelCatalogPricingPrefersCanonicalDollarCost(t *testing.T) {
+	cacheRatio := 0.1
+	createCacheRatio := 1.25
+	entry := BuildCatalogEntry(model.Pricing{
+		ModelName:        "gpt-5.6-sol",
+		ModelRatio:       37.5,
+		CompletionRatio:  8,
+		InputPrice:       5,
+		OutputPrice:      30,
+		UseDollarCost:    true,
+		CacheRatio:       &cacheRatio,
+		CreateCacheRatio: &createCacheRatio,
+	}, map[string]string{"gpt-5.6-sol": "codex"})
+
+	require.Equal(t, "input_output_price", entry.PricingSource)
+	require.False(t, entry.PricingEstimated)
+	require.Equal(t, "dollar_cost", entry.BillingMode)
+	require.Equal(t, 5.0, entry.InputPrice)
+	require.Equal(t, 30.0, entry.OutputPrice)
+	require.NotNil(t, entry.Pricing)
+	require.Equal(t, 5.0, entry.Pricing.Input)
+	require.Equal(t, 30.0, entry.Pricing.Output)
+	require.NotNil(t, entry.Pricing.CachedInput)
+	require.Equal(t, 0.5, *entry.Pricing.CachedInput)
+	require.NotNil(t, entry.Pricing.CacheWrite)
+	require.Equal(t, 6.25, *entry.Pricing.CacheWrite)
 }

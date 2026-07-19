@@ -95,9 +95,10 @@ func TestDefaultCodexCatalogPolicyIncludesOfficialGPT56Overrides(t *testing.T) {
 		meta, ok := policy.Overrides[modelName]
 		require.True(t, ok, modelName)
 		assert.Equal(t, displayName, meta.DisplayName)
-		assert.Equal(t, 1050000, meta.ContextWindowTokens)
-		assert.Equal(t, 1050000, meta.MaxTokens)
-		assert.Equal(t, 128000, meta.MaxCompletionTokens)
+		assert.Equal(t, 272000, meta.ContextWindowTokens)
+		assert.Equal(t, 272000, meta.MaxTokens)
+		assert.Zero(t, meta.MaxCompletionTokens)
+		assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
 		assert.Equal(t, constant.EndpointTypeOpenAIResponse, meta.EndpointPreference)
 		assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI}, meta.SupportedEndpoints)
 		assert.Equal(t, expectedEfforts[modelName], meta.SupportedReasoningEfforts)
@@ -159,6 +160,22 @@ func TestNormalizeCodexDiscoveryResultHidesSlugAcrossDuplicates(t *testing.T) {
 
 	require.Equal(t, []string{"gpt-5.6-terra", "gpt-5.5"}, result.Models)
 	require.Equal(t, []string{"gpt-5.4", "gpt-5.3", "gpt-future"}, result.Hidden)
+	require.Contains(t, result.Items, "gpt-5.6-terra")
+	require.NotContains(t, result.Items, "gpt-5.4")
+}
+
+func TestNormalizeCodexDiscoveryResultPreservesActiveLimits(t *testing.T) {
+	result := normalizeCodexDiscoveryResult([]codexDiscoveryItem{{
+		Slug:             "gpt-5.6-sol",
+		Visibility:       "list",
+		ContextWindow:    272000,
+		MaxContextWindow: 1050000,
+		MaxOutputTokens:  64000,
+	}})
+
+	contextLength, maxCompletionTokens := codexDiscoveryLimits(result.Items["gpt-5.6-sol"])
+	require.Equal(t, 272000, contextLength)
+	require.Equal(t, 64000, maxCompletionTokens)
 }
 
 func TestDoCodexDiscoveryRequestAcceptsHiddenOnlyCatalog(t *testing.T) {
@@ -256,6 +273,51 @@ func TestLegacyCodexSnapshotAndCandidatesCannotReintroduceKnownRetiredModels(t *
 	assert.Empty(t, ListCachedCodexDiscoveredModelIDs(5))
 }
 
+func TestPromotedCodexMetadataUsesOfficialOutputFallbackWhenOAuthOmitsIt(t *testing.T) {
+	originalDB := model.DB
+	t.Cleanup(func() { model.DB = originalDB })
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.CodexCatalogSnapshot{}, &model.CodexCatalogCandidate{}))
+	require.NoError(t, db.Create(&model.CodexCatalogCandidate{
+		ChannelID:           5,
+		ModelName:           "gpt-5.6-sol",
+		Promoted:            true,
+		ContextWindowTokens: 272000,
+		MaxTokens:           272000,
+		MaxCompletionTokens: 128000,
+		SupportedEndpoints:  `["openai-response","openai"]`,
+		EndpointPreference:  string(constant.EndpointTypeOpenAIResponse),
+	}).Error)
+
+	metadata, err := promotedCodexMetadataByModelName([]string{"gpt-5.6-sol"})
+	require.NoError(t, err)
+	meta, ok := metadata["gpt-5.6-sol"]
+	require.True(t, ok)
+	assert.Equal(t, 272000, meta.MaxTokens)
+	assert.Equal(t, 128000, meta.MaxCompletionTokens)
+	assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
+
+	discovery, err := common.Marshal(codexDiscoveryItem{
+		Slug:            "gpt-5.6-sol",
+		ContextWindow:   260000,
+		MaxOutputTokens: 64000,
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Model(&model.CodexCatalogCandidate{}).
+		Where("model_name = ?", "gpt-5.6-sol").
+		Update("discovery_metadata", string(discovery)).Error)
+
+	metadata, err = promotedCodexMetadataByModelName([]string{"gpt-5.6-sol"})
+	require.NoError(t, err)
+	meta = metadata["gpt-5.6-sol"]
+	assert.Equal(t, 260000, meta.ContextWindowTokens)
+	assert.Equal(t, 64000, meta.MaxCompletionTokens)
+}
+
 func TestDefaultCodexCatalogModelTracksVisibleReplacement(t *testing.T) {
 	policy := defaultCodexCatalogPolicy()
 
@@ -289,14 +351,29 @@ func countModelName(models []string, target string) int {
 func TestCodexCatalogSignatureChangesWithPolicy(t *testing.T) {
 	models := []string{"gpt-5.6-sol", "gpt-5.4"}
 	basePolicy := defaultCodexCatalogPolicy()
-	baseSignature, err := codexCatalogSignature(models, basePolicy)
+	baseSignature, err := codexCatalogSignature(models, basePolicy, nil)
 	require.NoError(t, err)
 
 	changedPolicy := defaultCodexCatalogPolicy()
 	meta := changedPolicy.Overrides["gpt-5.6-sol"]
-	meta.MaxCompletionTokens = 64000
+	meta.MaxTokens = 260000
 	changedPolicy.Overrides["gpt-5.6-sol"] = meta
-	changedSignature, err := codexCatalogSignature(models, changedPolicy)
+	changedSignature, err := codexCatalogSignature(models, changedPolicy, nil)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, baseSignature, changedSignature)
+}
+
+func TestCodexCatalogSignatureChangesWithOAuthLimits(t *testing.T) {
+	models := []string{"gpt-5.6-sol"}
+	policy := defaultCodexCatalogPolicy()
+	baseSignature, err := codexCatalogSignature(models, policy, map[string]codexDiscoveryItem{
+		"gpt-5.6-sol": {ContextWindow: 272000},
+	})
+	require.NoError(t, err)
+	changedSignature, err := codexCatalogSignature(models, policy, map[string]codexDiscoveryItem{
+		"gpt-5.6-sol": {ContextWindow: 272000, MaxOutputTokens: 64000},
+	})
 	require.NoError(t, err)
 
 	assert.NotEqual(t, baseSignature, changedSignature)
@@ -315,6 +392,9 @@ func TestNextCodexCatalogSyncDelay(t *testing.T) {
 
 	delay = nextCodexCatalogSyncDelay(time.Date(2026, 7, 7, 4, 30, 0, 0, location))
 	assert.Equal(t, 23*time.Hour+30*time.Minute, delay)
+
+	delay = nextCodexCatalogSyncDelay(time.Date(2026, 7, 7, 6, 30, 0, 0, time.UTC))
+	assert.Equal(t, 30*time.Minute, delay)
 }
 
 func TestMergeCodexCatalogMetadataPrefersOverrideAndKeepsContextWindowGroup(t *testing.T) {
@@ -343,4 +423,21 @@ func TestMergeCodexCatalogMetadataPrefersOverrideAndKeepsContextWindowGroup(t *t
 	assert.Equal(t, 128000, meta.MaxCompletionTokens)
 	assert.Equal(t, []string{"none", "high", "max"}, meta.SupportedReasoningEfforts)
 	assert.Equal(t, []string{"streaming", "function_calling"}, meta.Capabilities)
+}
+
+func TestApplyCodexDiscoveryLimitsPrefersOAuthPerField(t *testing.T) {
+	meta := codexFallbackMetadataForModel("gpt-5.6-sol")
+	require.Equal(t, 128000, meta.MaxCompletionTokens)
+
+	applyCodexDiscoveryLimits(&meta, codexDiscoveryItem{ContextWindow: 272000})
+	require.Equal(t, 272000, meta.ContextWindowTokens)
+	require.Equal(t, 128000, meta.MaxCompletionTokens)
+
+	applyCodexDiscoveryLimits(&meta, codexDiscoveryItem{
+		ContextWindow:    260000,
+		MaxOutputTokens:  64000,
+		MaxContextWindow: 1050000,
+	})
+	require.Equal(t, 260000, meta.ContextWindowTokens)
+	require.Equal(t, 64000, meta.MaxCompletionTokens)
 }

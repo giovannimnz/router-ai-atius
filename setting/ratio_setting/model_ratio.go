@@ -2,6 +2,7 @@ package ratio_setting
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -241,11 +242,11 @@ var defaultModelRatio = map[string]float64{
 	"deepseek-r1":            0.14, // $0.28 / 1M input tokens
 	"deepseek-v3.2":          0.14, // $0.28 / 1M input tokens
 	// MiniMax: $0.30 / 1M input, $1.20 / 1M output
-	"minimax-*":              0.15, // $0.30 / 1M input tokens
+	"minimax-*": 0.15, // $0.30 / 1M input tokens
 	// Kimi: ~$0.40 / 1M input, ~$2.00 / 1M output
-	"kimi-*":                 0.20, // ~$0.40 / 1M input tokens
+	"kimi-*": 0.20, // ~$0.40 / 1M input tokens
 	// Qwen3: $0.325 / 1M input, $1.95 / 1M output
-	"qwen3-*":                0.1625, // $0.325 / 1M input tokens
+	"qwen3-*": 0.1625, // $0.325 / 1M input tokens
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat":   0.2 / 1000 * USD,
 	"llama-3-sonar-small-32k-online": 0.2 / 1000 * USD,
@@ -330,6 +331,22 @@ var modelRatioMap = types.NewRWMap[string, float64]()
 var completionRatioMap = types.NewRWMap[string, float64]()
 var inputPriceMap = types.NewRWMap[string, float64]()  // $ per 1M input tokens (dollar-cost)
 var outputPriceMap = types.NewRWMap[string, float64]() // $ per 1M output tokens (dollar-cost)
+var dollarCostPricingMutex sync.RWMutex
+
+type DollarCostPricing struct {
+	InputPrice          float64
+	OutputPrice         float64
+	CacheRatio          float64
+	CreateCacheRatio    float64
+	HasInputPrice       bool
+	HasOutputPrice      bool
+	HasCacheRatio       bool
+	HasCreateCacheRatio bool
+}
+
+func (pricing DollarCostPricing) UseDollarCost() bool {
+	return pricing.HasInputPrice && pricing.HasOutputPrice
+}
 
 var defaultCompletionRatio = map[string]float64{
 	"gpt-4-gizmo-*":  2,
@@ -389,6 +406,12 @@ func GetModelPrice(name string, printErr bool) (float64, bool) {
 
 // GetInputPrice returns the input price in $ per 1M tokens for dollar-cost mode
 func GetInputPrice(name string) (float64, bool) {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	return getInputPrice(name)
+}
+
+func getInputPrice(name string) (float64, bool) {
 	name = FormatMatchingModelName(name)
 	if price, ok := inputPriceMap.Get(name); ok {
 		return price, true
@@ -403,6 +426,12 @@ func GetInputPrice(name string) (float64, bool) {
 
 // GetOutputPrice returns the output price in $ per 1M tokens for dollar-cost mode
 func GetOutputPrice(name string) (float64, bool) {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	return getOutputPrice(name)
+}
+
+func getOutputPrice(name string) (float64, bool) {
 	name = FormatMatchingModelName(name)
 	if price, ok := outputPriceMap.Get(name); ok {
 		return price, true
@@ -417,8 +446,10 @@ func GetOutputPrice(name string) (float64, bool) {
 
 // GetInputOutputPrice returns both input and output prices; useDollarCost is true when both are configured
 func GetInputOutputPrice(name string) (inputPrice, outputPrice float64, useDollarCost bool) {
-	inputPrice, hasInput := GetInputPrice(name)
-	outputPrice, hasOutput := GetOutputPrice(name)
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	inputPrice, hasInput := getInputPrice(name)
+	outputPrice, hasOutput := getOutputPrice(name)
 	useDollarCost = hasInput && hasOutput
 	if !useDollarCost {
 		inputPrice, outputPrice = 0, 0
@@ -426,12 +457,100 @@ func GetInputOutputPrice(name string) (inputPrice, outputPrice float64, useDolla
 	return
 }
 
+// GetDollarCostPricing returns the complete direct-cost pricing state under one
+// read lock, so billing cannot observe a partially published refresh.
+func GetDollarCostPricing(name string) DollarCostPricing {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+
+	inputPrice, hasInputPrice := getInputPrice(name)
+	outputPrice, hasOutputPrice := getOutputPrice(name)
+	cacheRatio, hasCacheRatio := getCacheRatio(name)
+	createCacheRatio, hasCreateCacheRatio := getCreateCacheRatio(name)
+	return DollarCostPricing{
+		InputPrice:          inputPrice,
+		OutputPrice:         outputPrice,
+		CacheRatio:          cacheRatio,
+		CreateCacheRatio:    createCacheRatio,
+		HasInputPrice:       hasInputPrice,
+		HasOutputPrice:      hasOutputPrice,
+		HasCacheRatio:       hasCacheRatio,
+		HasCreateCacheRatio: hasCreateCacheRatio,
+	}
+}
+
+// GetInputPriceMap returns a copy of the canonical dollar-cost input prices.
+func GetInputPriceMap() map[string]float64 {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	return inputPriceMap.ReadAll()
+}
+
+// GetOutputPriceMap returns a copy of the canonical dollar-cost output prices.
+func GetOutputPriceMap() map[string]float64 {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	return outputPriceMap.ReadAll()
+}
+
+// GetInputOutputPriceMaps returns a consistent copy of both dollar-cost maps.
+func GetInputOutputPriceMaps() (map[string]float64, map[string]float64) {
+	dollarCostPricingMutex.RLock()
+	defer dollarCostPricingMutex.RUnlock()
+	return inputPriceMap.ReadAll(), outputPriceMap.ReadAll()
+}
+
 func UpdateInputPriceByJSONString(jsonStr string) error {
+	dollarCostPricingMutex.Lock()
+	defer dollarCostPricingMutex.Unlock()
 	return types.LoadFromJsonStringWithCallback(inputPriceMap, jsonStr, InvalidateExposedDataCache)
 }
 
 func UpdateOutputPriceByJSONString(jsonStr string) error {
+	dollarCostPricingMutex.Lock()
+	defer dollarCostPricingMutex.Unlock()
 	return types.LoadFromJsonStringWithCallback(outputPriceMap, jsonStr, InvalidateExposedDataCache)
+}
+
+// UpdateInputOutputPricesByJSONStrings replaces both dollar-cost maps atomically.
+func UpdateInputOutputPricesByJSONStrings(inputJSON string, outputJSON string) error {
+	return UpdateDollarCostPricingByJSONStrings(&inputJSON, &outputJSON, nil, nil)
+}
+
+// UpdateDollarCostPricingByJSONStrings atomically publishes any supplied
+// direct-cost maps. JSON is fully validated before the shared write lock.
+func UpdateDollarCostPricingByJSONStrings(inputJSON, outputJSON, cacheJSON, createCacheJSON *string) error {
+	for _, raw := range []*string{inputJSON, outputJSON, cacheJSON, createCacheJSON} {
+		if raw == nil {
+			continue
+		}
+		var values map[string]float64
+		if err := common.Unmarshal([]byte(*raw), &values); err != nil {
+			return err
+		}
+	}
+
+	dollarCostPricingMutex.Lock()
+	defer dollarCostPricingMutex.Unlock()
+	updates := []struct {
+		target *types.RWMap[string, float64]
+		raw    *string
+	}{
+		{inputPriceMap, inputJSON},
+		{outputPriceMap, outputJSON},
+		{cacheRatioMap, cacheJSON},
+		{createCacheRatioMap, createCacheJSON},
+	}
+	for _, update := range updates {
+		if update.raw == nil {
+			continue
+		}
+		if err := types.LoadFromJsonString(update.target, *update.raw); err != nil {
+			return err
+		}
+	}
+	InvalidateExposedDataCache()
+	return nil
 }
 
 func UpdateModelRatioByJSONString(jsonStr string) error {

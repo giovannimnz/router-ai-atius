@@ -67,6 +67,8 @@ import { buildModelRatioColumns } from './model-ratio-table-columns'
 type ModelRatioVisualEditorProps = {
   savedModelPrice: string
   savedModelRatio: string
+  savedInputPrice: string
+  savedOutputPrice: string
   savedCacheRatio: string
   savedCreateCacheRatio: string
   savedCompletionRatio: string
@@ -77,6 +79,8 @@ type ModelRatioVisualEditorProps = {
   savedBillingExpr: string
   modelPrice: string
   modelRatio: string
+  inputPrice: string
+  outputPrice: string
   cacheRatio: string
   createCacheRatio: string
   completionRatio: string
@@ -103,6 +107,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
   {
     savedModelPrice,
     savedModelRatio,
+    savedInputPrice,
+    savedOutputPrice,
     savedCacheRatio,
     savedCreateCacheRatio,
     savedCompletionRatio,
@@ -113,6 +119,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     savedBillingExpr,
     modelPrice,
     modelRatio,
+    inputPrice,
+    outputPrice,
     cacheRatio,
     createCacheRatio,
     completionRatio,
@@ -184,6 +192,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     const savedRows = buildModelSnapshots({
       modelPrice: savedModelPrice,
       modelRatio: savedModelRatio,
+      inputPrice: savedInputPrice,
+      outputPrice: savedOutputPrice,
       cacheRatio: savedCacheRatio,
       createCacheRatio: savedCreateCacheRatio,
       completionRatio: savedCompletionRatio,
@@ -196,6 +206,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     const draftRows = buildModelSnapshots({
       modelPrice,
       modelRatio,
+      inputPrice,
+      outputPrice,
       cacheRatio,
       createCacheRatio,
       completionRatio,
@@ -232,6 +244,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
   }, [
     savedModelPrice,
     savedModelRatio,
+    savedInputPrice,
+    savedOutputPrice,
     savedCacheRatio,
     savedCreateCacheRatio,
     savedCompletionRatio,
@@ -242,6 +256,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     savedBillingExpr,
     modelPrice,
     modelRatio,
+    inputPrice,
+    outputPrice,
     cacheRatio,
     createCacheRatio,
     completionRatio,
@@ -280,6 +296,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
         name: editableModel.name,
         price: editableModel.price,
         ratio: editableModel.ratio,
+        inputPrice: editableModel.inputPrice,
+        outputPrice: editableModel.outputPrice,
         cacheRatio: editableModel.cacheRatio,
         createCacheRatio: editableModel.createCacheRatio,
         completionRatio: editableModel.completionRatio,
@@ -332,6 +350,17 @@ const ModelRatioVisualEditorComponent = forwardRef<
         fallback: {},
         silent: true,
       })
+      const inputPriceMap = safeJsonParse<Record<string, number>>(inputPrice, {
+        fallback: {},
+        silent: true,
+      })
+      const outputPriceMap = safeJsonParse<Record<string, number>>(
+        outputPrice,
+        {
+          fallback: {},
+          silent: true,
+        }
+      )
       const cacheMap = safeJsonParse<Record<string, number>>(cacheRatio, {
         fallback: {},
         silent: true,
@@ -367,6 +396,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
       delete priceMap[name]
       delete ratioMap[name]
+      delete inputPriceMap[name]
+      delete outputPriceMap[name]
       delete cacheMap[name]
       delete createCacheMap[name]
       delete completionMap[name]
@@ -378,6 +409,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
       onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
       onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
+      onChange('InputPrice', JSON.stringify(inputPriceMap, null, 2))
+      onChange('OutputPrice', JSON.stringify(outputPriceMap, null, 2))
       onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
       onChange('CreateCacheRatio', JSON.stringify(createCacheMap, null, 2))
       onChange('CompletionRatio', JSON.stringify(completionMap, null, 2))
@@ -405,6 +438,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     [
       modelPrice,
       modelRatio,
+      inputPrice,
+      outputPrice,
       cacheRatio,
       createCacheRatio,
       completionRatio,
@@ -461,6 +496,17 @@ const ModelRatioVisualEditorComponent = forwardRef<
         fallback: {},
         silent: true,
       })
+      const inputPriceMap = safeJsonParse<Record<string, number>>(inputPrice, {
+        fallback: {},
+        silent: true,
+      })
+      const outputPriceMap = safeJsonParse<Record<string, number>>(
+        outputPrice,
+        {
+          fallback: {},
+          silent: true,
+        }
+      )
       const cacheMap = safeJsonParse<Record<string, number>>(cacheRatio, {
         fallback: {},
         silent: true,
@@ -507,6 +553,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
       targetNames.forEach((name) => {
         delete priceMap[name]
         delete ratioMap[name]
+        delete inputPriceMap[name]
+        delete outputPriceMap[name]
         delete cacheMap[name]
         delete createCacheMap[name]
         delete completionMap[name]
@@ -539,6 +587,14 @@ const ModelRatioVisualEditorComponent = forwardRef<
           setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
         } else if (data.price && data.price !== '') {
           setIfPresent(priceMap, name, data.price)
+        } else if (data.inputPrice && data.outputPrice) {
+          setIfPresent(inputPriceMap, name, data.inputPrice)
+          setIfPresent(outputPriceMap, name, data.outputPrice)
+          setIfPresent(cacheMap, name, data.cacheRatio)
+          setIfPresent(createCacheMap, name, data.createCacheRatio)
+          setIfPresent(imageMap, name, data.imageRatio)
+          setIfPresent(audioMap, name, data.audioRatio)
+          setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
         } else {
           setIfPresent(ratioMap, name, data.ratio)
           setIfPresent(cacheMap, name, data.cacheRatio)
@@ -552,6 +608,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
       onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
       onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
+      onChange('InputPrice', JSON.stringify(inputPriceMap, null, 2))
+      onChange('OutputPrice', JSON.stringify(outputPriceMap, null, 2))
       onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
       onChange('CreateCacheRatio', JSON.stringify(createCacheMap, null, 2))
       onChange('CompletionRatio', JSON.stringify(completionMap, null, 2))
@@ -573,6 +631,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
     [
       modelPrice,
       modelRatio,
+      inputPrice,
+      outputPrice,
       cacheRatio,
       createCacheRatio,
       completionRatio,
@@ -782,6 +842,10 @@ export const ModelRatioVisualEditor = memo(
     return (
       prevProps.modelPrice === nextProps.modelPrice &&
       prevProps.modelRatio === nextProps.modelRatio &&
+      prevProps.inputPrice === nextProps.inputPrice &&
+      prevProps.outputPrice === nextProps.outputPrice &&
+      prevProps.savedInputPrice === nextProps.savedInputPrice &&
+      prevProps.savedOutputPrice === nextProps.savedOutputPrice &&
       prevProps.cacheRatio === nextProps.cacheRatio &&
       prevProps.createCacheRatio === nextProps.createCacheRatio &&
       prevProps.completionRatio === nextProps.completionRatio &&

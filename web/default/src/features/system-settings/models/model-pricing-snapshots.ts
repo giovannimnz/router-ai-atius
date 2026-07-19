@@ -24,6 +24,8 @@ import { formatPricingNumber } from './pricing-format'
 export type ModelPricingSnapshotInput = {
   modelPrice: string
   modelRatio: string
+  inputPrice: string
+  outputPrice: string
   cacheRatio: string
   createCacheRatio: string
   completionRatio: string
@@ -38,6 +40,8 @@ export type ModelPricingSnapshot = {
   name: string
   price?: string
   ratio?: string
+  inputPrice?: string
+  outputPrice?: string
   cacheRatio?: string
   createCacheRatio?: string
   completionRatio?: string
@@ -110,11 +114,13 @@ export const getPriceSummary = (
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }
 
-  const inputPrice = ratioToPrice(row.ratio)
-  if (!inputPrice) return t('Unset price')
+  const inputPrice = hasPricingValue(row.inputPrice)
+    ? row.inputPrice
+    : ratioToPrice(row.ratio)
+  if (!hasPricingValue(inputPrice)) return t('Unset price')
 
   const extraCount = [
-    row.completionRatio,
+    row.outputPrice || row.completionRatio,
     row.cacheRatio,
     row.createCacheRatio,
     row.imageRatio,
@@ -140,12 +146,19 @@ export const getPriceDetail = (
     return t('Fixed request price')
   }
 
-  const inputPrice = ratioToPrice(row.ratio)
-  if (!inputPrice) return t('No base input price')
+  const inputPrice = hasPricingValue(row.inputPrice)
+    ? row.inputPrice
+    : ratioToPrice(row.ratio)
+  if (!hasPricingValue(inputPrice)) return t('No base input price')
+
+  const outputPrice = hasPricingValue(row.outputPrice)
+    ? row.outputPrice
+    : ratioToPrice(row.completionRatio, inputPrice)
 
   const details = [
-    row.completionRatio &&
-      `${t('Output')} $${ratioToPrice(row.completionRatio, inputPrice)}`,
+    (hasPricingValue(row.outputPrice) ||
+      hasPricingValue(row.completionRatio)) &&
+      `${t('Output')} $${outputPrice}`,
     row.cacheRatio &&
       `${t('Cache')} $${ratioToPrice(row.cacheRatio, inputPrice)}`,
     row.createCacheRatio &&
@@ -160,6 +173,8 @@ export const getPriceDetail = (
 export const buildModelSnapshots = ({
   modelPrice,
   modelRatio,
+  inputPrice,
+  outputPrice,
   cacheRatio,
   createCacheRatio,
   completionRatio,
@@ -176,6 +191,14 @@ export const buildModelSnapshots = ({
   const ratioMap = safeJsonParse<Record<string, number>>(modelRatio, {
     fallback: {},
     context: 'model ratios',
+  })
+  const inputPriceMap = safeJsonParse<Record<string, number>>(inputPrice, {
+    fallback: {},
+    context: 'input prices',
+  })
+  const outputPriceMap = safeJsonParse<Record<string, number>>(outputPrice, {
+    fallback: {},
+    context: 'output prices',
   })
   const cacheMap = safeJsonParse<Record<string, number>>(cacheRatio, {
     fallback: {},
@@ -213,6 +236,8 @@ export const buildModelSnapshots = ({
   const modelNames = new Set([
     ...Object.keys(priceMap),
     ...Object.keys(ratioMap),
+    ...Object.keys(inputPriceMap),
+    ...Object.keys(outputPriceMap),
     ...Object.keys(cacheMap),
     ...Object.keys(createCacheMap),
     ...Object.keys(completionMap),
@@ -224,14 +249,16 @@ export const buildModelSnapshots = ({
   ])
 
   return Array.from(modelNames).map((name) => {
-    const price = priceMap[name]?.toString() || ''
-    const ratio = ratioMap[name]?.toString() || ''
-    const cache = cacheMap[name]?.toString() || ''
-    const createCache = createCacheMap[name]?.toString() || ''
-    const completion = completionMap[name]?.toString() || ''
-    const image = imageMap[name]?.toString() || ''
-    const audio = audioMap[name]?.toString() || ''
-    const audioCompletion = audioCompletionMap[name]?.toString() || ''
+    const price = priceMap[name]?.toString() ?? ''
+    const ratio = ratioMap[name]?.toString() ?? ''
+    const directInput = inputPriceMap[name]?.toString() ?? ''
+    const directOutput = outputPriceMap[name]?.toString() ?? ''
+    const cache = cacheMap[name]?.toString() ?? ''
+    const createCache = createCacheMap[name]?.toString() ?? ''
+    const completion = completionMap[name]?.toString() ?? ''
+    const image = imageMap[name]?.toString() ?? ''
+    const audio = audioMap[name]?.toString() ?? ''
+    const audioCompletion = audioCompletionMap[name]?.toString() ?? ''
 
     const modeForModel = billingModeMap[name]
     if (modeForModel === 'tiered_expr') {
@@ -245,6 +272,8 @@ export const buildModelSnapshots = ({
         requestRuleExpr,
         price,
         ratio,
+        inputPrice: directInput,
+        outputPrice: directOutput,
         cacheRatio: cache,
         createCacheRatio: createCache,
         completionRatio: completion,
@@ -259,6 +288,8 @@ export const buildModelSnapshots = ({
       name,
       price,
       ratio,
+      inputPrice: directInput,
+      outputPrice: directOutput,
       cacheRatio: cache,
       createCacheRatio: createCache,
       completionRatio: completion,
@@ -284,6 +315,8 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
   return JSON.stringify({
     price: snapshot.price || '',
     ratio: snapshot.ratio || '',
+    inputPrice: snapshot.inputPrice || '',
+    outputPrice: snapshot.outputPrice || '',
     cacheRatio: snapshot.cacheRatio || '',
     createCacheRatio: snapshot.createCacheRatio || '',
     completionRatio: snapshot.completionRatio || '',

@@ -12,8 +12,10 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -129,6 +131,16 @@ func withSelfUseModeDisabled(t *testing.T) {
 	})
 }
 
+func withSelfUseModeEnabled(t *testing.T) {
+	t.Helper()
+
+	original := operation_setting.SelfUseModeEnabled
+	operation_setting.SelfUseModeEnabled = true
+	t.Cleanup(func() {
+		operation_setting.SelfUseModeEnabled = original
+	})
+}
+
 func decodeListModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder) map[string]struct{} {
 	t.Helper()
 
@@ -155,6 +167,165 @@ func pricingByModelName(pricings []model.Pricing) map[string]model.Pricing {
 		byName[pricing.ModelName] = pricing
 	}
 	return byName
+}
+
+func TestApplyCodexMetadataUsesOAuthContextAndBillingContract(t *testing.T) {
+	entries := []dto.ModelCatalogEntry{{
+		ModelName:   "gpt-5.6-sol",
+		InputPrice:  5,
+		OutputPrice: 30,
+		Pricing: &dto.ModelCatalogPricing{
+			Input:  5,
+			Output: 30,
+			Unit:   "usd_per_1m_tokens",
+		},
+	}}
+
+	applyCodexMetadataToCatalogEntries(entries, map[string]service.CodexCatalogMetadata{
+		"gpt-5.6-sol": {
+			Provider:            "OpenAI Codex",
+			OwnedBy:             "codex",
+			ContextWindowTokens: 272000,
+			BillingMode:         service.CodexCatalogBillingMode,
+		},
+	})
+
+	require.Equal(t, "OpenAI Codex", entries[0].Provider)
+	require.Equal(t, "codex", entries[0].OwnedBy)
+	require.NotNil(t, entries[0].ContextWindow)
+	require.Equal(t, 272000, entries[0].ContextWindow.ContextLength)
+	require.Equal(t, service.CodexCatalogBillingMode, entries[0].BillingMode)
+	require.Equal(t, 5.0, entries[0].InputPrice)
+	require.Equal(t, 30.0, entries[0].OutputPrice)
+	require.NotNil(t, entries[0].Pricing)
+	require.Equal(t, 5.0, entries[0].Pricing.Input)
+	require.Equal(t, 30.0, entries[0].Pricing.Output)
+	require.Nil(t, entries[0].Pricing.CachedInput)
+	require.Nil(t, entries[0].Pricing.CacheWrite)
+	require.Equal(t, "usd_per_1m_tokens", entries[0].Pricing.Unit)
+	require.Equal(t, 0.000005, entries[0].Pricing.Prompt)
+	require.Equal(t, 0.00003, entries[0].Pricing.Completion)
+	require.Equal(t, "usd_per_token", entries[0].Pricing.CompatibilityUnit)
+	require.Equal(t, service.CodexOpenAIReferencePricingScope, entries[0].Pricing.Scope)
+
+	payload, err := common.Marshal(buildOpenAIModelFromCatalog(entries[0]))
+	require.NoError(t, err)
+	var public map[string]any
+	require.NoError(t, common.Unmarshal(payload, &public))
+	pricing, ok := public["pricing"].(map[string]any)
+	require.True(t, ok)
+	require.EqualValues(t, 5, pricing["input"])
+	require.EqualValues(t, 30, pricing["output"])
+	require.NotContains(t, pricing, "cached_input")
+	require.NotContains(t, pricing, "cache_write")
+	require.Equal(t, "usd_per_1m_tokens", pricing["unit"])
+	require.EqualValues(t, 0.000005, pricing["prompt"])
+	require.EqualValues(t, 0.00003, pricing["completion"])
+	require.Equal(t, "usd_per_token", pricing["compatibility_unit"])
+	require.Equal(t, service.CodexOpenAIReferencePricingScope, pricing["scope"])
+	require.Equal(t, service.CodexCatalogBillingMode, public["billing_mode"])
+	contextWindow, ok := public["context_window"].(map[string]any)
+	require.True(t, ok)
+	require.EqualValues(t, 272000, contextWindow["context_length"])
+	require.NotContains(t, contextWindow, "max_tokens")
+	require.EqualValues(t, 128000, contextWindow["max_completion_tokens"])
+}
+
+func TestApplyCodexMetadataMapsLegacyMaxTokensToContextLength(t *testing.T) {
+	entries := []dto.ModelCatalogEntry{{ModelName: "gpt-legacy-codex"}}
+
+	applyCodexMetadataToCatalogEntries(entries, map[string]service.CodexCatalogMetadata{
+		"gpt-legacy-codex": {MaxTokens: 128000},
+	})
+
+	require.NotNil(t, entries[0].ContextWindow)
+	require.Equal(t, 128000, entries[0].ContextWindow.ContextLength)
+	payload, err := common.Marshal(entries[0].ContextWindow)
+	require.NoError(t, err)
+	require.NotContains(t, string(payload), "max_tokens")
+}
+
+func TestRetrieveModelUsesPromotedCodexMetadataAndOfficialOutputFallback(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1002,
+		Username: "model-detail-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group: "default", Model: "gpt-5.6-sol", ChannelId: 5, Enabled: true,
+	}).Error)
+	discovery, err := common.Marshal(map[string]any{
+		"slug":           "gpt-5.6-sol",
+		"visibility":     "list",
+		"context_window": 272000,
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.CodexCatalogCandidate{
+		ChannelID:           5,
+		ModelName:           "gpt-5.6-sol",
+		Promoted:            true,
+		DisplayName:         "OpenAI Codex GPT-5.6 Sol",
+		Provider:            "OpenAI Codex",
+		OwnedBy:             "codex",
+		DiscoveryMetadata:   string(discovery),
+		ContextWindowTokens: 272000,
+		MaxTokens:           272000,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models/gpt-5.6-sol", nil)
+	ctx.Params = gin.Params{{Key: "model", Value: "gpt-5.6-sol"}}
+	ctx.Set("id", 1002)
+
+	RetrieveModel(ctx, constant.ChannelTypeOpenAI)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload dto.OpenAIModels
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.Equal(t, "gpt-5.6-sol", payload.Id)
+	require.Equal(t, "codex", payload.OwnedBy)
+	require.NotNil(t, payload.ContextWindow)
+	require.Equal(t, 272000, payload.ContextWindow.ContextLength)
+	require.Equal(t, 128000, payload.ContextWindow.MaxCompletionTokens)
+}
+
+func TestRetrieveModelRejectsModelOutsideTokenLimit(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1003,
+		Username: "model-detail-limited-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group: "default", Model: "gpt-5.6-sol", ChannelId: 5, Enabled: true,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models/gpt-5.6-sol", nil)
+	ctx.Params = gin.Params{{Key: "model", Value: "gpt-5.6-sol"}}
+	ctx.Set("id", 1003)
+	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimitEnabled, true)
+	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimit, map[string]bool{
+		"gpt-5.6-terra": true,
+	})
+
+	RetrieveModel(ctx, constant.ChannelTypeOpenAI)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Error types.OpenAIError `json:"error"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.Equal(t, "model_not_found", payload.Error.Code)
 }
 
 func TestListModelsIncludesTieredBillingModel(t *testing.T) {

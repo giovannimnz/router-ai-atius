@@ -66,7 +66,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
-	inputPrice, outputPrice, useDollarCost := ratio_setting.GetInputOutputPrice(info.OriginModelName)
+	dollarCostPricing := ratio_setting.GetDollarCostPricing(info.OriginModelName)
+	inputPrice := dollarCostPricing.InputPrice
+	outputPrice := dollarCostPricing.OutputPrice
+	useDollarCost := dollarCostPricing.UseDollarCost()
 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
@@ -94,10 +97,10 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 			preConsumedTokens += meta.MaxTokens
 		}
 		// Pre-consume based on input price only (output tokens unknown at this point)
-		preConsumedQuota = int(float64(preConsumedTokens) * inputPrice * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		preConsumedQuota = int(float64(preConsumedTokens) * inputPrice * common.QuotaPerUnit * groupRatioInfo.GroupRatio / 1_000_000)
 		completionRatio = 0 // not used in dollar-cost mode
-		cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
-		cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
+		cacheRatio = dollarCostPricing.CacheRatio
+		cacheCreationRatio = dollarCostPricing.CreateCacheRatio
 		cacheCreationRatio5m = cacheCreationRatio
 		cacheCreationRatio1h = cacheCreationRatio * claudeCacheCreation1hMultiplier
 		imageRatio, _ = ratio_setting.GetImageRatio(info.OriginModelName)
@@ -121,8 +124,8 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 			}
 		}
 		completionRatio = ratio_setting.GetCompletionRatio(info.OriginModelName)
-		cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
-		cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
+		cacheRatio = dollarCostPricing.CacheRatio
+		cacheCreationRatio = dollarCostPricing.CreateCacheRatio
 		cacheCreationRatio5m = cacheCreationRatio
 		// 固定1h和5min缓存写入价格的比例
 		cacheCreationRatio1h = cacheCreationRatio * claudeCacheCreation1hMultiplier
@@ -165,9 +168,9 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	priceData := types.PriceData{
 		FreeModel:            freeModel,
 		ModelPrice:           modelPrice,
-		InputPrice:          inputPrice,
-		OutputPrice:         outputPrice,
-		UseDollarCost:       useDollarCost,
+		InputPrice:           inputPrice,
+		OutputPrice:          outputPrice,
+		UseDollarCost:        useDollarCost,
 		ModelRatio:           modelRatio,
 		CompletionRatio:      completionRatio,
 		GroupRatioInfo:       groupRatioInfo,
@@ -251,6 +254,9 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 }
 
 func HasModelBillingConfig(modelName string) bool {
+	if _, _, ok := ratio_setting.GetInputOutputPrice(modelName); ok {
+		return true
+	}
 	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
 		return true
 	}

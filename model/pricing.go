@@ -24,6 +24,9 @@ type Pricing struct {
 	QuotaType              int                     `json:"quota_type"`
 	ModelRatio             float64                 `json:"model_ratio"`
 	ModelPrice             float64                 `json:"model_price"`
+	InputPrice             float64                 `json:"input_price"`
+	OutputPrice            float64                 `json:"output_price"`
+	UseDollarCost          bool                    `json:"use_dollar_cost,omitempty"`
 	OwnerBy                string                  `json:"owner_by"`
 	CompletionRatio        float64                 `json:"completion_ratio"`
 	CacheRatio             *float64                `json:"cache_ratio,omitempty"`
@@ -50,7 +53,7 @@ var (
 	vendorsList          []PricingVendor
 	supportedEndpointMap map[string]common.EndpointInfo
 	lastGetPricingTime   time.Time
-	updatePricingLock    sync.Mutex
+	updatePricingLock    sync.RWMutex
 
 	// 缓存映射：模型名 -> 启用分组 / 计费类型
 	modelEnableGroups     = make(map[string][]string)
@@ -64,17 +67,22 @@ var (
 )
 
 func GetPricing() []Pricing {
-	if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
+	updatePricingLock.RLock()
+	stale := time.Since(lastGetPricingTime) > time.Minute || len(pricingMap) == 0
+	updatePricingLock.RUnlock()
+	if stale {
 		updatePricingLock.Lock()
-		defer updatePricingLock.Unlock()
 		// Double check after acquiring the lock
-		if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
+		if time.Since(lastGetPricingTime) > time.Minute || len(pricingMap) == 0 {
 			modelSupportEndpointsLock.Lock()
-			defer modelSupportEndpointsLock.Unlock()
 			updatePricing()
+			modelSupportEndpointsLock.Unlock()
 		}
+		updatePricingLock.Unlock()
 	}
-	return pricingMap
+	updatePricingLock.RLock()
+	defer updatePricingLock.RUnlock()
+	return append([]Pricing(nil), pricingMap...)
 }
 
 func InvalidatePricingCache() {
@@ -88,11 +96,10 @@ func InvalidatePricingCache() {
 
 // GetVendors 返回当前定价接口使用到的供应商信息
 func GetVendors() []PricingVendor {
-	if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
-		// 保证先刷新一次
-		GetPricing()
-	}
-	return vendorsList
+	GetPricing()
+	updatePricingLock.RLock()
+	defer updatePricingLock.RUnlock()
+	return append([]PricingVendor(nil), vendorsList...)
 }
 
 func GetModelSupportEndpointTypes(model string) []constant.EndpointType {
@@ -304,8 +311,14 @@ func updatePricing() {
 			pricing.Tags = meta.Tags
 			pricing.VendorID = meta.VendorID
 		}
+		dollarCostPricing := ratio_setting.GetDollarCostPricing(model)
+		pricing.InputPrice = dollarCostPricing.InputPrice
+		pricing.OutputPrice = dollarCostPricing.OutputPrice
+		pricing.UseDollarCost = dollarCostPricing.UseDollarCost()
 		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
-		if findPrice {
+		if pricing.UseDollarCost {
+			pricing.QuotaType = 0
+		} else if findPrice {
 			pricing.ModelPrice = modelPrice
 			pricing.QuotaType = 1
 		} else {
@@ -314,11 +327,11 @@ func updatePricing() {
 			pricing.CompletionRatio = ratio_setting.GetCompletionRatio(model)
 			pricing.QuotaType = 0
 		}
-		if cacheRatio, ok := ratio_setting.GetCacheRatio(model); ok {
-			pricing.CacheRatio = &cacheRatio
+		if dollarCostPricing.HasCacheRatio {
+			pricing.CacheRatio = &dollarCostPricing.CacheRatio
 		}
-		if createCacheRatio, ok := ratio_setting.GetCreateCacheRatio(model); ok {
-			pricing.CreateCacheRatio = &createCacheRatio
+		if dollarCostPricing.HasCreateCacheRatio {
+			pricing.CreateCacheRatio = &dollarCostPricing.CreateCacheRatio
 		}
 		if imageRatio, ok := ratio_setting.GetImageRatio(model); ok {
 			pricing.ImageRatio = &imageRatio

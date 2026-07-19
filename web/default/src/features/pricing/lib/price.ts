@@ -85,6 +85,31 @@ function calculateTokenPrice(
   type: PriceType,
   ratio: number
 ): number {
+  if (model.use_dollar_cost) {
+    const inputPrice = Number(model.input_price)
+    const outputPrice = Number(model.output_price)
+    if (!Number.isFinite(inputPrice) || !Number.isFinite(outputPrice)) {
+      return NaN
+    }
+    switch (type) {
+      case 'input':
+        return inputPrice * ratio
+      case 'output':
+        return outputPrice * ratio
+      case 'cache':
+        return hasRatio(model.cache_ratio)
+          ? inputPrice * Number(model.cache_ratio) * ratio
+          : NaN
+      case 'create_cache':
+        return hasRatio(model.create_cache_ratio)
+          ? inputPrice * Number(model.create_cache_ratio) * ratio
+          : NaN
+      case 'image':
+      case 'audio_input':
+      case 'audio_output':
+        return NaN
+    }
+  }
   const base = model.model_ratio * 2 * ratio
 
   switch (type) {

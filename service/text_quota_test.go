@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -14,6 +15,69 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCalculateTextQuotaSummaryDollarCostUsesUSDPerMillion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:     types.RelayFormatOpenAI,
+		OriginModelName: "gpt-5.6-sol",
+		PriceData: types.PriceData{
+			InputPrice:    5,
+			OutputPrice:   30,
+			UseDollarCost: true,
+			GroupRatioInfo: types.GroupRatioInfo{
+				GroupRatio: 1,
+			},
+		},
+		StartTime: time.Now(),
+	}
+	usage := &dto.Usage{
+		PromptTokens:     1_000_000,
+		CompletionTokens: 100_000,
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+
+	require.Equal(t, int(8*common.QuotaPerUnit), summary.Quota)
+}
+
+func TestCalculateTextQuotaSummaryDollarCostAppliesOfficialCachePrices(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:     types.RelayFormatOpenAI,
+		OriginModelName: "gpt-5.6-sol",
+		PriceData: types.PriceData{
+			InputPrice:         5,
+			OutputPrice:        30,
+			UseDollarCost:      true,
+			CacheRatio:         0.1,
+			CacheCreationRatio: 1.25,
+			GroupRatioInfo: types.GroupRatioInfo{
+				GroupRatio: 1,
+			},
+		},
+		StartTime: time.Now(),
+	}
+	usage := &dto.Usage{
+		PromptTokens:     1_000_000,
+		CompletionTokens: 100_000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         100_000,
+			CachedCreationTokens: 100_000,
+		},
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+
+	// $4.00 input + $0.05 cache read + $0.625 cache write + $3.00 output.
+	require.Equal(t, 3_837_500, summary.Quota)
+}
 
 func TestCalculateTextQuotaSummaryUnifiedForClaudeSemantic(t *testing.T) {
 	gin.SetMode(gin.TestMode)

@@ -117,6 +117,28 @@ type OptionUpdateRequest struct {
 	Value any    `json:"value"`
 }
 
+type DollarCostPricePatchRequest struct {
+	Prices map[string]*model.DollarCostPrice `json:"prices"`
+}
+
+func PatchDollarCostPrices(c *gin.Context) {
+	var request DollarCostPricePatchRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	changed, err := model.PatchDollarCostPrices(request.Prices, nil)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    gin.H{"changed_models": changed},
+	})
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -138,6 +160,9 @@ func UpdateOption(c *gin.Context) {
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
 	switch option.Key {
+	case "InputPrice", "OutputPrice":
+		common.ApiErrorMsg(c, "InputPrice e OutputPrice devem ser atualizados juntos pelo endpoint de preços por modelo")
+		return
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
@@ -260,7 +285,8 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	case "CreateCacheRatio":
-		err = ratio_setting.UpdateCreateCacheRatioByJSONString(option.Value.(string))
+		var cacheRatios map[string]float64
+		err = common.UnmarshalJsonStr(option.Value.(string), &cacheRatios)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

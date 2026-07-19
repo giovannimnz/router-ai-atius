@@ -41,6 +41,8 @@ const defaultBillingSettings: BillingSettings = {
   DisplayTokenStatEnabled: true,
   ModelPrice: '',
   ModelRatio: '',
+  InputPrice: '{}',
+  OutputPrice: '{}',
   CacheRatio: '',
   CreateCacheRatio: '',
   CompletionRatio: '',

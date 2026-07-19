@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Option struct {
@@ -188,7 +190,50 @@ func InitOptionMap() {
 
 func loadOptionsFromDatabase() {
 	options, _ := AllOption()
+	optionValues := make(map[string]string, len(options))
 	for _, option := range options {
+		optionValues[option.Key] = option.Value
+	}
+	inputPriceJSON, hasInputPrice := optionValues[inputPriceOptionKey]
+	outputPriceJSON, hasOutputPrice := optionValues[outputPriceOptionKey]
+	cacheRatioJSON, hasCacheRatio := optionValues[cacheRatioOptionKey]
+	createCacheRatioJSON, hasCreateCacheRatio := optionValues[createCacheRatioOptionKey]
+	if hasInputPrice && hasOutputPrice {
+		var cacheRatioUpdate *string
+		if hasCacheRatio {
+			cacheRatioUpdate = &cacheRatioJSON
+		}
+		var createCacheRatioUpdate *string
+		if hasCreateCacheRatio {
+			createCacheRatioUpdate = &createCacheRatioJSON
+		}
+		if err := ratio_setting.UpdateDollarCostPricingByJSONStrings(
+			&inputPriceJSON,
+			&outputPriceJSON,
+			cacheRatioUpdate,
+			createCacheRatioUpdate,
+		); err != nil {
+			common.SysLog("failed to update dollar-cost price maps: " + err.Error())
+		} else {
+			common.OptionMapRWMutex.Lock()
+			common.OptionMap[inputPriceOptionKey] = inputPriceJSON
+			common.OptionMap[outputPriceOptionKey] = outputPriceJSON
+			if hasCacheRatio {
+				common.OptionMap[cacheRatioOptionKey] = cacheRatioJSON
+			}
+			if hasCreateCacheRatio {
+				common.OptionMap[createCacheRatioOptionKey] = createCacheRatioJSON
+			}
+			common.OptionMapRWMutex.Unlock()
+		}
+	}
+	for _, option := range options {
+		if hasInputPrice && hasOutputPrice && (option.Key == inputPriceOptionKey ||
+			option.Key == outputPriceOptionKey ||
+			(hasCacheRatio && option.Key == cacheRatioOptionKey) ||
+			(hasCreateCacheRatio && option.Key == createCacheRatioOptionKey)) {
+			continue
+		}
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
@@ -205,17 +250,31 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
-	// Save to database first
-	option := Option{
-		Key: key,
+	if key == inputPriceOptionKey || key == outputPriceOptionKey {
+		return fmt.Errorf("%s and %s must be updated together", inputPriceOptionKey, outputPriceOptionKey)
 	}
-	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
-	option.Value = value
-	// Save is a combination function.
-	// If save value does not contain primary key, it will execute Create,
-	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
+	if key == cacheRatioOptionKey || key == createCacheRatioOptionKey {
+		_, err := PatchDollarCostPrices(nil, map[string]string{key: value})
+		return err
+	}
+	// Save to database first
+	option := Option{Key: key, Value: value}
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = DB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "key"}},
+			DoUpdates: clause.AssignmentColumns([]string{"value"}),
+		}).Create(&option).Error
+		if !isOptionWriteRetryableError(err) {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+		}
+	}
+	if err != nil {
+		return err
+	}
 	// Update OptionMap
 	return updateOptionMap(key, value)
 }
@@ -229,23 +288,86 @@ func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
 	}
-	err := DB.Transaction(func(tx *gorm.DB) error {
-		for k, v := range values {
-			option := Option{Key: k}
-			if err := tx.FirstOrCreate(&option, Option{Key: k}).Error; err != nil {
-				return err
+	inputPriceJSON, hasInputPrice := values["InputPrice"]
+	outputPriceJSON, hasOutputPrice := values["OutputPrice"]
+	if hasInputPrice != hasOutputPrice {
+		return fmt.Errorf("%s and %s must be updated together", inputPriceOptionKey, outputPriceOptionKey)
+	}
+	if hasInputPrice && hasOutputPrice {
+		for _, key := range []string{inputPriceOptionKey, outputPriceOptionKey, cacheRatioOptionKey, createCacheRatioOptionKey} {
+			raw, exists := values[key]
+			if !exists {
+				continue
 			}
-			option.Value = v
-			if err := tx.Save(&option).Error; err != nil {
+			var parsed map[string]float64
+			if err := common.Unmarshal([]byte(raw), &parsed); err != nil {
 				return err
 			}
 		}
-		return nil
-	})
+	}
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = DB.Transaction(func(tx *gorm.DB) error {
+			for key, value := range values {
+				option := Option{Key: key, Value: value}
+				if err := tx.Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "key"}},
+					DoUpdates: clause.AssignmentColumns([]string{"value"}),
+				}).Create(&option).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if !isOptionWriteRetryableError(err) {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+		}
+	}
 	if err != nil {
 		return err
 	}
+	if hasInputPrice && hasOutputPrice {
+		var cacheRatioUpdate *string
+		if cacheRatioJSON, ok := values[cacheRatioOptionKey]; ok {
+			cacheRatioUpdate = &cacheRatioJSON
+		}
+		var createCacheRatioUpdate *string
+		if createCacheRatioJSON, ok := values[createCacheRatioOptionKey]; ok {
+			createCacheRatioUpdate = &createCacheRatioJSON
+		}
+		if err := ratio_setting.UpdateDollarCostPricingByJSONStrings(
+			&inputPriceJSON,
+			&outputPriceJSON,
+			cacheRatioUpdate,
+			createCacheRatioUpdate,
+		); err != nil {
+			return err
+		}
+		func() {
+			common.OptionMapRWMutex.Lock()
+			defer common.OptionMapRWMutex.Unlock()
+			if common.OptionMap == nil {
+				common.OptionMap = make(map[string]string)
+			}
+			common.OptionMap["InputPrice"] = inputPriceJSON
+			common.OptionMap["OutputPrice"] = outputPriceJSON
+			if cacheRatioJSON, ok := values[cacheRatioOptionKey]; ok {
+				common.OptionMap[cacheRatioOptionKey] = cacheRatioJSON
+			}
+			if createCacheRatioJSON, ok := values[createCacheRatioOptionKey]; ok {
+				common.OptionMap[createCacheRatioOptionKey] = createCacheRatioJSON
+			}
+		}()
+		InvalidatePricingCache()
+	}
 	for k, v := range values {
+		if hasInputPrice && hasOutputPrice && (k == inputPriceOptionKey ||
+			k == outputPriceOptionKey || k == cacheRatioOptionKey || k == createCacheRatioOptionKey) {
+			continue
+		}
 		if err := updateOptionMap(k, v); err != nil {
 			return err
 		}
@@ -576,6 +698,11 @@ func updateOptionMap(key string, value string) (err error) {
 		// WaffoPayMethods is read directly from OptionMap via setting.GetWaffoPayMethods().
 		// The value is already stored in OptionMap at the top of this function (line: common.OptionMap[key] = value).
 		// No additional in-memory variable to update.
+	}
+	if key == "InputPrice" || key == "OutputPrice" || key == "ModelPrice" ||
+		key == "ModelRatio" || key == "CompletionRatio" || key == "CacheRatio" ||
+		key == "CreateCacheRatio" {
+		InvalidatePricingCache()
 	}
 	return err
 }

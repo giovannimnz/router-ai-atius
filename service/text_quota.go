@@ -170,9 +170,9 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		ModelRatio:           relayInfo.PriceData.ModelRatio,
 		GroupRatio:           relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 		ModelPrice:           relayInfo.PriceData.ModelPrice,
-		InputPrice:          relayInfo.PriceData.InputPrice,
-		OutputPrice:         relayInfo.PriceData.OutputPrice,
-		UseDollarCost:       relayInfo.PriceData.UseDollarCost,
+		InputPrice:           relayInfo.PriceData.InputPrice,
+		OutputPrice:          relayInfo.PriceData.OutputPrice,
+		UseDollarCost:        relayInfo.PriceData.UseDollarCost,
 		CacheCreationRatio:   relayInfo.PriceData.CacheCreationRatio,
 		CacheCreationRatio5m: relayInfo.PriceData.CacheCreation5mRatio,
 		CacheCreationRatio1h: relayInfo.PriceData.CacheCreation1hRatio,
@@ -240,16 +240,33 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		dInputPrice := decimal.NewFromFloat(summary.InputPrice)
 		dOutputPrice := decimal.NewFromFloat(summary.OutputPrice)
 
-		// Handle cached tokens: non-cached charge at InputPrice, cached charge at InputPrice × CacheRatio
+		// Handle cached tokens: non-cached charge at InputPrice, cached charge at InputPrice × CacheRatio.
 		nonCachedTokens := dPromptTokens
 		if !dCacheTokens.IsZero() {
 			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
 				nonCachedTokens = nonCachedTokens.Sub(dCacheTokens)
 			}
 		}
+		hasSplitCacheCreationTokens := summary.CacheCreationTokens5m > 0 || summary.CacheCreationTokens1h > 0
+		var cacheCreationQuota decimal.Decimal
+		if !dCachedCreationTokens.IsZero() || hasSplitCacheCreationTokens {
+			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+				nonCachedTokens = nonCachedTokens.Sub(dCachedCreationTokens)
+				cacheCreationQuota = dCachedCreationTokens.Mul(dCacheCreationRatio).Mul(dInputPrice)
+			} else {
+				remaining := summary.CacheCreationTokens - summary.CacheCreationTokens5m - summary.CacheCreationTokens1h
+				if remaining < 0 {
+					remaining = 0
+				}
+				cacheCreationQuota = decimal.NewFromInt(int64(remaining)).Mul(dCacheCreationRatio)
+				cacheCreationQuota = cacheCreationQuota.Add(decimal.NewFromInt(int64(summary.CacheCreationTokens5m)).Mul(dCacheCreationRatio5m))
+				cacheCreationQuota = cacheCreationQuota.Add(decimal.NewFromInt(int64(summary.CacheCreationTokens1h)).Mul(dCacheCreationRatio1h))
+				cacheCreationQuota = cacheCreationQuota.Mul(dInputPrice)
+			}
+		}
 
-		// Input quota: non-cached + cached (at cache ratio)
-		inputQuotaDecimal := nonCachedTokens.Mul(dInputPrice)
+		// Input quota: non-cached + cached reads + cache writes.
+		inputQuotaDecimal := nonCachedTokens.Mul(dInputPrice).Add(cacheCreationQuota)
 		if !dCacheTokens.IsZero() {
 			cachedQuota := dCacheTokens.Mul(dCacheRatio).Mul(dInputPrice)
 			inputQuotaDecimal = inputQuotaDecimal.Add(cachedQuota)
@@ -259,6 +276,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		outputQuotaDecimal := dCompletionTokens.Mul(dOutputPrice)
 
 		quotaCalculateDecimal := inputQuotaDecimal.Add(outputQuotaDecimal).
+			Div(decimal.NewFromInt(1_000_000)).
 			Mul(dQuotaPerUnit).Mul(dGroupRatio)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)

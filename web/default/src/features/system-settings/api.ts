@@ -27,6 +27,8 @@ import type {
   SystemTaskResponse,
   UpdateOptionRequest,
   UpdateOptionResponse,
+  DollarCostPricePatch,
+  DollarCostPricePatchResponse,
   UpstreamChannelsResponse,
   UpstreamRatiosResponse,
 } from './types'
@@ -38,6 +40,16 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function patchDollarCostPrices(
+  prices: Record<string, DollarCostPricePatch | null>
+) {
+  const res = await api.put<DollarCostPricePatchResponse>(
+    '/api/option/dollar-cost-prices',
+    { prices }
+  )
   return res.data
 }
 

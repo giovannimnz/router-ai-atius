@@ -429,8 +429,11 @@ Chave-valor genérico para configuração. Armazenado como `text`.
 
 | key | Conteúdo | Descrição |
 |-----|----------|-----------|
-| `InputPrice` | JSON com preços input por modelo | Preços MiniMax: M2.7 $0.30, M2.5 $0.30, deepseek-v4-flash $0.14, deepseek-v4-pro $0.435 |
-| `OutputPrice` | JSON com preços output por modelo | M2.7 $1.20, M2.5 $1.20, deepseek-v4-flash $0.28, deepseek-v4-pro $0.87 |
+| `InputPrice` | JSON com preços input por modelo, USD/1M | Fonte canônica do modo `dollar_cost`, incluindo modelos Codex atualizados automaticamente |
+| `OutputPrice` | JSON com preços output por modelo, USD/1M | Fonte canônica do modo `dollar_cost`, incluindo modelos Codex atualizados automaticamente |
+| `CacheRatio` | JSON com razão cached-input/input por modelo | No modo `dollar_cost`, projeta e cobra o preço absoluto de cached input sincronizado |
+| `CreateCacheRatio` | JSON com razão cache-write/input por modelo | No modo `dollar_cost`, projeta e cobra o preço absoluto de cache write sincronizado |
+| `CodexOpenAIReferencePricing` | JSON com snapshot, ETag, limites de saída e proveniência | Última tabela Standard válida de `developers.openai.com/api/docs/pricing.md` mais `max output tokens` das páginas oficiais dos modelos |
 | `ModelRatio` | JSON com ratios de conversão | MiniMax-M2.x = 0.15, deepseek-v4-flash = 0.07, deepseek-v4-pro = 0.2175 |
 | `console_setting.api_info` | JSON array com info da API | URLs dos endpoints expostas no `/api/status` |
 | `operation_settings` | JSON | `{"self_use": true, "price_configured": true}` |
@@ -541,7 +544,11 @@ O DB guarda dois sistemas de pricing side-by-side:
 
 **2. InputPrice/OutputPrice (options keys)**
 - Preços absolutos em USD por 1M tokens
-- Usado como input para expressões de billing
+- Ativa diretamente o modo `dollar_cost` quando ambos existem para o modelo
+- Alimenta settlement e catálogo público pela mesma fonte
+- `InputPrice`, `OutputPrice`, `CacheRatio` e `CreateCacheRatio` compartilham a mesma transação/CAS; clientes legados que atualizam um mapa de cache isolado são redirecionados internamente para esse caminho
+- Após o commit, os quatro mapas são publicados sob um único write lock e lidos pelo settlement sob um único read lock; nenhuma requisição observa uma combinação parcial de snapshots
+- Remover um preço `dollar_cost` não remove implicitamente cache ratios; `CacheRatio` e `CreateCacheRatio` exigem atualização explícita, inclusive em mudanças de modo
 
 **Fluxo de cálculo de custo:**
 
@@ -549,7 +556,7 @@ O DB guarda dois sistemas de pricing side-by-side:
 InputPrice[$/1M] + OutputPrice[$/1M]
     │
     ▼
-billing_expr.eval(prompt_tokens, completion_tokens)
+service/text_quota.go
     │
     ▼
 estimated_costUSD = (prompt_tokens/1M * input_price) + (completion_tokens/1M * output_price)

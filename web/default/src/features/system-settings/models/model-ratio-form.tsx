@@ -47,6 +47,8 @@ import {
 type ModelFormValues = {
   ModelPrice: string
   ModelRatio: string
+  InputPrice: string
+  OutputPrice: string
   CacheRatio: string
   CreateCacheRatio: string
   CompletionRatio: string
@@ -70,6 +72,8 @@ type ModelRatioFormProps = {
 type ModelJsonFieldName =
   | 'ModelPrice'
   | 'ModelRatio'
+  | 'InputPrice'
+  | 'OutputPrice'
   | 'CacheRatio'
   | 'CreateCacheRatio'
   | 'CompletionRatio'
@@ -92,6 +96,16 @@ const modelJsonFields: Array<{
     name: 'ModelRatio',
     labelKey: 'Model ratio',
     descriptionKey: 'JSON map of model → multiplier applied to quota billing.',
+  },
+  {
+    name: 'InputPrice',
+    labelKey: 'Input price',
+    descriptionKey: 'JSON map of model → USD per 1M input tokens.',
+  },
+  {
+    name: 'OutputPrice',
+    labelKey: 'Output price',
+    descriptionKey: 'JSON map of model → USD per 1M output tokens.',
   },
   {
     name: 'CacheRatio',
@@ -238,6 +252,8 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               ref={visualEditorRef}
               savedModelPrice={savedValues.ModelPrice}
               savedModelRatio={savedValues.ModelRatio}
+              savedInputPrice={savedValues.InputPrice}
+              savedOutputPrice={savedValues.OutputPrice}
               savedCacheRatio={savedValues.CacheRatio}
               savedCreateCacheRatio={savedValues.CreateCacheRatio}
               savedCompletionRatio={savedValues.CompletionRatio}
@@ -248,6 +264,8 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               savedBillingExpr={savedValues.BillingExpr}
               modelPrice={form.watch('ModelPrice')}
               modelRatio={form.watch('ModelRatio')}
+              inputPrice={form.watch('InputPrice')}
+              outputPrice={form.watch('OutputPrice')}
               cacheRatio={form.watch('CacheRatio')}
               createCacheRatio={form.watch('CreateCacheRatio')}
               completionRatio={form.watch('CompletionRatio')}

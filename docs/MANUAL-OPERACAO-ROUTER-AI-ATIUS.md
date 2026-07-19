@@ -12,7 +12,7 @@
 | Docs locais | `/home/ubuntu/GitHub/containers/router-ai-atius/docs` |
 | Runbook Podman | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/PODMAN.md` |
 | Runbook k3s migration | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/K3S-MIGRATION.md` |
-| Runbook OpenAI Codex e 1M context | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md` |
+| Runbook OpenAI Codex OAuth | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/OPENAI-CODEX-OAUTH-MODEL-METADATA.md` |
 | Runbook oficial de CI/auth/release Codex | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/CODEX-CI-AUTH-RELEASE.md` |
 
 Registro dedicado do corte full-Go 2026-06-18: `docs/FULL-GO-V1-MODELS-CUTOVER-2026-06-18.md`.
@@ -82,7 +82,7 @@ Estado validado pelo banco:
 |---|---:|---:|---|---|
 | `MiniMax` | `35` | disabled | `https://api.minimax.io` | restaurado como canal consolidado unico, mas mantido desabilitado no estado final |
 | `DeepSeek` | `43` | enabled | `https://api.deepseek.com` | `deepseek-v4-pro`, `deepseek-v4-flash` via canal consolidado unico |
-| `OpenAI - Codex` | `57` | enabled | OAuth local / sem `base_url` | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark` |
+| `OpenAI - Codex` | `57` | enabled | OAuth local / sem `base_url` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.3-codex-spark` |
 | `MiniMax - Anthropic-Compatible`, `MiniMax - Embeddings`, `DeepSeek - Anthropic-Compatible`, `Codex - Embeddings` | legado | disabled | historico | rotas substituidas pelos canais unificados |
 
 Comando:
@@ -104,17 +104,23 @@ Estado validado em 2026-06-18:
 - O backend Go e o dono do catalogo enriquecido em `/v1/models`; o middleware Python nao e fonte do contrato de model-list.
 - O root publico de `/v1/models` em modos model-list contem somente `data`: nao expor top-level `object`, `success`, `first_id`, `last_id` ou `has_more`.
 - Os campos enriquecidos publicos esperados por item sao `pricing`, `supported_endpoint_types`, `endpoint_routes` e `billing_mode` quando disponivel.
-- O objeto publico `pricing` expoe somente `input` e `output`; nao expoe `unit`.
+- O objeto publico `pricing` de modelos com preco USD expoe `input`, `output` e `unit=usd_per_1m_tokens`.
+- Modelos do channel Codex OAuth type `57` com preco oficial publicam `billing_mode=dollar_cost`. O Router usa os mesmos `InputPrice`/`OutputPrice` em USD/1M e os ratios oficiais de cached input/cache write no settlement e no catalogo, com `scope=openai_api_standard_reference`.
+- O pricing Codex tambem expoe `prompt` e `completion` em `usd_per_token` para compatibilidade com Hermes antigos; `cached_input` e `cache_write` seguem a unidade principal por 1M tokens.
+- Modelos sem preco explicito e modelos com `tiered_expr` nao publicam um preco plano derivado do fallback generico.
 - O payload publico nao expoe os aliases redundantes `input_price`/`output_price`, `quota_type`, `enable_groups` ou `supported_endpoint_type_labels`.
 - `pricing_version` e campo interno e nao deve aparecer no payload publico de `/v1/models`.
 - `pricing_source` e `pricing_estimated` ficam internos e nao devem aparecer no payload publico de `/v1/models`.
 - A ordenacao publica e deterministica: texto antes de embeddings; providers MiniMax, DeepSeek e OpenAI/OpenAI Codex; dentro do provider, modelos mais recentes/capazes primeiro.
 - Regras de variante: versao numerica maior sobe; `-highspeed` fica acima da variante sem `-highspeed`; `pro` fica acima de `flash`, que fica como variante secundaria.
-- Contrato final da Phase 24 para Codex: `gpt-5.4` e o modelo default de long-context; nao republicar `gpt-5.4-1m` nem `gpt-5.5-1m`.
+- Contrato Codex OAuth vigente: Sol, Terra, Luna e 5.5 usam `context_length=272000` publicado pelo discovery; Spark usa `128000`. A resolucao e campo a campo: um `max_completion_tokens` publicado pelo OAuth vence; quando ausente, Sol/Terra/Luna/5.5 usam o `128000` das paginas oficiais Standard da OpenAI sem substituir o contexto OAuth.
 - `api_format=anthropic` e headers Anthropic selecionam modelos Anthropic-capable no catalogo Go, mantendo o mesmo root `{"data":[...]}`.
 - Graphify fica obrigatorio no fluxo GSD desta area quando habilitado no checkout. Em 2026-06-18, este checkout retornou `graphify status: disabled` e nao tinha `.planning/config.json`; nesse caso registrar Graphify como indisponivel e usar testes/CLI/smoke como evidencias.
-- Para modelos ainda sem preco cadastrado, o comportamento esperado do catalogo enriquecido e retornar `0.00` ate o cadastro real ou estimado ser feito.
-- O cadastro de modelos token-priced deve usar `ModelRatio` e `CompletionRatio`; nao usar `ModelPrice` para esses modelos, porque `ModelPrice` muda a semantica para cobranca fixa/request.
+- Modelos sem preco oficial ou configuracao explicita omitem `pricing`; o Router nao publica fallback estimado como se fosse valor real.
+- O cadastro absoluto token-priced deve usar `InputPrice` e `OutputPrice` em USD/1M. `ModelRatio`/`CompletionRatio` continuam como modo relativo legado; nao usar `ModelPrice`, porque ele muda a semantica para cobranca fixa/request.
+- O collector Codex consulta `https://developers.openai.com/api/docs/pricing.md` e as paginas oficiais dos modelos no startup e diariamente as `04:00 America/Sao_Paulo`. Ele faz merge transacional apenas dos modelos Codex em `InputPrice`, `OutputPrice`, `CacheRatio` e `CreateCacheRatio`, atualiza o fallback de `max_completion_tokens`, grava somente quando valores efetivos mudam e preserva o ultimo snapshot valido em falhas ou `304`.
+- A publicacao no runtime troca os quatro mapas de dollar-cost sob um unico lock, e o settlement le input/output/cache-read/cache-write como um unico snapshot. `GET /v1/models/{id}` reutiliza a mesma selecao autorizada de `GET /v1/models`.
+- Precos ficam na tabela `options`, e limites OAuth em `codex_catalog_candidates`; ambos sao persistentes fora da image, logo updates futuros nao exigem rebuild.
 - Backup antes do cadastro de precos em 2026-06-15: `/home/ubuntu/GitHub/containers/router-ai-atius/backups/clianything/20260615_063018_options.sql`.
 
 Precos cadastrados/validados no backend:
@@ -130,10 +136,11 @@ Precos cadastrados/validados no backend:
 | `MiniMax-M2.7-highspeed` / `-hs` | 0.60 | 2.40 | estimado |
 | `deepseek-v4-flash` | 0.14 | 0.28 | backend |
 | `deepseek-v4-pro` | 0.435 | 0.87 | backend |
-| `gpt-5.5` | 5.00 | 30.00 | estimado/standard |
-| `gpt-5.4` | 5.00 | 22.50 | OpenAI standard long-context |
-| `gpt-5.4-mini` | 0.75 | 4.50 | estimado/standard |
-| `gpt-5.3-codex-spark` | 1.75 | 14.00 | estimado |
+| `gpt-5.6-sol` | 5.00 | 30.00 | referencia OpenAI Standard, coleta automatica |
+| `gpt-5.6-terra` | 2.50 | 15.00 | referencia OpenAI Standard, coleta automatica |
+| `gpt-5.6-luna` | 1.00 | 6.00 | referencia OpenAI Standard, coleta automatica |
+| `gpt-5.5` | 5.00 | 30.00 | referencia OpenAI Standard, coleta automatica |
+| `gpt-5.3-codex-spark` | omitido | omitido | sem preco oficial de API publicado |
 | `embo-01` | 0.069 | 0.069 | estimado |
 | `text-embedding-3-small` | 0.02 | 0.02 | OpenAI |
 | `text-embedding-3-large` | 0.13 | 0.13 | OpenAI |
@@ -349,12 +356,12 @@ Estado observado em 2026-06-15:
 
 ### Hermes via Atius Router
 
-Estado validado em 2026-07-01:
+Estado canonico atualizado em 2026-07-19:
 
 - Documentacao dedicada: `docs/HERMES-ATIUS-ROUTER-PROVIDER.md`.
 - O Hermes deve usar o Atius Router como OpenAI-compatible, nao como
   Anthropic-compatible, para modelos GPT/Codex.
-- `api_mode` correto para `gpt-5.4` e `gpt-5.5`:
+- `api_mode` correto para modelos GPT/Codex:
   `chat_completions`.
 - `base_url` correto: `https://router.atius.com.br`, sem sufixo `/v1`.
 - `model.aliases` deve apontar os modelos GPT/Codex para
@@ -366,13 +373,16 @@ Exemplo sem secrets:
 ```yaml
 model:
   provider: custom
-  default: gpt-5.4
-  context_length: 1048576
+  default: gpt-5.6-sol
+  context_length: 272000
   base_url: https://router.atius.com.br
   api_key: ${ATIUS_ROUTER_API_KEY}
   api_mode: chat_completions
   aliases:
-    gpt-5.4: custom:atius-router/gpt-5.4
+    gpt-5.6-sol: custom:atius-router/gpt-5.6-sol
+    gpt-5.6-terra: custom:atius-router/gpt-5.6-terra
+    gpt-5.6-luna: custom:atius-router/gpt-5.6-luna
+    gpt-5.5: custom:atius-router/gpt-5.5
     gpt-5.5: custom:atius-router/gpt-5.5
 fallback_providers:
   - provider: custom
@@ -420,7 +430,7 @@ Valido em 2026-06-18:
 - Anthropic SDK local contra `http://127.0.0.1:3000` com `MiniMax-M3`: OK.
 - OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `gpt-5.5` via `OpenAI - Codex`: OK com `ATIUS_ROUTER_STREAM=1`.
 - Router Go deve rotear Anthropic/OpenAI automaticamente via canal unico do provider quando o provider estiver ativo. Contrato final da Phase 24: `DeepSeek` channel 2 ativo; `MiniMax` channel 1 restaurado, mas desabilitado.
-- `OpenAI - Codex` esta ativo no channel 5 com modelos `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark`.
+- `OpenAI - Codex` esta ativo no channel 5 com modelos `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` e `gpt-5.3-codex-spark`; modelos com `visibility: hide` nao voltam ao catalogo.
 - Embeddings Codex devem usar o mesmo channel 5 e a mesma credencial OAuth do Codex, sem servico/container adicional nem copia de chave; runtime atual deixa `text-embedding-3-*` desativado por `429 insufficient_quota`.
 - `data/codex-home/.codex/auth.json` existe e tem `auth_mode: chatgpt`; esse arquivo e credencial de runtime e nao deve ser copiado para docs/logs.
 - O smoke principal presente neste checkout e `scripts/smoke-provider-consolidation.py`; ele exige `ATIUS_ROUTER_TOKEN` via env para chamadas reais e valida a matriz ativa OpenAI/Anthropic/Codex.

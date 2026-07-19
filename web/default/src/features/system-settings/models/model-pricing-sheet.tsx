@@ -445,6 +445,11 @@ export const ModelPricingEditorPanel = forwardRef<
         billingMode: pricingMode,
         price: values.price || '',
         ratio: values.ratio || '',
+        inputPrice: promptPrice,
+        outputPrice:
+          laneEnabled.completion && lanePrices.completion
+            ? lanePrices.completion
+            : '',
         cacheRatio: values.cacheRatio || '',
         createCacheRatio: values.createCacheRatio || '',
         completionRatio: values.completionRatio || '',
@@ -460,7 +465,14 @@ export const ModelPricingEditorPanel = forwardRef<
 
       return data
     },
-    [billingExpr, pricingMode, requestRuleExpr]
+    [
+      billingExpr,
+      laneEnabled.completion,
+      lanePrices.completion,
+      pricingMode,
+      promptPrice,
+      requestRuleExpr,
+    ]
   )
 
   useImperativeHandle(

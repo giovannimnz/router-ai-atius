@@ -111,6 +111,9 @@ func PreferredOwnerNames(modelNames []string, groups []string) (map[string]strin
 }
 
 func pricingProvenance(pricing model.Pricing) (string, bool) {
+	if pricing.UseDollarCost {
+		return "input_output_price", false
+	}
 	if pricing.QuotaType == 1 {
 		if _, ok := ratio_setting.GetModelPrice(pricing.ModelName, false); ok {
 			return "model_price", false
@@ -126,6 +129,9 @@ func pricingProvenance(pricing model.Pricing) (string, bool) {
 }
 
 func PublicTokenPrices(pricing model.Pricing) (float64, float64) {
+	if pricing.UseDollarCost {
+		return pricing.InputPrice, pricing.OutputPrice
+	}
 	if pricing.QuotaType == 1 {
 		return pricing.ModelPrice, pricing.ModelPrice
 	}
@@ -166,7 +172,29 @@ func BuildCatalogEntry(pricing model.Pricing, ownerByModel map[string]string) dt
 		ownedBy = pricing.OwnerBy
 	}
 	source, estimated := pricingProvenance(pricing)
-	inputPrice, outputPrice := PublicTokenPrices(pricing)
+	inputPrice := 0.0
+	outputPrice := 0.0
+	var publicPricing *dto.ModelCatalogPricing
+	if source == "input_output_price" || source == "model_ratio" || source == "model_price" {
+		inputPrice, outputPrice = PublicTokenPrices(pricing)
+		publicPricing = &dto.ModelCatalogPricing{
+			Input:  inputPrice,
+			Output: outputPrice,
+			Unit:   "usd_per_1m_tokens",
+		}
+		if pricing.UseDollarCost && pricing.CacheRatio != nil {
+			cachedInput := inputPrice * *pricing.CacheRatio
+			publicPricing.CachedInput = &cachedInput
+		}
+		if pricing.UseDollarCost && pricing.CreateCacheRatio != nil {
+			cacheWrite := inputPrice * *pricing.CreateCacheRatio
+			publicPricing.CacheWrite = &cacheWrite
+		}
+	}
+	billingMode := pricing.BillingMode
+	if pricing.UseDollarCost {
+		billingMode = "dollar_cost"
+	}
 	provider := providerName(pricing.ModelName, ownedBy)
 	return dto.ModelCatalogEntry{
 		ModelName:                   pricing.ModelName,
@@ -183,16 +211,12 @@ func BuildCatalogEntry(pricing model.Pricing, ownerByModel map[string]string) dt
 		CompletionRatio:             pricing.CompletionRatio,
 		InputPrice:                  inputPrice,
 		OutputPrice:                 outputPrice,
-		Pricing: &dto.ModelCatalogPricing{
-			Input:  inputPrice,
-			Output: outputPrice,
-			Unit:   "usd_per_1m_tokens",
-		},
-		BillingMode:      pricing.BillingMode,
-		BillingExpr:      pricing.BillingExpr,
-		PricingSource:    source,
-		PricingEstimated: estimated,
-		PricingVersion:   pricing.PricingVersion,
+		Pricing:                     publicPricing,
+		BillingMode:                 billingMode,
+		BillingExpr:                 pricing.BillingExpr,
+		PricingSource:               source,
+		PricingEstimated:            estimated,
+		PricingVersion:              pricing.PricingVersion,
 	}
 }
 
@@ -210,11 +234,7 @@ func BuildCatalogEntryForModel(modelName string, owner string, endpoints []const
 		PricingEstimated:            true,
 		InputPrice:                  0,
 		OutputPrice:                 0,
-		Pricing: &dto.ModelCatalogPricing{
-			Input:  0,
-			Output: 0,
-			Unit:   "usd_per_1m_tokens",
-		},
+		Pricing:                     nil,
 	}
 }
 

@@ -27,10 +27,11 @@ import * as z from 'zod'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-import { resetModelRatios } from '../api'
+import { patchDollarCostPrices, resetModelRatios } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { safeJsonParse } from '../utils/json-parser'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
@@ -43,6 +44,64 @@ import {
 } from './utils'
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
+
+function buildDollarCostPricePatches(
+  savedInputJSON: string,
+  savedOutputJSON: string,
+  nextInputJSON: string,
+  nextOutputJSON: string
+) {
+  const savedInputs = safeJsonParse<Record<string, number>>(savedInputJSON, {
+    fallback: {},
+    silent: true,
+  })
+  const savedOutputs = safeJsonParse<Record<string, number>>(savedOutputJSON, {
+    fallback: {},
+    silent: true,
+  })
+  const nextInputs = safeJsonParse<Record<string, number>>(nextInputJSON, {
+    fallback: {},
+  })
+  const nextOutputs = safeJsonParse<Record<string, number>>(nextOutputJSON, {
+    fallback: {},
+  })
+  const modelNames = new Set([
+    ...Object.keys(savedInputs),
+    ...Object.keys(savedOutputs),
+    ...Object.keys(nextInputs),
+    ...Object.keys(nextOutputs),
+  ])
+  const patches: Record<string, { input: number; output: number } | null> = {}
+
+  modelNames.forEach((modelName) => {
+    const hasInput = Object.hasOwn(nextInputs, modelName)
+    const hasOutput = Object.hasOwn(nextOutputs, modelName)
+    if (hasInput !== hasOutput) {
+      throw new Error(
+        `InputPrice and OutputPrice must both be configured for ${modelName}`
+      )
+    }
+    if (!hasInput) {
+      if (
+        Object.hasOwn(savedInputs, modelName) ||
+        Object.hasOwn(savedOutputs, modelName)
+      ) {
+        patches[modelName] = null
+      }
+      return
+    }
+    if (
+      savedInputs[modelName] !== nextInputs[modelName] ||
+      savedOutputs[modelName] !== nextOutputs[modelName]
+    ) {
+      patches[modelName] = {
+        input: nextInputs[modelName],
+        output: nextOutputs[modelName],
+      }
+    }
+  })
+  return patches
+}
 
 function formatJsonValidationError(
   t: Translate,
@@ -101,6 +160,8 @@ const createModelSchema = (t: Translate) =>
   z.object({
     ModelPrice: createJsonStringField(t),
     ModelRatio: createJsonStringField(t),
+    InputPrice: createJsonStringField(t),
+    OutputPrice: createJsonStringField(t),
     CacheRatio: createJsonStringField(t),
     CreateCacheRatio: createJsonStringField(t),
     CompletionRatio: createJsonStringField(t),
@@ -171,6 +232,8 @@ export function RatioSettingsCard({
   const modelNormalizedDefaults = useRef({
     ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
     ModelRatio: normalizeJsonString(modelDefaults.ModelRatio),
+    InputPrice: normalizeJsonString(modelDefaults.InputPrice),
+    OutputPrice: normalizeJsonString(modelDefaults.OutputPrice),
     CacheRatio: normalizeJsonString(modelDefaults.CacheRatio),
     CreateCacheRatio: normalizeJsonString(modelDefaults.CreateCacheRatio),
     CompletionRatio: normalizeJsonString(modelDefaults.CompletionRatio),
@@ -208,6 +271,8 @@ export function RatioSettingsCard({
       ...modelDefaults,
       ModelPrice: formatJsonForTextarea(modelDefaults.ModelPrice),
       ModelRatio: formatJsonForTextarea(modelDefaults.ModelRatio),
+      InputPrice: formatJsonForTextarea(modelDefaults.InputPrice),
+      OutputPrice: formatJsonForTextarea(modelDefaults.OutputPrice),
       CacheRatio: formatJsonForTextarea(modelDefaults.CacheRatio),
       CreateCacheRatio: formatJsonForTextarea(modelDefaults.CreateCacheRatio),
       CompletionRatio: formatJsonForTextarea(modelDefaults.CompletionRatio),
@@ -241,6 +306,8 @@ export function RatioSettingsCard({
     modelNormalizedDefaults.current = {
       ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
       ModelRatio: normalizeJsonString(modelDefaults.ModelRatio),
+      InputPrice: normalizeJsonString(modelDefaults.InputPrice),
+      OutputPrice: normalizeJsonString(modelDefaults.OutputPrice),
       CacheRatio: normalizeJsonString(modelDefaults.CacheRatio),
       CreateCacheRatio: normalizeJsonString(modelDefaults.CreateCacheRatio),
       CompletionRatio: normalizeJsonString(modelDefaults.CompletionRatio),
@@ -259,6 +326,8 @@ export function RatioSettingsCard({
       ...modelDefaults,
       ModelPrice: formatJsonForTextarea(modelDefaults.ModelPrice),
       ModelRatio: formatJsonForTextarea(modelDefaults.ModelRatio),
+      InputPrice: formatJsonForTextarea(modelDefaults.InputPrice),
+      OutputPrice: formatJsonForTextarea(modelDefaults.OutputPrice),
       CacheRatio: formatJsonForTextarea(modelDefaults.CacheRatio),
       CreateCacheRatio: formatJsonForTextarea(modelDefaults.CreateCacheRatio),
       CompletionRatio: formatJsonForTextarea(modelDefaults.CompletionRatio),
@@ -303,6 +372,8 @@ export function RatioSettingsCard({
       const normalized = {
         ModelPrice: normalizeJsonString(values.ModelPrice),
         ModelRatio: normalizeJsonString(values.ModelRatio),
+        InputPrice: normalizeJsonString(values.InputPrice),
+        OutputPrice: normalizeJsonString(values.OutputPrice),
         CacheRatio: normalizeJsonString(values.CacheRatio),
         CreateCacheRatio: normalizeJsonString(values.CreateCacheRatio),
         CompletionRatio: normalizeJsonString(values.CompletionRatio),
@@ -322,10 +393,20 @@ export function RatioSettingsCard({
       const updates = (
         Object.keys(normalized) as Array<keyof ModelFormValues>
       ).filter(
-        (key) => normalized[key] !== modelNormalizedDefaults.current[key]
+        (key) =>
+          key !== 'InputPrice' &&
+          key !== 'OutputPrice' &&
+          normalized[key] !== modelNormalizedDefaults.current[key]
       )
 
-      if (updates.length === 0) {
+      const pricePatches = buildDollarCostPricePatches(
+        modelNormalizedDefaults.current.InputPrice,
+        modelNormalizedDefaults.current.OutputPrice,
+        normalized.InputPrice,
+        normalized.OutputPrice
+      )
+
+      if (updates.length === 0 && Object.keys(pricePatches).length === 0) {
         toast.info(t('No model price changes to save'))
         return
       }
@@ -335,10 +416,18 @@ export function RatioSettingsCard({
         await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
       }
 
+      if (Object.keys(pricePatches).length > 0) {
+        const result = await patchDollarCostPrices(pricePatches)
+        if (!result.success) {
+          throw new Error(result.message || t('Failed to update model prices'))
+        }
+        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      }
+
       modelNormalizedDefaults.current = normalized
       setSavedModelValues(normalized)
     },
-    [t, updateOption]
+    [queryClient, t, updateOption]
   )
 
   const saveGroupRatios = useCallback(

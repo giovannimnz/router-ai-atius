@@ -72,6 +72,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { patchDollarCostPrices } from '@/features/system-settings/api'
 import {
   useSystemOptions,
   getOptionValue,
@@ -183,6 +184,8 @@ export function ModelMutateDrawer({
       'claude.thinking_adapter_budget_tokens_percentage': 0.8,
       ModelPrice: '',
       ModelRatio: '',
+      InputPrice: '{}',
+      OutputPrice: '{}',
       CacheRatio: '',
       CompletionRatio: '',
       ImageRatio: '',
@@ -316,6 +319,14 @@ export function ModelMutateDrawer({
           modelSettings.ModelRatio,
           { fallback: {}, silent: true }
         )
+        const inputPriceMap = safeJsonParse<Record<string, number>>(
+          modelSettings.InputPrice,
+          { fallback: {}, silent: true }
+        )
+        const outputPriceMap = safeJsonParse<Record<string, number>>(
+          modelSettings.OutputPrice,
+          { fallback: {}, silent: true }
+        )
         const cacheMap = safeJsonParse<Record<string, number>>(
           modelSettings.CacheRatio,
           { fallback: {}, silent: true }
@@ -341,6 +352,8 @@ export function ModelMutateDrawer({
         const modelName = model.model_name
         const price = priceMap[modelName]
         const ratio = ratioMap[modelName]
+        const directInputPrice = inputPriceMap[modelName]
+        const directOutputPrice = outputPriceMap[modelName]
         const cacheRatio = cacheMap[modelName]
         const completionRatio = completionMap[modelName]
         const imageRatio = imageMap[modelName]
@@ -356,7 +369,15 @@ export function ModelMutateDrawer({
           })
         } else {
           setPricingMode('per-token')
-          if (ratio !== undefined && ratio !== null) {
+          if (
+            directInputPrice !== undefined &&
+            directOutputPrice !== undefined
+          ) {
+            setPricingSubMode('price')
+            setPromptPrice(directInputPrice.toString())
+            setCompletionPrice(directOutputPrice.toString())
+          } else if (ratio !== undefined && ratio !== null) {
+            setPricingSubMode('ratio')
             const tokenPrice = ratio * 2
             setPromptPrice(tokenPrice.toString())
             if (completionRatio !== undefined && completionRatio !== null) {
@@ -449,7 +470,10 @@ export function ModelMutateDrawer({
               values.price &&
               values.price !== '') ||
             (pricingMode === 'per-token' &&
-              (values.ratio ||
+              ((pricingSubMode === 'price' &&
+                promptPrice !== '' &&
+                completionPrice !== '') ||
+                values.ratio ||
                 values.cacheRatio ||
                 values.completionRatio ||
                 values.imageRatio ||
@@ -519,7 +543,11 @@ export function ModelMutateDrawer({
               ) {
                 priceMap[finalModelName] = Number.parseFloat(values.price)
               } else if (pricingMode === 'per-token') {
-                if (values.ratio && values.ratio !== '') {
+                if (
+                  pricingSubMode === 'ratio' &&
+                  values.ratio &&
+                  values.ratio !== ''
+                ) {
                   ratioMap[finalModelName] = Number.parseFloat(values.ratio)
                 }
                 if (values.cacheRatio && values.cacheRatio !== '') {
@@ -527,7 +555,11 @@ export function ModelMutateDrawer({
                     values.cacheRatio
                   )
                 }
-                if (values.completionRatio && values.completionRatio !== '') {
+                if (
+                  pricingSubMode === 'ratio' &&
+                  values.completionRatio &&
+                  values.completionRatio !== ''
+                ) {
                   completionMap[finalModelName] = Number.parseFloat(
                     values.completionRatio
                   )
@@ -621,6 +653,31 @@ export function ModelMutateDrawer({
             for (const update of updates) {
               await updateOption.mutateAsync(update)
             }
+
+            const dollarCostPatches: Record<
+              string,
+              { input: number; output: number } | null
+            > = { [finalModelName]: null }
+            if (isEditing && oldModelName && oldModelName !== finalModelName) {
+              dollarCostPatches[oldModelName] = null
+            }
+            if (
+              pricingMode === 'per-token' &&
+              pricingSubMode === 'price' &&
+              promptPrice !== '' &&
+              completionPrice !== ''
+            ) {
+              dollarCostPatches[finalModelName] = {
+                input: Number.parseFloat(promptPrice),
+                output: Number.parseFloat(completionPrice),
+              }
+            }
+            const priceResult = await patchDollarCostPrices(dollarCostPatches)
+            if (!priceResult.success) {
+              throw new Error(
+                priceResult.message || 'Failed to update dollar-cost prices'
+              )
+            }
           }
 
           toast.success(
@@ -646,6 +703,9 @@ export function ModelMutateDrawer({
       queryClient,
       onOpenChange,
       pricingMode,
+      pricingSubMode,
+      promptPrice,
+      completionPrice,
       oldModelName,
       modelSettings,
       updateOption,

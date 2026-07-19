@@ -201,10 +201,29 @@ func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadat
 			entries[i].SupportedEndpointTypeLabels = modelcatalog.EndpointTypeLabels(meta.SupportedEndpoints)
 			entries[i].EndpointRoutes = modelcatalog.EndpointRoutes(meta.SupportedEndpoints)
 		}
-		if meta.MaxTokens > 0 || meta.MaxCompletionTokens > 0 {
+		contextLength := meta.ContextWindowTokens
+		if contextLength <= 0 {
+			contextLength = meta.MaxTokens
+		}
+		maxCompletionTokens := meta.MaxCompletionTokens
+		if maxCompletionTokens <= 0 {
+			if reference, found := service.CodexOpenAIReferencePriceForModel(entries[i].ModelName); found {
+				maxCompletionTokens = reference.MaxCompletionTokens
+			}
+		}
+		if contextLength > 0 || maxCompletionTokens > 0 {
 			entries[i].ContextWindow = &dto.ModelContextWindow{
-				MaxTokens:           meta.MaxTokens,
-				MaxCompletionTokens: meta.MaxCompletionTokens,
+				ContextLength:       contextLength,
+				MaxCompletionTokens: maxCompletionTokens,
+			}
+		}
+		if meta.BillingMode == service.CodexCatalogBillingMode {
+			entries[i].BillingMode = meta.BillingMode
+			if entries[i].Pricing != nil {
+				entries[i].Pricing.Prompt = entries[i].Pricing.Input / 1_000_000
+				entries[i].Pricing.Completion = entries[i].Pricing.Output / 1_000_000
+				entries[i].Pricing.CompatibilityUnit = "usd_per_token"
+				entries[i].Pricing.Scope = service.CodexOpenAIReferencePricingScope
 			}
 		}
 	}
@@ -259,7 +278,7 @@ func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 	}, nil
 }
 
-func ListModels(c *gin.Context, modelType int) {
+func visibleModelCatalogEntries(c *gin.Context) ([]dto.ModelCatalogEntry, error) {
 	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
 	if !acceptUnsetRatioModel {
 		userId := c.GetInt("id")
@@ -274,11 +293,7 @@ func ListModels(c *gin.Context, modelType int) {
 	userModelNames := make([]string, 0)
 	groups, err := getModelListGroups(c)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "get user group failed",
-		})
-		return
+		return nil, err
 	}
 	ownerGroups := groups.ownerGroups
 	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
@@ -329,6 +344,18 @@ func ListModels(c *gin.Context, modelType int) {
 	catalogEntries := catalogEntriesForModels(userModelNames, ownerByModel)
 	if codexMetadata, err := service.CodexPromotedMetadataByModelName(userModelNames); err == nil && len(codexMetadata) > 0 {
 		applyCodexMetadataToCatalogEntries(catalogEntries, codexMetadata)
+	}
+	return catalogEntries, nil
+}
+
+func ListModels(c *gin.Context, modelType int) {
+	catalogEntries, err := visibleModelCatalogEntries(c)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "get user group failed",
+		})
+		return
 	}
 
 	switch modelType {
@@ -389,29 +416,38 @@ func EnabledListModels(c *gin.Context) {
 
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
-	if aiModel, ok := openAIModelsMap[modelId]; ok {
+	catalogEntries, err := visibleModelCatalogEntries(c)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "get user group failed",
+		})
+		return
+	}
+	for _, entry := range catalogEntries {
+		if entry.ModelName != modelId {
+			continue
+		}
+		if modelType == constant.ChannelTypeAnthropic && !modelcatalog.IsAnthropicCapable(entry) {
+			continue
+		}
 		switch modelType {
 		case constant.ChannelTypeAnthropic:
-			c.JSON(200, dto.AnthropicModel{
-				ID:          aiModel.Id,
-				CreatedAt:   time.Unix(int64(aiModel.Created), 0).UTC().Format(time.RFC3339),
-				DisplayName: aiModel.Id,
-				Type:        "model",
-			})
+			c.JSON(http.StatusOK, buildAnthropicModelFromCatalog(entry))
 		default:
-			c.JSON(200, aiModel)
+			c.JSON(http.StatusOK, buildOpenAIModelFromCatalog(entry))
 		}
-	} else {
-		openAIError := types.OpenAIError{
-			Message: fmt.Sprintf("The model '%s' does not exist", modelId),
-			Type:    "invalid_request_error",
-			Param:   "model",
-			Code:    "model_not_found",
-		}
-		c.JSON(200, gin.H{
-			"error": openAIError,
-		})
+		return
 	}
+	openAIError := types.OpenAIError{
+		Message: fmt.Sprintf("The model '%s' does not exist", modelId),
+		Type:    "invalid_request_error",
+		Param:   "model",
+		Code:    "model_not_found",
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"error": openAIError,
+	})
 }
 
 // ListClaudeModels returns all Anthropic-compatible models (channels with type=14)

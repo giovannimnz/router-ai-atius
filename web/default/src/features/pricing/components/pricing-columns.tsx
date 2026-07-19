@@ -154,23 +154,24 @@ export function usePricingColumns(
           }
 
           return (
-            <div className='max-w-full min-w-0'>
-              <span className='font-mono text-sm tabular-nums'>
-                {primaryEntries.map((entry, index) => (
-                  <span key={entry.key}>
-                    {index > 0 && (
-                      <span className='text-muted-foreground/40 mx-1'>/</span>
-                    )}
+            <div className='max-w-full min-w-0 space-y-0.5 text-xs'>
+              {primaryEntries.map((entry) => (
+                <div
+                  key={entry.key}
+                  className='text-muted-foreground whitespace-nowrap'
+                >
+                  {t(entry.shortLabel)}{' '}
+                  <span className='text-foreground font-mono font-semibold tabular-nums'>
                     {stripTrailingZeros(entry.formatted)}
                   </span>
-                ))}
-              </span>
+                  /{tokenUnitLabel}
+                </div>
+              ))}
               <div className='text-muted-foreground/50 text-[10px]'>
-                / {tokenUnitLabel} tokens
                 {dynamicSummary.tierCount > 1 &&
-                  ` · ${t('{{count}} tiers', {
+                  t('{{count}} tiers', {
                     count: dynamicSummary.tierCount,
-                  })}`}
+                  })}
               </div>
             </div>
           )
@@ -201,14 +202,20 @@ export function usePricingColumns(
           )
 
           return (
-            <div className='max-w-full min-w-0'>
-              <span className='font-mono text-sm tabular-nums'>
-                {inputPrice}
-                <span className='text-muted-foreground/40 mx-1'>/</span>
-                {outputPrice}
-              </span>
-              <div className='text-muted-foreground/50 text-[10px]'>
-                / {tokenUnitLabel} tokens
+            <div className='max-w-full min-w-0 space-y-0.5 text-xs'>
+              <div className='text-muted-foreground whitespace-nowrap'>
+                {t('Input')}{' '}
+                <span className='text-foreground font-mono font-semibold tabular-nums'>
+                  {inputPrice}
+                </span>
+                /{tokenUnitLabel}
+              </div>
+              <div className='text-muted-foreground whitespace-nowrap'>
+                {t('Output')}{' '}
+                <span className='text-foreground font-mono font-semibold tabular-nums'>
+                  {outputPrice}
+                </span>
+                /{tokenUnitLabel}
               </div>
             </div>
           )

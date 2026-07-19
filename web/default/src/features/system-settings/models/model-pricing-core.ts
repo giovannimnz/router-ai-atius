@@ -53,6 +53,8 @@ export type ModelRatioData = {
   name: string
   price?: string
   ratio?: string
+  inputPrice?: string
+  outputPrice?: string
   cacheRatio?: string
   createCacheRatio?: string
   completionRatio?: string
@@ -182,10 +184,16 @@ export function createInitialLaneState(data?: ModelRatioData | null) {
     }
   }
 
-  const promptPrice = ratioToBasePrice(data.ratio)
+  const promptPrice =
+    data.inputPrice !== undefined && hasValue(data.inputPrice)
+      ? data.inputPrice
+      : ratioToBasePrice(data.ratio)
   const audioInputPrice = deriveLanePrice(data.audioRatio, promptPrice)
   const prices: Record<LaneKey, string> = {
-    completion: deriveLanePrice(data.completionRatio, promptPrice),
+    completion:
+      data.outputPrice !== undefined && hasValue(data.outputPrice)
+        ? data.outputPrice
+        : deriveLanePrice(data.completionRatio, promptPrice),
     cache: deriveLanePrice(data.cacheRatio, promptPrice),
     createCache: deriveLanePrice(data.createCacheRatio, promptPrice),
     image: deriveLanePrice(data.imageRatio, promptPrice),
@@ -197,7 +205,7 @@ export function createInitialLaneState(data?: ModelRatioData | null) {
     promptPrice,
     prices,
     enabled: {
-      completion: hasValue(data.completionRatio),
+      completion: hasValue(data.outputPrice) || hasValue(data.completionRatio),
       cache: hasValue(data.cacheRatio),
       createCache: hasValue(data.createCacheRatio),
       image: hasValue(data.imageRatio),

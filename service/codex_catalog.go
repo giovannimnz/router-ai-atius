@@ -34,6 +34,7 @@ const (
 	codexCatalogDefaultModelOptionKey      = "CodexCatalogDefaultModel"
 	codexCatalogDenylistOptionKey          = "CodexCatalogDenylist"
 	codexCatalogOverridesOptionKey         = "CodexCatalogMetadataOverrides"
+	CodexCatalogBillingMode                = "dollar_cost"
 	codexCatalogDiscoveryClientVersionEnv  = "CODEX_DISCOVERY_CLIENT_VERSION"
 	codexCatalogDiscoveryClientVersionHint = "codex --version"
 )
@@ -58,6 +59,7 @@ type CodexCatalogMetadata struct {
 	MaxCompletionTokens       int                     `json:"max_completion_tokens,omitempty"`
 	SupportedReasoningEfforts []string                `json:"supported_reasoning_efforts,omitempty"`
 	Capabilities              []string                `json:"capabilities,omitempty"`
+	BillingMode               string                  `json:"billing_mode,omitempty"`
 }
 
 type codexCatalogPolicy struct {
@@ -67,13 +69,18 @@ type codexCatalogPolicy struct {
 }
 
 type codexDiscoveryItem struct {
-	Slug       string `json:"slug"`
-	Visibility string `json:"visibility,omitempty"`
+	Slug                string `json:"slug"`
+	Visibility          string `json:"visibility,omitempty"`
+	ContextWindow       int    `json:"context_window,omitempty"`
+	MaxContextWindow    int    `json:"max_context_window,omitempty"`
+	MaxOutputTokens     int    `json:"max_output_tokens,omitempty"`
+	MaxCompletionTokens int    `json:"max_completion_tokens,omitempty"`
 }
 
 type codexDiscoveryResult struct {
 	Models []string
 	Hidden []string
+	Items  map[string]codexDiscoveryItem
 }
 
 type codexDiscoveryResponse struct {
@@ -127,9 +134,9 @@ func officialGPT56CodexMetadata(displayName string, reasoningEfforts []string) C
 		OwnedBy:                   "codex",
 		EndpointPreference:        constant.EndpointTypeOpenAIResponse,
 		SupportedEndpoints:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
-		ContextWindowTokens:       1050000,
-		MaxTokens:                 1050000,
-		MaxCompletionTokens:       128000,
+		ContextWindowTokens:       272000,
+		MaxTokens:                 272000,
+		BillingMode:               CodexCatalogBillingMode,
 		SupportedReasoningEfforts: append([]string(nil), reasoningEfforts...),
 		Capabilities: []string{
 			"text_input",
@@ -181,7 +188,7 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 				ContextWindowTokens: 272000,
 				MaxTokens:           272000,
-				MaxCompletionTokens: 128000,
+				BillingMode:         CodexCatalogBillingMode,
 			},
 			"gpt-5.3-codex-spark": {
 				DisplayName:         "OpenAI Codex GPT-5.3-codex-spark",
@@ -191,7 +198,7 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 				ContextWindowTokens: 128000,
 				MaxTokens:           128000,
-				MaxCompletionTokens: 32000,
+				BillingMode:         CodexCatalogBillingMode,
 			},
 		},
 	}
@@ -304,6 +311,7 @@ func normalizeCodexDiscoveryResult(items []codexDiscoveryItem) codexDiscoveryRes
 	result := codexDiscoveryResult{
 		Models: make([]string, 0, len(items)),
 		Hidden: make([]string, 0),
+		Items:  make(map[string]codexDiscoveryItem, len(items)),
 	}
 	visibleSeen := make(map[string]struct{}, len(items))
 	hiddenSeen := make(map[string]struct{})
@@ -325,11 +333,15 @@ func normalizeCodexDiscoveryResult(items []codexDiscoveryItem) codexDiscoveryRes
 		}
 		visibleSeen[slug] = struct{}{}
 		result.Models = append(result.Models, slug)
+		item.Slug = slug
+		item.Visibility = visibility
+		result.Items[slug] = item
 	}
 	if len(result.Hidden) > 0 {
 		hiddenSet := make(map[string]struct{}, len(result.Hidden))
 		for _, slug := range result.Hidden {
 			hiddenSet[slug] = struct{}{}
+			delete(result.Items, slug)
 		}
 		visible := result.Models[:0]
 		for _, slug := range result.Models {
@@ -571,6 +583,20 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 			ContextWindowTokens: candidate.ContextWindowTokens,
 			MaxTokens:           candidate.MaxTokens,
 			MaxCompletionTokens: candidate.MaxCompletionTokens,
+			BillingMode:         CodexCatalogBillingMode,
+		}
+		var discoveryItem codexDiscoveryItem
+		if err := common.UnmarshalJsonStr(candidate.DiscoveryMetadata, &discoveryItem); err == nil {
+			activeContext, activeOutput := codexDiscoveryLimits(discoveryItem)
+			if activeContext > 0 {
+				metadata.ContextWindowTokens = activeContext
+				metadata.MaxTokens = activeContext
+			}
+			if activeOutput > 0 {
+				metadata.MaxCompletionTokens = activeOutput
+			} else if reference, ok := CodexOpenAIReferencePriceForModel(candidate.ModelName); ok {
+				metadata.MaxCompletionTokens = reference.MaxCompletionTokens
+			}
 		}
 		var sourceMetadata CodexCatalogMetadata
 		if err := common.UnmarshalJsonStr(candidate.SourceMetadata, &sourceMetadata); err == nil {
@@ -626,15 +652,27 @@ func codexCatalogStorageReady() bool {
 		model.DB.Migrator().HasTable(&model.CodexCatalogSnapshot{})
 }
 
-func codexCatalogSignature(models []string, policy codexCatalogPolicy) (string, error) {
+func codexCatalogSignature(models []string, policy codexCatalogPolicy, discoveryItems map[string]codexDiscoveryItem) (string, error) {
 	normalized := normalizeCodexCatalogModelNames(models)
 	sort.Strings(normalized)
+	canonicalDiscovery := make([]codexDiscoveryItem, 0, len(normalized))
+	for _, modelName := range normalized {
+		item := discoveryItems[modelName]
+		item.Slug = modelName
+		item.Visibility = ""
+		canonicalDiscovery = append(canonicalDiscovery, item)
+	}
+	discoveryPayload, err := common.Marshal(canonicalDiscovery)
+	if err != nil {
+		return "", err
+	}
 	policyPayload, err := common.Marshal(policy)
 	if err != nil {
 		return "", err
 	}
 	payload := strings.Join(normalized, "\n") +
 		"\n--validation-contract--\n" + codexCatalogValidationContractVersion +
+		"\n--oauth-discovery--\n" + string(discoveryPayload) +
 		"\n--policy--\n" + string(policyPayload)
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(payload))), nil
 }
@@ -686,18 +724,41 @@ func codexFallbackMetadataForModel(modelName string) CodexCatalogMetadata {
 		SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 		ContextWindowTokens: 272000,
 		MaxTokens:           272000,
-		MaxCompletionTokens: 128000,
+		BillingMode:         CodexCatalogBillingMode,
 	}
 	normalized := strings.ToLower(modelName)
 	switch {
-	case strings.Contains(normalized, "mini"):
-		meta.MaxCompletionTokens = 64000
 	case strings.Contains(normalized, "spark"):
 		meta.ContextWindowTokens = 128000
 		meta.MaxTokens = 128000
-		meta.MaxCompletionTokens = 32000
+	}
+	if reference, ok := CodexOpenAIReferencePriceForModel(modelName); ok {
+		meta.MaxCompletionTokens = reference.MaxCompletionTokens
 	}
 	return meta
+}
+
+func codexDiscoveryLimits(item codexDiscoveryItem) (int, int) {
+	contextLength := item.ContextWindow
+	if contextLength <= 0 {
+		contextLength = item.MaxContextWindow
+	}
+	maxCompletionTokens := item.MaxCompletionTokens
+	if maxCompletionTokens <= 0 {
+		maxCompletionTokens = item.MaxOutputTokens
+	}
+	return contextLength, maxCompletionTokens
+}
+
+func applyCodexDiscoveryLimits(meta *CodexCatalogMetadata, item codexDiscoveryItem) {
+	contextLength, maxCompletionTokens := codexDiscoveryLimits(item)
+	if contextLength > 0 {
+		meta.ContextWindowTokens = contextLength
+		meta.MaxTokens = contextLength
+	}
+	if maxCompletionTokens > 0 {
+		meta.MaxCompletionTokens = maxCompletionTokens
+	}
 }
 
 func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, override CodexCatalogMetadata) CodexCatalogMetadata {
@@ -780,14 +841,12 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 	if meta.DisplayName == "" {
 		meta.DisplayName = modelName
 	}
+	meta.BillingMode = CodexCatalogBillingMode
 	if meta.MaxTokens <= 0 {
 		meta.MaxTokens = meta.ContextWindowTokens
 	}
 	if meta.ContextWindowTokens <= 0 {
 		meta.ContextWindowTokens = meta.MaxTokens
-	}
-	if meta.MaxCompletionTokens <= 0 {
-		meta.MaxCompletionTokens = 128000
 	}
 	return meta
 }
@@ -1026,7 +1085,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 	}
 
 	policy := loadCodexCatalogPolicy()
-	signature, err := codexCatalogSignature(discoveredModels, policy)
+	signature, err := codexCatalogSignature(discoveredModels, policy, discovery.Items)
 	if err != nil {
 		return nil, err
 	}
@@ -1037,6 +1096,10 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		if len(existingCandidates) == 0 || len(promotedModels) == 0 {
 			latestSnapshot = nil
 		} else {
+			promotedModels = prioritizeCodexDefaultModel(promotedModels, policy.DefaultModel)
+			if err := syncCodexChannelModels(channel, promotedModels, false); err != nil {
+				return nil, err
+			}
 			return &CodexCatalogSyncResult{
 				ChannelID:  channelID,
 				Discovered: discoveredModels,
@@ -1048,7 +1111,9 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 
 	snapshotItems := make([]codexDiscoveryItem, 0, len(discoveredModels))
 	for _, modelName := range discoveredModels {
-		snapshotItems = append(snapshotItems, codexDiscoveryItem{Slug: modelName})
+		item := discovery.Items[modelName]
+		item.Slug = modelName
+		snapshotItems = append(snapshotItems, item)
 	}
 	snapshotPayload, err := common.Marshal(snapshotItems)
 	if err != nil {
@@ -1061,10 +1126,6 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		ModelCount:    len(discoveredModels),
 		Snapshot:      string(snapshotPayload),
 	}
-	if err := snapshot.Save(); err != nil {
-		return nil, err
-	}
-
 	sourceMetadata := codexSourceMetadataByModelName(discoveredModels)
 	now := common.GetTimestamp()
 	seen := make(map[string]struct{}, len(discoveredModels))
@@ -1076,6 +1137,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		sourceMeta := sourceMetadata[modelName]
 		overrideMeta := policy.Overrides[modelName]
 		mergedMeta := mergeCodexCatalogMetadata(modelName, sourceMeta, overrideMeta)
+		applyCodexDiscoveryLimits(&mergedMeta, discovery.Items[modelName])
 
 		candidate, findErr := model.FindCodexCatalogCandidate(channelID, modelName)
 		if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
@@ -1088,10 +1150,9 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 			}
 		}
 
-		discoveryPayload, _ := common.Marshal(map[string]any{
-			"model":          modelName,
-			"client_version": clientVersion,
-		})
+		discoveryItem := discovery.Items[modelName]
+		discoveryItem.Slug = modelName
+		discoveryPayload, _ := common.Marshal(discoveryItem)
 		sourcePayload, _ := common.Marshal(sourceMeta)
 		overridePayload, _ := common.Marshal(overrideMeta)
 
@@ -1188,6 +1249,9 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		allowEmptyCatalog = true
 	}
 	if err := syncCodexChannelModels(channel, modelsToSync, allowEmptyCatalog); err != nil {
+		return nil, err
+	}
+	if err := snapshot.Save(); err != nil {
 		return nil, err
 	}
 

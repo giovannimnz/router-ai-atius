@@ -67,6 +67,15 @@ Isso elimina a divergencia entre o valor cobrado e o valor anunciado aos
 clientes. Limites de plano/credits do ChatGPT continuam
 sendo uma restricao separada do upstream.
 
+O backend Codex upstream sempre responde em SSE, inclusive quando o cliente do
+Router pede `stream=false`. O adaptador mantem `stream=true` apenas no request
+upstream e, para o cliente nao streaming, acumula os eventos ate o terminal
+`response.completed`/`response.done`, devolvendo o objeto `response` como JSON.
+Nao voltar a enviar SSE ao `OaiResponsesHandler`: isso produz
+`invalid character 'e' looking for beginning of value`. Eventos
+`response.failed` continuam sendo erros upstream reais e nao sao convertidos em
+sucesso.
+
 ## Coleta automatica de pricing
 
 O Router coleta a tabela diretamente do endpoint Markdown oficial
@@ -173,3 +182,5 @@ cria backup em `~/.hermes/backups/codex-model-metadata/` antes da escrita.
 7. A selecao no Hermes nao exibe `Expensive Model Warning` para esses modelos.
 8. Uma segunda coleta sem mudanca nao regrava nenhum mapa de preco nem o snapshot.
 9. `GET /v1/models/{id}` aplica os mesmos filtros de grupo, token model-limit e billing de `GET /v1/models`; um modelo fora do catalogo visivel retorna `model_not_found`.
+10. `/v1/responses` com `stream=false` em canal Codex consome o SSE upstream e retorna JSON terminal; `response.failed` permanece erro.
+11. `response.output_item.done` com `web_search_call` incrementa a telemetria de built-in tools tanto no caminho stream quanto no non-stream, preservando billing e auditoria.

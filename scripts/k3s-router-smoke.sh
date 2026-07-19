@@ -52,8 +52,8 @@ for forbidden in ("pricing_source", "pricing_estimated", "pricing_version"):
         raise SystemExit(f"forbidden field present: {forbidden}")
 PY
 
-ATIUS_ROUTER_BASE_URL="$base_url" \
+ATIUS_ROUTER_EMBEDDINGS_BASE_URL="${base_url}/v1" \
 ATIUS_ROUTER_TOKEN="${ATIUS_ROUTER_TOKEN}" \
 ATIUS_ROUTER_EMBEDDINGS_MODEL=embedding-gte-v1 \
-ATIUS_ROUTER_EXPECTED_DIMENSION=768 \
+ATIUS_ROUTER_EXPECT_EMBEDDING_DIM=768 \
 python3 scripts/smoke-embeddings.py

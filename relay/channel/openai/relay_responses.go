@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/relayconvert"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -68,6 +71,111 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	return &usage, nil
 }
 
+func recordResponsesBuiltInToolUsage(info *relaycommon.RelayInfo, item *dto.ResponsesOutput) {
+	if info == nil || item == nil || item.Type != dto.BuildInCallWebSearchCall || info.ResponsesUsageInfo == nil {
+		return
+	}
+	if webSearchTool := info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; webSearchTool != nil {
+		webSearchTool.CallCount++
+	}
+}
+
+// OaiResponsesBufferedStreamHandler converts an upstream Responses SSE stream
+// into the JSON response expected by a non-streaming client.
+func OaiResponsesBufferedStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if resp == nil || resp.Body == nil {
+		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+	defer service.CloseResponseBodyGracefully(resp)
+
+	accumulator := relayconvert.NewResponsesBufferedAccumulator()
+	var finalResponse *dto.OpenAIResponsesResponse
+	var finalResponseRaw json.RawMessage
+
+	scanner := helper.NewStreamScanner(resp.Body)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) < 6 || line[:5] != "data:" {
+			continue
+		}
+		data := strings.TrimSpace(line[5:])
+		if data == "" {
+			continue
+		}
+		if data == "[DONE]" {
+			break
+		}
+
+		var streamResponse dto.ResponsesStreamResponse
+		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+		var envelope struct {
+			Response json.RawMessage `json:"response"`
+		}
+		if err := common.UnmarshalJsonStr(data, &envelope); err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+		accumulator.ProcessEvent(&streamResponse)
+		if streamResponse.Type == dto.ResponsesOutputTypeItemDone {
+			recordResponsesBuiltInToolUsage(info, streamResponse.Item)
+		}
+
+		switch streamResponse.Type {
+		case "response.completed", "response.done", "response.incomplete":
+			finalResponse = streamResponse.Response
+			finalResponseRaw = append(finalResponseRaw[:0], envelope.Response...)
+		case "response.failed", "response.error":
+			if streamResponse.Response != nil {
+				if oaiError := streamResponse.Response.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
+					return nil, types.WithOpenAIError(*oaiError, http.StatusInternalServerError)
+				}
+			}
+			return nil, types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResponse.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+		}
+		if finalResponse != nil {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+	if finalResponse == nil {
+		return nil, types.NewOpenAIError(fmt.Errorf("responses stream ended without a terminal response"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	hasTerminalOutput := len(finalResponse.Output) > 0
+	accumulator.SupplementResponseOutput(finalResponse)
+	if finalResponse.HasImageGenerationCall() {
+		c.Set("image_generation_call", true)
+		c.Set("image_generation_call_quality", finalResponse.GetQuality())
+		c.Set("image_generation_call_size", finalResponse.GetSize())
+	}
+
+	responseBody := []byte(finalResponseRaw)
+	if !hasTerminalOutput || len(responseBody) == 0 {
+		var err error
+		responseBody, err = common.Marshal(finalResponse)
+		if err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
+		}
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	service.IOCopyBytesGracefully(c, resp, responseBody)
+
+	usage := &dto.Usage{}
+	if finalResponse.Usage != nil {
+		usage.PromptTokens = finalResponse.Usage.InputTokens
+		usage.CompletionTokens = finalResponse.Usage.OutputTokens
+		usage.TotalTokens = finalResponse.Usage.TotalTokens
+		if finalResponse.Usage.InputTokensDetails != nil {
+			usage.PromptTokensDetails.CachedTokens = finalResponse.Usage.InputTokensDetails.CachedTokens
+		}
+	}
+	return usage, nil
+}
+
 func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		logger.LogError(c, "invalid response or response body")
@@ -116,17 +224,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			// 处理输出文本
 			responseTextBuilder.WriteString(streamResponse.Delta)
 		case dto.ResponsesOutputTypeItemDone:
-			// 函数调用处理
-			if streamResponse.Item != nil {
-				switch streamResponse.Item.Type {
-				case dto.BuildInCallWebSearchCall:
-					if info != nil && info.ResponsesUsageInfo != nil && info.ResponsesUsageInfo.BuiltInTools != nil {
-						if webSearchTool, exists := info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool != nil {
-							webSearchTool.CallCount++
-						}
-					}
-				}
-			}
+			recordResponsesBuiltInToolUsage(info, streamResponse.Item)
 		}
 	})
 

@@ -5,8 +5,8 @@
 | Item | Caminho |
 |---|---|
 | Deploy ativo | `/home/ubuntu/GitHub/containers/router-ai-atius` |
-| Runtime data/logs montados no pod | `/home/ubuntu/GitHub/containers/router-ai-atius/data`, `/home/ubuntu/GitHub/containers/router-ai-atius/logs` |
-| Runtime source of truth | user unit `container-router-ai-atius.service` e imagem `ghcr.io/giovannimnz/router-ai-atius:latest` |
+| Runtime data | PVCs `router-ai-atius-data` e `router-ai-atius-postgres-data` no namespace `router-ai-atius` |
+| Runtime source of truth | k3s no `atius-srv-1`, release `ghcr.io/giovannimnz/router-ai-atius:v2.17.3` |
 | Admin / fork-sync | `/home/ubuntu/GitHub/omni-srv-admin/modules/fork-sync/projects/atius-router` |
 | CLI operacional | `/home/ubuntu/GitHub/containers/router-ai-atius/bin/clianything` |
 | Docs locais | `/home/ubuntu/GitHub/containers/router-ai-atius/docs` |
@@ -17,19 +17,19 @@
 
 Registro dedicado do corte full-Go 2026-06-18: `docs/FULL-GO-V1-MODELS-CUTOVER-2026-06-18.md`.
 Registro dedicado do provider `OpenAI - Codex`, aliases `-1m`, mapping upstream e custos long-context: `docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md`.
-Trilha de migração para k3s, ainda sem produção movida: `docs/K3S-MIGRATION.md`.
+Runtime k3s e rollback: `docs/K3S-MIGRATION.md` e `docs/K3S-CUTOVER-2026-07-19.md`.
 
 ## Status atual validado
 
-- Podman pod: `atius-ai-router`
-- Containers em runtime atual: `router-ai-atius`, `redis`, infra pause. O antigo `model-detailed-hotfix` foi parado em 2026-06-18 apos cutover full-Go.
-- Backend local: `http://127.0.0.1:3000`
-- Caminho canônico de banco do runtime live: PgBouncer `10.11.1.11:6432` -> database `DBRouterAiAtius`
+- Runtime: namespace k3s `router-ai-atius`, fixo em `atius-srv-1`.
+- Workloads: `Deployment/router-ai-atius`, `StatefulSet/router-ai-atius-postgres` e `Deployment/router-ai-atius-redis`.
+- Backend do edge: `http://10.43.102.221:3000`.
+- Banco canonico live: PostgreSQL 17 no StatefulSet, database `DBRouterAiAtius`.
 - Nao ha model proxy Python ativo no caminho `/v1/`.
-- Alias Apache para `/v1/`: `http://127.0.0.1:3000`
-- `data/postgres_data` é cluster PostgreSQL legado/desanexado; não é a fonte de verdade do runtime live
+- Apache encaminha app/API para `http://10.43.102.221:3000`; docs permanecem em `127.0.0.1:3003`.
+- O Router Podman esta parado e preservado apenas para rollback pela user unit `container-router-ai-atius.service`.
 - Publico: `https://router.atius.com.br`
-- Deploy full-Go + base URL `/v1` normalization 2026-06-18: imagem `ghcr.io/giovannimnz/router-ai-atius:latest` id `e389110f98fb8e3fce80ac8cf691a04c1c74b6268d91d5fb304bb6f574344151`.
+- Release k3s 2026-07-19: `v2.17.3`, image ID `bb69e163c3846d27df37f1c4888f3f7ef3e8ffbfd1f7412811dfe256b40d1226`.
 - Rollback imediato antes da normalizacao `/v1`: `ghcr.io/giovannimnz/router-ai-atius:rollback-before-baseurl-v1-normalize-20260618122124`.
 - Rollback provider consolidation: `ghcr.io/giovannimnz/router-ai-atius:rollback-before-provider-consolidation-20260618080648`.
 
@@ -37,9 +37,11 @@ Validacao rapida:
 
 ```bash
 cd /home/ubuntu/GitHub/containers/router-ai-atius
-scripts/podman-validate.sh
-bin/clianything status
-bin/clianything providers --all
+scripts/k3s-router-validate-manifests.sh
+sudo k3s kubectl -n router-ai-atius get pods,svc,pvc -o wide
+K3S_ROUTER_BASE_URL=https://router.atius.com.br \
+  ATIUS_ROUTER_TOKEN="$ATIUS_ROUTER_TOKEN" \
+  scripts/k3s-router-smoke.sh
 ```
 
 `bin/clianything coverage --strict` e gate de paridade quando a arvore `docs/atius-router-docs/content/docs/en/api/management` estiver presente. Neste checkout de runtime ela pode estar ausente; nesse caso o comando falha por artefato de docs faltante, nao por estado dos providers.
@@ -48,11 +50,10 @@ bin/clianything providers --all
 
 ## Rotas Apache relevantes
 
-Estado observado em 2026-06-18:
+Estado validado em 2026-07-19:
 
-- `https://router.atius.com.br/api/` e `/` apontam para `127.0.0.1:3000`.
-- `https://router.atius.com.br/v1/` aponta direto para o backend Go em `127.0.0.1:3000`; o catalogo e o relay nao dependem de container adicional.
-- `https://router.atius.com.br/health` aponta para `127.0.0.1:3000/api/status`.
+- `https://router.atius.com.br/api/`, `/v1/`, `/health` e `/` apontam para o Service k3s `10.43.102.221:3000`.
+- O catalogo e o relay continuam Go-only e nao dependem de container adicional.
 - Docs/i18n usam porta `3003` quando o serviço de docs esta ativo.
 - Os botões e links `Docs` do router devem apontar para rotas internas do
   mesmo host: ingles em `/en/docs` e portugues em `/pt/docs`. Nao restaurar
@@ -67,7 +68,7 @@ Validacao:
 ```bash
 apache2ctl configtest
 /usr/bin/curl -fsS https://router.atius.com.br/api/status >/dev/null
-/usr/bin/curl -fsS http://127.0.0.1:3000/api/status >/dev/null
+/usr/bin/curl -fsS http://10.43.102.221:3000/api/status >/dev/null
 /usr/bin/curl -fsS https://router.atius.com.br/health >/dev/null
 /usr/bin/curl -fsS https://router.atius.com.br/docs.json | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["openapi"].startswith("3.")'
 /usr/bin/curl -fsS https://router.atius.com.br/docs/openapi.json | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["paths"]'
@@ -203,7 +204,7 @@ Estado atualizado em 2026-07-05:
 - Apos `3` janelas ruins consecutivas (default minimo), o governor bloqueia scale-up. Cada janela ruim adicional pode reduzir a concorrencia em `1` ate `min=1`. Uma amostra saudavel reseta o contador de janelas ruins.
 - Isso existe porque `/health` curto pode atrasar durante inferencia CPU-bound sem erro real de embeddings. O sinal de health e deliberadamente mais conservador que o sinal do trafego real.
 - Guardrail de capacidade dos pods TEI tambem existe, read-only e disabled-by-default. Ele so liga quando `EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=true` e `EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL` apontam para um endpoint interno sem auth extra que exponha uso e pods. Se `capacity_used_percent`, `cpu_usage_percent` ou `memory_usage_percent` estiverem acima de `EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80`, o governor bloqueia scale-up imediatamente; depois de `EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD=3` janelas ruins, reduz concorrencia gradualmente em `1` ate `min=1`. Pods degradados (`pods_ready < pods_total`) tambem bloqueiam scale-up.
-- O capacity probe aceita JSON ou texto estilo Prometheus. Campos reconhecidos incluem `capacity_used_percent`, `capacity_free_percent`, `cpu_usage_percent`, `memory_usage_percent`, `pods_ready` e `pods_total`.
+- O capacity probe aceita JSON ou texto estilo Prometheus. Campos reconhecidos incluem `capacity_used_percent`, `capacity_free_percent`, `cpu_usage_percent`, `memory_usage_percent`, `pods_ready`, `pods_total` e `te_queue_size`. Para o TEI nativo, fila vazia representa `0%` de saturacao observavel e qualquer item enfileirado representa `100%`: isso bloqueia scale-up imediatamente sem inventar uso de CPU/memoria que o endpoint nao publica.
 - Quando a fila esta cheia ou expira antes de despachar para o upstream, o router retorna `429` com codigo `embedding_governor_queue_full`, `embedding_governor_batch_queue_full` ou `embedding_governor_queue_timeout`.
 - Snapshot/telemetria agregada relevante do governor: `interactive_average_latency_ms`, `batch_average_latency_ms`, `interactive_completed`, `batch_completed`, `interactive_slow`, `batch_slow`, `health_probe_enabled`, `health_bad_windows`, `last_health_status`, `last_health_latency_ms`, `last_health_at`, `capacity_probe_enabled`, `capacity_bad_windows`, `last_capacity_status`, `last_capacity_used_percent`, `last_capacity_free_percent`, `last_capacity_ready_pods`, `last_capacity_total_pods`, `last_capacity_latency_ms`, `last_capacity_at`. Nenhum desses campos deve carregar input bruto, token ou URL secreta.
 
@@ -243,6 +244,21 @@ EMBEDDING_GOVERNOR_CAPACITY_PROBE_INTERVAL=30s
 EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80
 EMBEDDING_GOVERNOR_CAPACITY_BAD_WINDOW_THRESHOLD=3
 ```
+
+O profile k3s de producao sobrescreve os defaults opt-in acima com probes
+read-only na faixa OCI DRG:
+
+```bash
+EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=true
+EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=http://10.21.1.21:3115/health
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=true
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=http://10.21.1.21:3115/metrics
+EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80
+```
+
+O `/metrics` efetivo publica `te_queue_size`; nao publica CPU ou memoria. O
+governor usa somente esse sinal nativo de saturacao e o combina com health,
+latencia, filas locais, cooldown e feedback das requests.
 
 Significado operacional dos envs novos:
 
@@ -308,11 +324,15 @@ Leitura correta desses gates:
 - Para automacao e validacao, recupere `ATIUS_ROUTER_API_KEY` do HashiCorp Vault machine/automation e exporte como `ATIUS_ROUTER_TOKEN` apenas no shell efemero do teste.
 - Sem `ATIUS_ROUTER_TOKEN`, o smoke de embeddings deve falhar com `exit 2` antes da rede. Isso e limitacao de ambiente, nao passe livre.
 - Se `graphify status` retornar `stale=true` ou `commit_stale=true` num checkout com Graphify habilitado, rebuild e obrigatorio antes de assinar a mudanca. O rebuild faz parte do gate de validacao, nao do governor.
-- Deploy/restart nao e automatico em execucao de plano. Quando for validar em runtime, usar somente a user unit existente:
+- Para reiniciar o runtime atual, use o Deployment k3s:
 
 ```bash
-systemctl --user restart container-router-ai-atius.service
+sudo k3s kubectl -n router-ai-atius rollout restart deployment/router-ai-atius
+sudo k3s kubectl -n router-ai-atius rollout status deployment/router-ai-atius --timeout=240s
 ```
+
+`container-router-ai-atius.service` e somente rollback; nao iniciar junto com o
+backend k3s enquanto Apache estiver apontado ao Service.
 
 - Apos esse restart controlado, os monitor gates minimos sao:
   - `bin/clianything status --strict`
@@ -428,14 +448,14 @@ Valido em 2026-06-18:
 
 - OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `MiniMax-M3`: OK.
 - Anthropic SDK local contra `http://127.0.0.1:3000` com `MiniMax-M3`: OK.
-- OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `gpt-5.5` via `OpenAI - Codex`: OK com `ATIUS_ROUTER_STREAM=1`.
+- `/v1/responses` publico com `gpt-5.6-sol` via `OpenAI - Codex`: OK em streaming e nao streaming desde `v2.17.3`.
 - Router Go deve rotear Anthropic/OpenAI automaticamente via canal unico do provider quando o provider estiver ativo. Contrato final da Phase 24: `DeepSeek` channel 2 ativo; `MiniMax` channel 1 restaurado, mas desabilitado.
 - `OpenAI - Codex` esta ativo no channel 5 com modelos `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` e `gpt-5.3-codex-spark`; modelos com `visibility: hide` nao voltam ao catalogo.
 - Embeddings Codex devem usar o mesmo channel 5 e a mesma credencial OAuth do Codex, sem servico/container adicional nem copia de chave; runtime atual deixa `text-embedding-3-*` desativado por `429 insufficient_quota`.
 - `data/codex-home/.codex/auth.json` existe e tem `auth_mode: chatgpt`; esse arquivo e credencial de runtime e nao deve ser copiado para docs/logs.
 - O smoke principal presente neste checkout e `scripts/smoke-provider-consolidation.py`; ele exige `ATIUS_ROUTER_TOKEN` via env para chamadas reais e valida a matriz ativa OpenAI/Anthropic/Codex.
 - `scripts/smoke-embeddings.py` fica como check legado/focado de embeddings.
-- Para smoke de embeddings Go-native, o default local e `http://127.0.0.1:3000/v1`.
+- Para smoke k3s, use `ATIUS_ROUTER_EMBEDDINGS_BASE_URL=http://10.43.102.221:3000/v1`; no publico, use `https://router.atius.com.br/v1`.
 
 Nao documentar ou copiar tokens desse arquivo em notes, docs ou logs.
 
@@ -538,18 +558,20 @@ bin/clianything coverage --strict
 # Ultimos logs sem payload sensivel
 bin/clianything logs --limit 50
 
-# Logs de containers
-podman logs router-ai-atius --tail 80
+# Logs do runtime atual
+sudo k3s kubectl -n router-ai-atius logs deployment/router-ai-atius --tail=80
 
-# Restart controlado do backend Go
-systemctl --user restart container-router-ai-atius.service
+# Restart controlado do backend Go no k3s
+sudo k3s kubectl -n router-ai-atius rollout restart deployment/router-ai-atius
+sudo k3s kubectl -n router-ai-atius rollout status deployment/router-ai-atius --timeout=240s
 
 # O antigo container model-detailed deve permanecer parado no runtime full-Go.
 systemctl --user is-active container-model-detailed.service
 podman ps -a --filter pod=atius-ai-router --format '{{.Names}}' | grep -E '^model-detailed' && exit 1 || true
 ```
 
-Nao usar `podman restart router-ai-atius` como rotina operacional neste runtime. Em 2026-06-15, restart direto do container Go falhou durante cleanup/unmount e precisou ser recuperado pelo user unit `container-router-ai-atius.service`.
+Nao usar `podman restart router-ai-atius` como rotina operacional. Podman e a
+trilha de rollback; no runtime atual, operar o Deployment k3s.
 
 ## CLIAnything Phase 18
 

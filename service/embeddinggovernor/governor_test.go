@@ -602,6 +602,24 @@ tei_pods_total 2
 	assert.True(t, reading.HasPods)
 }
 
+func TestCapacityProbeParsesTEIQueueSaturation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want float64
+	}{
+		{name: "idle", body: "te_queue_size 0\n", want: 0},
+		{name: "queued", body: "te_queue_size 1\n", want: 100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reading, ok := parseCapacityProbePayload([]byte(tc.body))
+
+			require.True(t, ok)
+			assert.Equal(t, tc.want, reading.UsedPercent)
+		})
+	}
+}
+
 func TestSplitLatencyMetricsTrackInteractiveAndBatchSeparately(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
 		cfg.BatchSlowRequestDuration = 10 * time.Minute

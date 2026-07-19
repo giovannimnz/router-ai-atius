@@ -1,16 +1,16 @@
 # Graph Report - router-codex-metadata  (2026-07-19)
 
 ## Corpus Check
-- 3663 files · ~7,164,824 words
+- 3668 files · ~7,168,737 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 33466 nodes · 73210 edges · 2143 communities (1939 shown, 204 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 6610 edges (avg confidence: 0.8)
+- 33514 nodes · 73277 edges · 2154 communities (1947 shown, 207 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 6622 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c4a936f8`
+- Built from commit: `89454fd7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1249,6 +1249,8 @@
 - [[_COMMUNITY_Community 1233|Community 1233]]
 - [[_COMMUNITY_Community 1234|Community 1234]]
 - [[_COMMUNITY_Community 1235|Community 1235]]
+- [[_COMMUNITY_Community 1236|Community 1236]]
+- [[_COMMUNITY_Community 1237|Community 1237]]
 - [[_COMMUNITY_Community 1238|Community 1238]]
 - [[_COMMUNITY_Community 1239|Community 1239]]
 - [[_COMMUNITY_Community 1241|Community 1241]]
@@ -1297,6 +1299,7 @@
 - [[_COMMUNITY_Community 1284|Community 1284]]
 - [[_COMMUNITY_Community 1285|Community 1285]]
 - [[_COMMUNITY_Community 1286|Community 1286]]
+- [[_COMMUNITY_Community 1288|Community 1288]]
 - [[_COMMUNITY_Community 1289|Community 1289]]
 - [[_COMMUNITY_Community 1290|Community 1290]]
 - [[_COMMUNITY_Community 1291|Community 1291]]
@@ -1423,12 +1426,20 @@
 - [[_COMMUNITY_Community 1433|Community 1433]]
 - [[_COMMUNITY_Community 2105|Community 2105]]
 - [[_COMMUNITY_Community 2113|Community 2113]]
+- [[_COMMUNITY_Community 2144|Community 2144]]
+- [[_COMMUNITY_Community 2145|Community 2145]]
 - [[_COMMUNITY_Community 2146|Community 2146]]
+- [[_COMMUNITY_Community 2147|Community 2147]]
+- [[_COMMUNITY_Community 2148|Community 2148]]
+- [[_COMMUNITY_Community 2149|Community 2149]]
 - [[_COMMUNITY_Community 2150|Community 2150]]
+- [[_COMMUNITY_Community 2151|Community 2151]]
+- [[_COMMUNITY_Community 2152|Community 2152]]
+- [[_COMMUNITY_Community 2153|Community 2153]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `__()` - 3230 edges
-2. `Communities (2143 total, 202 thin omitted)` - 1209 edges
+2. `Communities (2155 total, 203 thin omitted)` - 1220 edges
 3. `__()` - 1192 edges
 4. `cn()` - 830 edges
 5. `push()` - 334 edges
@@ -1439,16 +1450,16 @@
 10. `showError()` - 200 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `SyncDiskCacheStats()` --calls--> `Int64`  [INFERRED]
-  common/disk_cache_config.go → pkg/perf_metrics/types.go
-- `generateDefaultSidebarConfig()` --calls--> `SysLog()`  [INFERRED]
-  controller/user.go → common/sys_log.go
 - `IsAdmin()` --calls--> `SysLog()`  [INFERRED]
   model/user.go → common/sys_log.go
 - `updateUserUsedQuota()` --calls--> `SysLog()`  [INFERRED]
   model/user.go → common/sys_log.go
 - `RecordTopupLog()` --calls--> `GetIp()`  [INFERRED]
   model/log.go → common/utils.go
+- `Bytes2Size()` --calls--> `Int64`  [INFERRED]
+  common/utils.go → pkg/perf_metrics/types.go
+- `SearchRedemptions()` --calls--> `GetTimestamp()`  [INFERRED]
+  model/redemption.go → common/utils.go
 
 ## Import Cycles
 - 1-file cycle: `integration/middleware/model_detailed_fastapi.py -> integration/middleware/model_detailed_fastapi.py`
@@ -1471,55 +1482,55 @@
 - 1-file cycle: `web/default/src/routes/_authenticated/wallet/index.tsx -> web/default/src/routes/_authenticated/wallet/index.tsx`
 - 1-file cycle: `web/default/src/routes/about/index.tsx -> web/default/src/routes/about/index.tsx`
 
-## Communities (2143 total, 204 thin omitted)
+## Communities (2154 total, 207 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.00
-Nodes (1209): Communities (2143 total, 202 thin omitted), Community 0 - "Community 0", Community 1000 - "Community 1000", Community 1001 - "Community 1001", Community 1002 - "Community 1002", Community 1003 - "Community 1003", Community 1004 - "Community 1004", Community 1005 - "Community 1005" (+1201 more)
+Nodes (1220): Communities (2155 total, 203 thin omitted), Community 0 - "Community 0", Community 1000 - "Community 1000", Community 1001 - "Community 1001", Community 1002 - "Community 1002", Community 1003 - "Community 1003", Community 1004 - "Community 1004", Community 1005 - "Community 1005" (+1212 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.00
-Nodes (494): pg(), __(), _8e(), A3e(), A5(), abt(), addText(), Aee() (+486 more)
+Nodes (442): HF(), __(), $3e(), A3e(), abt(), acceptToken(), addChanges(), addMapping() (+434 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.01
-Nodes (437): BasicAuthFormValues, basicAuthSchema, BasicAuthSection(), BasicAuthSectionProps, BotProtectionFormValues, botProtectionSchema, BotProtectionSection(), BotProtectionSectionProps (+429 more)
+Nodes (431): BasicAuthFormValues, basicAuthSchema, BasicAuthSection(), BasicAuthSectionProps, BotProtectionFormValues, botProtectionSchema, BotProtectionSection(), BotProtectionSectionProps (+423 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.01
-Nodes (392): Artifact(), ArtifactAction(), ArtifactActionProps, ArtifactActions(), ArtifactActionsProps, ArtifactClose(), ArtifactCloseProps, ArtifactContent() (+384 more)
+Nodes (384): Action(), Actions(), Artifact(), ArtifactAction(), ArtifactActionProps, ArtifactActions(), ArtifactActionsProps, ArtifactClose() (+376 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.01
-Nodes (528): _5e(), _7e(), a5e(), a7e(), A8e(), a9e(), accept(), active() (+520 more)
+Nodes (452): _5e(), _7e(), _8e(), a5e(), a7e(), A8e(), accept(), active() (+444 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.01
-Nodes (107): ade(), age(), aie(), ane(), ase, blur(), boe(), buildDecorations() (+99 more)
+Nodes (103): accept(), _adoptNodes(), age(), ane(), appendChild(), blur(), bne(), bo() (+95 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.01
-Nodes (278): __(), _4(), aa(), aF(), aL(), AP(), At(), Aue() (+270 more)
+Nodes (305): __(), _4(), aa(), aD(), aF(), AH(), ai(), aL() (+297 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.07
-Nodes (56): ConfirmDialogProps, route, PasskeyCard(), PasskeyCardProps, getRequiredTextRows(), NormalizedRequiredTextPart, RequiredTextPart, RiskAcknowledgementDialog() (+48 more)
+Cohesion: 0.04
+Nodes (78): useUsersColumns(), UsersDeleteDialog(), UsersPrimaryButtons(), UsersContext, UsersContextType, UsersProvider(), useUsers(), isDisabledUserRow() (+70 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.02
-Nodes (190): searchSchema, Chat2LinkPage(), Channels(), channelsSearchSchema, ChatRouteComponent(), AppHeader(), AppHeaderProps, AppSidebar() (+182 more)
+Nodes (183): Route, Channels(), channelsSearchSchema, AppHeader(), AppHeaderProps, AppSidebar(), AuthenticatedLayout(), AuthenticatedLayoutProps (+175 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.01
-Nodes (508): bQ(), gA(), HF(), hz(), nq(), pq(), wF(), WQ() (+500 more)
+Nodes (408): gA(), a1(), a_t(), activeForPoint(), Ad(), addActions(), addActive(), addBlock() (+400 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.02
-Nodes (248): A(), aD(), AH(), ai(), an(), as(), Au(), av() (+240 more)
+Nodes (186): A(), an(), as(), Au(), av(), ax(), b(), bA() (+178 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.01
-Nodes (310): Action(), ActionProps, Actions(), ActionsProps, getChannels(), searchChannels(), CHANNEL_STATUS, CHANNEL_STATUS_OPTIONS (+302 more)
+Nodes (306): ActionProps, ActionsProps, batchDeleteChannels(), batchSetChannelTag(), batchUpdateChannelStatus(), channelActionConfig(), CodexUsageResetResponse, CodexUsageResponse (+298 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.01
@@ -1542,164 +1553,164 @@ Cohesion: 0.03
 Nodes (143): LoginForm(), OAuth2Callback(), PasswordResetConfirm(), PasswordResetForm(), RegisterForm(), TwoFAVerification(), AccountManagement(), CheckinCalendar() (+135 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.02
-Nodes (276): A(), aCe(), adoptAttributes(), adt(), aft(), ah(), _appendCommentNode(), _appendElement() (+268 more)
+Cohesion: 0.03
+Nodes (255): A(), aCe(), adoptAttributes(), adt(), aft(), ah(), _appendCommentNode(), _appendElement() (+247 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.01
-Nodes (265): batchDeleteChannels(), batchSetChannelTag(), batchUpdateChannelStatus(), channelActionConfig(), CodexUsageResetResponse, CodexUsageResponse, completeCodexCredentialRegeneration(), copyChannel() (+257 more)
+Cohesion: 0.02
+Nodes (138): Chat2LinkPage(), Route, createChannel(), ADD_MODE_OPTIONS, AUTO_BAN_OPTIONS, BALANCE_THRESHOLDS, CHANNEL_STATUS_CONFIG, CHANNEL_STATUS_LABELS (+130 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.01
-Nodes (243): bindEmail(), getOAuthState(), githubOAuthStart(), login(), login2fa(), logout(), register(), sendEmailVerification() (+235 more)
+Cohesion: 0.03
+Nodes (108): bindEmail(), getOAuthState(), githubOAuthStart(), login(), login2fa(), logout(), register(), sendEmailVerification() (+100 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.02
-Nodes (330): R(), _0t(), _1e(), $2t(), $5t(), _8t(), a3t(), AAe() (+322 more)
+Nodes (241): tp, R(), Rwe(), tp, tp, _0t(), _1e(), $2t() (+233 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.06
-Nodes (44): ContentLayoutConfig(), ContentLayoutPreview(), DirConfig(), FONT_OPTIONS, FontConfig(), PresetConfig(), RadioGroupItem(), RADIUS_OPTIONS (+36 more)
+Cohesion: 0.14
+Nodes (20): FALLBACK_CONTEXT, ThemeCustomizationContext, ThemeCustomizationContextType, CONTENT_LAYOUT_VALUES, ContentLayout, DEFAULT_THEME_CUSTOMIZATION, PRESET_DEFAULT_FONT, ResolvedThemeFont (+12 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.09
-Nodes (4): kne(), wne, xne, yne
+Cohesion: 0.05
+Nodes (12): bpe(), cpe, dpe(), epe(), fpe, gpe, ime(), mpe (+4 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.02
-Nodes (55): a6, A7, c6(), C7, checkAsyncSchedule(), clone(), D7, e6 (+47 more)
+Nodes (50): a6, A7, c6(), C7, clone(), D7, e6, F7 (+42 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.02
-Nodes (194): tp, tp, tp, abe(), addHooks(), after(), Am(), an() (+186 more)
+Cohesion: 0.03
+Nodes (173): abe(), addHooks(), Am(), awe(), bbe(), _be(), bm(), bve() (+165 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.03
-Nodes (117): ClaudeErrorWithStatusCode, ChannelType2APIType(), DeepCopy(), T, NewOutboundJSONBody(), AppendRequestConversionFromRequest(), GuessRelayFormatFromRequest(), init() (+109 more)
+Cohesion: 0.04
+Nodes (80): ClaudeErrorWithStatusCode, ReaderOnly(), DeepCopy(), T, NewOutboundJSONBody(), ApplyParamOverrideWithRelayInfo(), AppendRequestConversionFromRequest(), GuessRelayFormatFromRequest() (+72 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.02
-Nodes (161): useDeploymentsColumns(), DeploymentsTable(), DescriptionCell(), DescriptionCellProps, useModelsColumns(), ModelsDialogs(), ModelsPrimaryButtons(), DialogType (+153 more)
+Nodes (151): DescriptionCell(), DescriptionCellProps, useModelsColumns(), ModelsDialogs(), ModelsPrimaryButtons(), DialogType, ModelsContext, ModelsContextType (+143 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.04
-Nodes (103): aCt(), atLastNode(), att(), b7e(), bet(), Btt(), cCt(), cet() (+95 more)
+Cohesion: 0.02
+Nodes (185): a9e(), aCt(), AF(), atLastNode(), att(), b7e(), baseTheme(), blockScalar() (+177 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.03
 Nodes (85): ModelsList(), ChannelsActions(), ChannelsFilters(), ChannelsPage(), useChannelsData(), useChannelUpstreamUpdates(), useIsMobile(), useTableCompactMode() (+77 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.03
-Nodes (22): Bae, cde, Dde(), Ete, Fue(), hae(), jue(), kce (+14 more)
+Cohesion: 0.01
+Nodes (37): ade(), Bae, bce, cde, _de, Element(), fte, Fue() (+29 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.01
-Nodes (29): aE(), bre(), Bse, cre(), Dae(), dre(), goe(), gre() (+21 more)
+Nodes (35): aE(), aie(), ase, bre(), cie(), cre(), Dae(), dre() (+27 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.08
-Nodes (18): asyncTaskPollHandler, channelTestHandler, channelTestTaskPayload, midjourneyPollHandler, modelUpdateHandler, modelUpdateTaskPayload, finishSystemTaskHandler(), Context (+10 more)
+Cohesion: 0.05
+Nodes (39): asyncTaskPollHandler, channelTestHandler, channelTestTaskPayload, checkMjTaskNeedUpdate(), GetAllMidjourney(), GetUserMidjourney(), Context, Midjourney (+31 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.06
-Nodes (51): ConflictConfirmDialog(), ConflictItem, CHANNEL_STATUS_CONFIG, ENDPOINT_OPTIONS, RATIO_TYPE_OPTIONS, RenderUpstreamValueArgs, useUpstreamRatioSyncColumns(), getOrderedRatioTypes() (+43 more)
+Cohesion: 0.03
+Nodes (80): defaultAuthSettings, defaultBillingSettings, SettingsPageProvider(), SettingsPage(), SettingsPageFrameProps, SettingsPageProps, DEFAULT_API_INFO, defaultContentSettings (+72 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.03
-Nodes (127): HmacSha256(), HmacSha256Raw(), Sha1(), Sha1Raw(), GetJsonString(), GetTopupGroupRatio(), ValidateRedirectURL(), AdminCompleteTopupRequest (+119 more)
+Cohesion: 0.04
+Nodes (107): GetJsonString(), GetTopupGroupRatio(), ValidateRedirectURL(), AdminCompleteTopupRequest, AmountRequest, CreemAdaptor, CreemCheckoutRequest, CreemCheckoutResponse (+99 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.04
-Nodes (55): DollarCostPricePatchRequest, buildCompletionRatioMetaValue(), collectModelNamesFromOptionValue(), GetOptions(), Context, DollarCostPrice, isPaymentComplianceOptionKey(), isPositiveOptionValue() (+47 more)
+Cohesion: 0.12
+Nodes (17): K, CheckGroupRatio(), ContainsGroupRatio(), GetGroupRatioSetting(), GroupGroupRatio2JSONString(), GroupRatio2JSONString(), init(), UpdateGroupGroupRatioByJSONString() (+9 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.03
-Nodes (106): adoptAttributes(), _adoptNodes(), Ao(), appendChild(), _appendCommentNode(), _appendElement(), _attachElementToTree(), ay() (+98 more)
+Cohesion: 0.04
+Nodes (90): adoptAttributes(), Ao(), _appendCommentNode(), _appendElement(), _attachElementToTree(), ay(), by(), Cb() (+82 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.05
-Nodes (100): GetTimestamp(), Context, ListSystemInstances(), CreateLogCleanupSystemTask(), GetCurrentSystemTask(), GetSystemTask(), Context, ListSystemTasks() (+92 more)
+Cohesion: 0.06
+Nodes (89): GetTimestamp(), Context, ListSystemInstances(), CreateLogCleanupSystemTask(), GetCurrentSystemTask(), GetSystemTask(), Context, RegisterScheduledSystemTasks() (+81 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.03
-Nodes (40): afe(), ale(), bfe(), cfe(), cle, cue(), Dfe(), dle() (+32 more)
+Nodes (42): afe(), ale(), bfe(), cfe(), cle, cue(), Dce(), Dfe() (+34 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.01
-Nodes (238): getAboutContent(), AboutResponse, Node(), NodeActionProps, NodeContent(), NodeContentProps, NodeDescriptionProps, NodeFooter() (+230 more)
+Cohesion: 0.02
+Nodes (182): Node(), NodeActionProps, NodeContent(), NodeContentProps, NodeDescriptionProps, NodeFooter(), NodeFooterProps, NodeHeader() (+174 more)
 
 ### Community 39 - "Community 39"
 Cohesion: 0.03
-Nodes (122): o6, Va(), A4e(), aj(), as(), B4e(), Bhn(), bo() (+114 more)
+Nodes (116): o6, Va(), A4e(), Ac(), aj(), as(), B4e(), Bhn() (+108 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.02
-Nodes (214): Suggestion(), SuggestionProps, Suggestions(), SuggestionsProps, getRelativeTime(), CardStaggerContainer(), CardStaggerItem(), FadeInProps (+206 more)
+Cohesion: 0.03
+Nodes (103): getRelativeTime(), CardStaggerContainer(), CardStaggerItem(), FadeInProps, PageTransitionProps, StaggerContainer(), StaggerContainerProps, StaggerItem() (+95 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.03
-Nodes (88): FooterColumnProps, FooterLink, LegalLinks(), NEW_API_FOOTER_ATTRIBUTION_KEY, useSubscriptionsColumns(), SubscriptionsDialogs(), Props, SubscriptionsPrimaryButtons() (+80 more)
+Cohesion: 0.06
+Nodes (60): CONSUMPTION_DISTRIBUTION_CHART_OPTIONS, DEFAULT_DASHBOARD_CHART_PREFERENCES, DEFAULT_TIME_GRANULARITY, EMPTY_DASHBOARD_FILTERS, MODEL_ANALYTICS_CHART_OPTIONS, TIME_RANGE_BY_GRANULARITY, ConsumptionDistributionChartType, DashboardChartPreferences (+52 more)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.04
-Nodes (77): DataTableColumnHeader(), DataTablePagination(), AmountDiscountData, AmountDiscountDialog(), createAmountDiscountDialogSchema(), AmountDiscountVisualEditor(), AmountDiscountVisualEditorProps, PaymentMethodData (+69 more)
+Cohesion: 0.08
+Nodes (54): UsingLogDatabase(), MapToJsonStr(), SysError(), DeleteHistoryLogs(), GetAllLogs(), GetLogByKey(), GetLogsSelfStat(), GetLogsStat() (+46 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.04
-Nodes (19): bpe(), cpe, dpe(), epe(), fpe, G9(), gpe, hE() (+11 more)
+Cohesion: 0.02
+Nodes (56): ac(), aoe(), are(), atIndentedComment(), blockMap(), blockScalar(), blockSequence(), bt() (+48 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.03
-Nodes (83): Password2Hash(), GetRandomString(), DeleteKey(), GenerateVerificationCode(), Time, RegisterVerificationCodeWithKey(), removeExpiredPairs(), VerifyCodeWithKey() (+75 more)
+Cohesion: 0.04
+Nodes (67): Password2Hash(), ValidatePasswordAndHash(), GetSubscription(), GetUsage(), Context, findOrCreateOAuthUser(), OAuthUser, Provider (+59 more)
 
 ### Community 45 - "Community 45"
-Cohesion: 0.04
-Nodes (64): Adaptor, baiduEmbeddingHandler(), baiduHandler(), baiduStreamHandler(), embeddingRequestOpenAI2Baidu(), embeddingResponseBaidu2OpenAI(), getBaiduAccessToken(), getBaiduAccessTokenHelper() (+56 more)
+Cohesion: 0.09
+Nodes (21): Adaptor, embeddingRequestOpenAI2Baidu(), requestOpenAI2Baidu(), BaiduChatRequest, BaiduEmbeddingRequest, AudioRequest, ClaudeRequest, Context (+13 more)
 
 ### Community 46 - "Community 46"
 Cohesion: 0.03
-Nodes (11): _7, E7, hp(), n7, ode, Of(), Qhe(), Rte (+3 more)
+Nodes (15): _7, E7, hp(), isXML(), n7, ode, Of(), Qhe() (+7 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.09
-Nodes (22): CleanupOldCacheFiles(), File, Mutex, Reader, newDiskStorage(), newDiskStorageFromReader(), newMemoryStorage(), ReaderOnly() (+14 more)
+Cohesion: 0.07
+Nodes (38): GenerateBackupCodes(), GenerateQRCodeData(), generateRandomBackupCode(), GenerateTOTPSecret(), Get2FAIssuer(), HashBackupCode(), NormalizeBackupCode(), ValidateNumericCode() (+30 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.03
 Nodes (75): PricingCardSkeleton(), CARD_STYLES, PricingCardView(), useContainerWidth(), useMinimumLoadingTime(), FilterModalContent(), FilterModalFooter(), ModelBasicInfo() (+67 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.06
-Nodes (114): _advanceBy(), _appendCharToCurrentCharacterToken(), but(), _callState(), _consume(), _consumeSequenceIfMatch(), _createAttr(), _createCharacterToken() (+106 more)
+Cohesion: 0.05
+Nodes (127): addToNumericResult(), _advanceBy(), _appendCharToCurrentCharacterToken(), AZ(), but(), _callState(), _consume(), _consumeSequenceIfMatch() (+119 more)
 
 ### Community 50 - "Community 50"
 Cohesion: 0.04
 Nodes (74): API_ENDPOINTS, DEBUG_TABS, DEFAULT_CONFIG, DEFAULT_MESSAGES, ERROR_MESSAGES, getDefaultMessages(), MESSAGE_ROLES, MESSAGE_STATUS (+66 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.03
-Nodes (119): GetChannelsResponse, SearchChannelsResponse, ApiKeysMutateDrawer(), ConfigDrawer(), sideDrawerContentClassName(), sideDrawerFooterClassName(), sideDrawerFormClassName(), sideDrawerHeaderClassName() (+111 more)
+Cohesion: 0.02
+Nodes (141): ApiKeysMutateDrawer(), ConfigDrawer(), ContentLayoutPreview(), DirConfig(), FONT_OPTIONS, RadioGroupItem(), RADIUS_OPTIONS, SectionTitle() (+133 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.04
-Nodes (95): ApiErrorMsg(), ApiSuccess(), GetPageQuery(), Context, PageInfo, AdminBindSubscriptionRequest, AdminCreateUserSubscriptionRequest, AdminUpdateSubscriptionPlanStatusRequest (+87 more)
+Cohesion: 0.05
+Nodes (95): ApiErrorMsg(), ApiSuccess(), GetPageQuery(), Context, PageInfo, NormalizeBillingPreference(), AdminBindSubscriptionRequest, AdminCreateUserSubscriptionRequest (+87 more)
 
 ### Community 53 - "Community 53"
 Cohesion: 0.03
-Nodes (89): DynamicPricingBreakdown(), OP_LABELS, TIME_FUNC_LABELS, VAR_LABELS, EMPTY_CANDIDATE_MODEL_NAMES, ModelPricingEditor(), buildExprLiteral(), buildRequestConditionExpr() (+81 more)
+Nodes (83): DynamicPricingBreakdown(), OP_LABELS, TIME_FUNC_LABELS, VAR_LABELS, EMPTY_CANDIDATE_MODEL_NAMES, ModelPricingEditor(), buildExprLiteral(), buildRequestConditionExpr() (+75 more)
 
 ### Community 54 - "Community 54"
-Cohesion: 0.05
-Nodes (35): AuthSettings(), defaultAuthSettings, Route, BillingSettings(), defaultBillingSettings, Route, SettingsPageProvider(), SettingsPage() (+27 more)
+Cohesion: 0.50
+Nodes (3): ContentSettings(), Route, ContentSettings
 
 ### Community 55 - "Community 55"
-Cohesion: 0.08
-Nodes (46): Duration, ParseRedisOption(), RedisDel(), RedisDelKey(), RedisGet(), RedisHGetObj(), RedisHIncrBy(), RedisHSetField() (+38 more)
+Cohesion: 0.03
+Nodes (165): AAe(), ADe(), Ae(), aIt(), aje(), Ake(), aMe(), Ao() (+157 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.05
-Nodes (38): String2Int(), GetTagModels(), UpdateAbilityByTag(), UpdateAbilityStatusByTag(), ApplyChannelGroupFilter(), BatchDeleteChannels(), BatchSetChannelTag(), channelGroupFilterCondition() (+30 more)
+Nodes (41): String2Int(), GetAllChannels(), GetTagModels(), UpdateAbilityByTag(), UpdateAbilityStatusByTag(), ApplyChannelGroupFilter(), BatchDeleteChannels(), BatchSetChannelTag() (+33 more)
 
 ### Community 57 - "Community 57"
 Cohesion: 0.02
@@ -1711,43 +1722,43 @@ Nodes (71): useDashboardCharts(), displayAmountToQuota(), getQuotaPerUnit(), quo
 
 ### Community 59 - "Community 59"
 Cohesion: 0.03
-Nodes (159): Codec, LogDatabaseType(), MainDatabaseType(), SetDatabaseTypes(), SetLogDatabaseType(), SetMainDatabaseType(), UsingLogDatabase(), UsingMainDatabase() (+151 more)
+Nodes (128): Codec, LogDatabaseType(), MainDatabaseType(), SetDatabaseTypes(), SetLogDatabaseType(), SetMainDatabaseType(), UsingMainDatabase(), DatabaseType (+120 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.05
-Nodes (83): RemoveGeminiDisabledFields(), FunctionCall, GeminiModelsResponse, buildUsageFromGeminiMetadata(), clampThinkingBudget(), clampThinkingBudgetByEffort(), cleanFunctionParameters(), cleanFunctionParametersShallow() (+75 more)
+Nodes (75): RemoveGeminiDisabledFields(), FunctionCall, failingReadCloser, GeminiModelsResponse, buildUsageFromGeminiMetadata(), clampThinkingBudget(), clampThinkingBudgetByEffort(), cleanFunctionParameters() (+67 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.04
-Nodes (19): fu, hl(), Il(), jle, jt, jte, Kt(), Ll (+11 more)
+Cohesion: 0.18
+Nodes (3): Ek(), size(), Tk()
 
 ### Community 62 - "Community 62"
-Cohesion: 0.02
-Nodes (123): Route, Route, Route, Route, Route, ResetPassword(), Route, Route (+115 more)
+Cohesion: 0.03
+Nodes (75): Route, Route, Route, Route, Route, AboutIndexRoute, AuthenticatedChannelsIndexRoute, AuthenticatedChat2linkRoute (+67 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.06
-Nodes (75): StringToByteSlice(), StripCJK(), GetUUID(), CompletionsStreamResponse, ClaudeChunkData(), ClaudeData(), Done(), FlushWriter() (+67 more)
+Cohesion: 0.05
+Nodes (83): GetStringIfEmpty(), MaskEmail(), maskHostForPlainDomain(), maskHostForURL(), maskHostTail(), MaskSensitiveInfo(), StringToByteSlice(), StripCJK() (+75 more)
 
 ### Community 64 - "Community 64"
-Cohesion: 0.03
-Nodes (77): ErrorState(), formatPercent(), ResourceCell(), ResourceCellProps, ringColorClass(), RingProgress(), RingProgressProps, STATUS_CLASS_NAME (+69 more)
+Cohesion: 0.02
+Nodes (190): useApiKeysColumns(), useGroupRatios(), ApiKeysDeleteDialog(), ApiKeysDialogs(), ApiKeysMultiDeleteDialog(), ApiKeysMultiDeleteDialogProps, ApiKeysPrimaryButtons(), ApiKeysContext (+182 more)
 
 ### Community 65 - "Community 65"
 Cohesion: 0.06
-Nodes (65): AddChannelRequest, AddChannel(), applyChannelStatusFilter(), channelHasSensitiveChanges(), clearChannelReadOnlyFields(), Channel, BatchSetChannelTag(), BatchUpdateChannelStatus() (+57 more)
+Nodes (67): StrToMap(), AddChannelRequest, AddChannel(), applyChannelStatusFilter(), channelHasSensitiveChanges(), clearChannelReadOnlyFields(), Channel, BatchSetChannelTag() (+59 more)
 
 ### Community 66 - "Community 66"
-Cohesion: 0.07
-Nodes (35): AdminStep(), AdminStepProps, CompleteStep(), CompleteStepProps, DATABASE_VARIANT, USAGE_MODE_LABEL_KEYS, DatabaseStepProps, LoadingState() (+27 more)
+Cohesion: 0.03
+Nodes (107): getAffinityUsageCache(), CacheStatsDialog(), Props, CodexRegenerateDialog(), CodexRegenerateDialogProps, OpenAuthorizationWindow, CopyButton(), Dialog() (+99 more)
 
 ### Community 67 - "Community 67"
 Cohesion: 0.05
-Nodes (70): ActionDefinition, newGormAdapter(), newRule(), ruleToLine(), newAuthzTestDB(), TestAdapterAddPolicyIsIdempotent(), TestCapabilitiesUseCatalogShape(), TestClearUserAuthorizationRemovesOverrides() (+62 more)
+Nodes (68): ActionDefinition, newGormAdapter(), newRule(), ruleToLine(), newAuthzTestDB(), TestAdapterAddPolicyIsIdempotent(), TestCapabilitiesUseCatalogShape(), TestClearUserAuthorizationRemovesOverrides() (+60 more)
 
 ### Community 68 - "Community 68"
-Cohesion: 0.08
-Nodes (28): GetGroups(), GetUserGroups(), Context, filterActiveGroups(), GetPerfMetrics(), GetPerfMetricsSummary(), Context, filterPricingByUsableGroups() (+20 more)
+Cohesion: 0.10
+Nodes (21): GetGroups(), GetUserGroups(), Context, filterActiveGroups(), GetPerfMetrics(), GetPerfMetricsSummary(), Context, filterPricingByUsableGroups() (+13 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.06
@@ -1755,15 +1766,15 @@ Nodes (73): ChannelAffinityKeySource, channelAffinityMeta, ChannelAffinityRule, 
 
 ### Community 70 - "Community 70"
 Cohesion: 0.05
-Nodes (33): DashboardFlowGraph, DashboardFlowLink, DashboardFlowNode, FlowBuildOptions, FlowFilterOptions, FlowSummary, ProcessedFlowData, applyFlowHighlights() (+25 more)
+Nodes (71): getDashboardChartColors(), processChartData(), addLink(), addNode(), applyFlowHighlights(), applyTopNodeLimit(), assignLinkDisplayColors(), buildDashboardFlowData() (+63 more)
 
 ### Community 71 - "Community 71"
-Cohesion: 0.09
-Nodes (77): ApplyParamOverride(), assertJSONEqual(), TestApplyParamOverrideAppendObjectMergeKeepOrigin(), TestApplyParamOverrideAppendObjectMergeOverride(), TestApplyParamOverrideConditionAND(), TestApplyParamOverrideConditionFromContext(), TestApplyParamOverrideConditionFromRequestHeaders(), TestApplyParamOverrideConditionFromRetryAndLastErrorContext() (+69 more)
+Cohesion: 0.08
+Nodes (84): ApplyParamOverride(), assertJSONEqual(), TestApplyParamOverrideAppendObjectMergeKeepOrigin(), TestApplyParamOverrideAppendObjectMergeOverride(), TestApplyParamOverrideConditionAND(), TestApplyParamOverrideConditionFromContext(), TestApplyParamOverrideConditionFromRequestHeaders(), TestApplyParamOverrideConditionFromRetryAndLastErrorContext() (+76 more)
 
 ### Community 72 - "Community 72"
-Cohesion: 0.11
-Nodes (24): SetContextKey(), Path2RelayMode(), Path2RelayModeMidjourney(), Path2RelaySuno(), channelSupportsRequestPath(), Distribute(), extractModelNameFromGeminiPath(), getJSONStringValue() (+16 more)
+Cohesion: 0.05
+Nodes (79): BodyStorage, CodexCatalogMetadata, ApiError(), CleanupBodyStorage(), GetBodyStorage(), GetContextKey(), GetContextKeyBool(), GetContextKeyInt() (+71 more)
 
 ### Community 73 - "Community 73"
 Cohesion: 0.12
@@ -1774,8 +1785,8 @@ Cohesion: 0.04
 Nodes (47): CHANNEL_AFFINITY_RULE_TEMPLATES, CLAUDE_CLI_HEADER_PASSTHROUGH_HEADERS, CLAUDE_CLI_HEADER_PASSTHROUGH_TEMPLATE, cloneChannelAffinityTemplate(), CODEX_CLI_HEADER_PASSTHROUGH_HEADERS, CODEX_CLI_HEADER_PASSTHROUGH_TEMPLATE, verifyJSON(), AWS_BEDROCK_ANTHROPIC_COMPAT_TEMPLATE (+39 more)
 
 ### Community 75 - "Community 75"
-Cohesion: 0.05
-Nodes (44): extractModelFromOperationName(), ParseVeoDurationSeconds(), ParseVeoResolution(), ResolveVeoDuration(), ResolveVeoResolution(), SizeToVeoAspectRatio(), SizeToVeoResolution(), VeoResolutionRatio() (+36 more)
+Cohesion: 0.07
+Nodes (35): IsJsonObject(), ParseVeoDurationSeconds(), ParseVeoResolution(), ResolveVeoDuration(), ResolveVeoResolution(), SizeToVeoAspectRatio(), SizeToVeoResolution(), VeoResolutionRatio() (+27 more)
 
 ### Community 76 - "Community 76"
 Cohesion: 0.07
@@ -1790,8 +1801,8 @@ Cohesion: 0.06
 Nodes (54): ANNOUNCEMENT_LEGEND_DATA, CARD_PROPS, CHART_CONFIG, DEFAULT_CHART_SPECS, DEFAULT_TIME_INTERVALS, DEFAULT_TIME_RANGE, DEFAULTS, FORM_FIELD_PROPS (+46 more)
 
 ### Community 79 - "Community 79"
-Cohesion: 0.07
-Nodes (67): ConditionOperation, applyOperations(), applyOperationsLegacy(), AsParamOverrideReturnError(), buildParamOverrideAuditLine(), checkConditions(), checkSingleCondition(), collectWildcardPaths() (+59 more)
+Cohesion: 0.06
+Nodes (71): ConditionOperation, applyOperations(), applyOperationsLegacy(), AsParamOverrideReturnError(), buildLegacyParamOverride(), buildParamOverrideAuditLine(), checkConditions(), checkSingleCondition() (+63 more)
 
 ### Community 80 - "Community 80"
 Cohesion: 0.07
@@ -1802,56 +1813,56 @@ Cohesion: 0.09
 Nodes (27): ContextCacheUsage(), ContextCacheUsageProps, ContextContent(), ContextContentBody(), ContextContentBodyProps, ContextContentFooter(), ContextContentFooterProps, ContextContentHeader() (+19 more)
 
 ### Community 82 - "Community 82"
-Cohesion: 0.07
-Nodes (53): Certificate, generateMessageID(), getSMTPAuth(), Auth, Client, Config, newSMTPClient(), AutoSMTPAuth() (+45 more)
+Cohesion: 0.18
+Nodes (31): Certificate, generateMessageID(), getSMTPAuth(), Auth, Client, Config, newSMTPClient(), SendEmail() (+23 more)
 
 ### Community 83 - "Community 83"
 Cohesion: 0.07
 Nodes (28): CarouselApiContext, InlineCitation(), InlineCitationCardBody(), InlineCitationCardBodyProps, InlineCitationCardProps, InlineCitationCardTrigger(), InlineCitationCardTriggerProps, InlineCitationCarousel() (+20 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.09
-Nodes (7): eoe, parse(), Qu(), toe(), upe, xae, xu()
+Cohesion: 0.08
+Nodes (12): bu, Cu(), eoe, ku(), parse(), Qu(), Su(), toe() (+4 more)
 
 ### Community 85 - "Community 85"
-Cohesion: 0.05
-Nodes (63): accessConditionItem, CreateCustomOAuthProviderRequest, buildUserOAuthBindingsResponse(), CreateCustomOAuthProvider(), DeleteCustomOAuthProvider(), FetchCustomOAuthDiscovery(), GetCustomOAuthProvider(), GetCustomOAuthProviders() (+55 more)
+Cohesion: 0.06
+Nodes (57): accessConditionItem, CreateCustomOAuthProviderRequest, buildUserOAuthBindingsResponse(), CreateCustomOAuthProvider(), DeleteCustomOAuthProvider(), FetchCustomOAuthDiscovery(), GetCustomOAuthProvider(), GetCustomOAuthProviders() (+49 more)
 
 ### Community 86 - "Community 86"
 Cohesion: 0.10
-Nodes (18): CORS(), HandlerFunc, Version(), Engine, HandlerFunc, RouteTag(), SetUpLogger(), Engine (+10 more)
+Nodes (16): CORS(), HandlerFunc, Version(), Context, KlingRequestConvert(), Engine, HandlerFunc, RouteTag() (+8 more)
 
 ### Community 87 - "Community 87"
-Cohesion: 0.08
-Nodes (22): FALLBACK_PALETTE, MarketShareSection(), MarketShareSectionProps, PERIOD_DESCRIPTIONS, VENDOR_COLOURS, PageTransition(), PERIODS, RankingsHero() (+14 more)
+Cohesion: 0.05
+Nodes (41): EntityLinkBaseProps, ModelLink(), ModelLinkProps, VendorLink(), VendorLinkProps, GrowthText(), GrowthTextProps, FALLBACK_PALETTE (+33 more)
 
 ### Community 88 - "Community 88"
-Cohesion: 0.06
-Nodes (44): aliAnthropicMessagesModelPatterns(), isSyncImageModel(), supportsAliAnthropicMessages(), aliImageHandler(), asyncTaskWait(), getImageBase64sFromForm(), oaiFormEdit2AliImageEdit(), oaiImage2AliImageRequest() (+36 more)
+Cohesion: 0.08
+Nodes (27): aliAnthropicMessagesModelPatterns(), isSyncImageModel(), supportsAliAnthropicMessages(), isOldWanModel(), isWanModel(), oaiFormEdit2WanxImageEdit(), requestOpenAI2Ali(), Adaptor (+19 more)
 
 ### Community 89 - "Community 89"
 Cohesion: 0.07
 Nodes (24): FormatJsonSchema, FunctionRequest, GeneralOpenAIRequest, Input, MediaInput, MessageFile, MessageImageUrl, MessageInputAudio (+16 more)
 
 ### Community 90 - "Community 90"
-Cohesion: 0.29
-Nodes (21): AdminResetPasskey(), getSessionUser(), Context, User, PasskeyDelete(), PasskeyLoginBegin(), PasskeyLoginFinish(), PasskeyRegisterBegin() (+13 more)
+Cohesion: 0.08
+Nodes (44): AuthenticatorTransport, AdminResetPasskey(), getSessionUser(), Context, User, PasskeyDelete(), PasskeyLoginBegin(), PasskeyLoginFinish() (+36 more)
 
 ### Community 91 - "Community 91"
 Cohesion: 0.06
-Nodes (71): TestDoAwsClientRequest_AppliesRuntimeHeaderOverrideToAnthropicBeta(), TestConvertOpenAIResponsesRequestNormalizesCodexUpstreamContract(), TestRelayInfoGetFinalRequestRelayFormatFallsBackToConversionChain(), TestRelayInfoGetFinalRequestRelayFormatFallsBackToRelayFormat(), TestRelayInfoGetFinalRequestRelayFormatNilReceiver(), TestRelayInfoGetFinalRequestRelayFormatPrefersExplicitFinal(), T, TestBuildOpenAIModelFallsBackToCustomForUnknownModels() (+63 more)
+Nodes (72): TestConvertOpenAIResponsesRequestNormalizesCodexUpstreamContract(), TestDoResponseBuffersCodexSSEForNonStreamingClient(), TestDoResponsePropagatesCodexSSEFailure(), TestDoResponseRebuildsCodexOutputFromSSEDeltas(), TestRelayInfoGetFinalRequestRelayFormatFallsBackToConversionChain(), TestRelayInfoGetFinalRequestRelayFormatFallsBackToRelayFormat(), TestRelayInfoGetFinalRequestRelayFormatNilReceiver(), TestRelayInfoGetFinalRequestRelayFormatPrefersExplicitFinal() (+64 more)
 
 ### Community 92 - "Community 92"
-Cohesion: 0.02
-Nodes (220): DynamicPricingBreakdown(), DynamicPricingBreakdownProps, OP_LABELS, TIME_FUNC_LABELS, VAR_LABELS, IconCard(), IconCardProps, LoadingSkeleton() (+212 more)
+Cohesion: 0.05
+Nodes (57): DynamicPricingBreakdown(), DynamicPricingBreakdownProps, OP_LABELS, TIME_FUNC_LABELS, VAR_LABELS, BILLING_CONDITION_VARS, BILLING_EXTRA_VARS, BILLING_PRICING_VARS (+49 more)
 
 ### Community 93 - "Community 93"
-Cohesion: 0.07
-Nodes (53): GetDBTimestamp(), AdminBindSubscription(), AdminDeleteUserSubscription(), AdminInvalidateUserSubscription(), buildSubscriptionSummaries(), calcNextResetTime(), calcPlanEndTime(), calcSubscriptionBalanceQuota() (+45 more)
+Cohesion: 0.06
+Nodes (54): GetDBTimestamp(), AdminBindSubscription(), AdminDeleteUserSubscription(), AdminInvalidateUserSubscription(), buildSubscriptionSummaries(), calcNextResetTime(), calcPlanEndTime(), calcSubscriptionBalanceQuota() (+46 more)
 
 ### Community 94 - "Community 94"
-Cohesion: 0.07
-Nodes (47): BucketPoint, DeletePerfMetricsBefore(), GetPerfMetrics(), GetPerfMetricsSummaryAll(), GetPerfMetricsSummaryBucketsAll(), UpsertPerfMetric(), PerfMetric, PerfMetricSummary (+39 more)
+Cohesion: 0.08
+Nodes (45): BucketPoint, DeletePerfMetricsBefore(), GetPerfMetrics(), GetPerfMetricsSummaryAll(), GetPerfMetricsSummaryBucketsAll(), UpsertPerfMetric(), PerfMetric, PerfMetricSummary (+37 more)
 
 ### Community 95 - "Community 95"
 Cohesion: 0.08
@@ -1862,44 +1873,44 @@ Cohesion: 0.06
 Nodes (59): AsyncClient, FastAPI, HTTPBasicCredentials, RedirectResponse, Request, auth_check(), clean_code_fences(), _decode_session_via_helper() (+51 more)
 
 ### Community 97 - "Community 97"
-Cohesion: 0.09
-Nodes (57): $2e(), A2e(), ak(), B0e(), bk(), C2e(), ck(), d2e() (+49 more)
+Cohesion: 0.12
+Nodes (46): $2e(), A2e(), ak(), bk(), C2e(), ck(), d2e(), dk() (+38 more)
 
 ### Community 98 - "Community 98"
-Cohesion: 0.09
-Nodes (28): Reasoning, ReasoningContent, ReasoningContentProps, ReasoningContext, ReasoningContextValue, ReasoningProps, ReasoningTrigger, ReasoningTriggerProps (+20 more)
+Cohesion: 0.08
+Nodes (29): Reasoning, ReasoningContent, ReasoningContentProps, ReasoningContext, ReasoningContextValue, ReasoningProps, ReasoningTrigger, ReasoningTriggerProps (+21 more)
 
 ### Community 99 - "Community 99"
 Cohesion: 0.07
-Nodes (39): Adaptor, ClientMode, isNovaModel(), awsHandler(), awsModelCanCrossRegion(), awsModelCrossRegion(), awsStreamHandler(), buildAwsRequestBody() (+31 more)
+Nodes (41): Adaptor, ClientMode, isNovaModel(), awsHandler(), awsModelCanCrossRegion(), awsModelCrossRegion(), awsStreamHandler(), buildAwsRequestBody() (+33 more)
 
 ### Community 100 - "Community 100"
-Cohesion: 0.13
-Nodes (25): ApiCategory, apiCategoryOf(), APP_TEMPLATES, buildAppRankings(), buildGroupPerformance(), buildLatencyTimeSeries(), buildRateLimits(), buildSupportedParameters() (+17 more)
+Cohesion: 0.10
+Nodes (31): COMPACT_NUMBER, GrowthChip(), ModelDetailsApps(), RankBadge(), ApiCategory, apiCategoryOf(), APP_TEMPLATES, AppRanking (+23 more)
 
 ### Community 101 - "Community 101"
 Cohesion: 0.05
-Nodes (48): fonts, Direction, DirectionContext, DirectionContextType, DirectionProvider(), Font, FontContext, FontContextType (+40 more)
+Nodes (45): fonts, Direction, DirectionContext, DirectionContextType, DirectionProvider(), Font, FontContext, FontContextType (+37 more)
 
 ### Community 102 - "Community 102"
-Cohesion: 0.13
-Nodes (31): RelayMidjourney(), MidjourneyRequest, GetByMJId(), GetByOnlyMJId(), coverMidjourneyTaskDto(), getMjRequestPath(), Context, Midjourney (+23 more)
+Cohesion: 0.14
+Nodes (29): RelayMidjourney(), MidjourneyRequest, GetByMJId(), coverMidjourneyTaskDto(), getMjRequestPath(), Context, Midjourney, MidjourneyDto (+21 more)
 
 ### Community 103 - "Community 103"
 Cohesion: 0.03
 Nodes (58): dependencies, ai, auto-skeleton-react, axios, @base-ui/react, class-variance-authority, clsx, cmdk (+50 more)
 
 ### Community 104 - "Community 104"
-Cohesion: 0.08
-Nodes (45): SafeSendBool(), Context, init(), RelayCtxGo(), getScannerBufferSize(), NewStreamScanner(), StreamScannerHandler(), buildSSEBody() (+37 more)
+Cohesion: 0.09
+Nodes (40): SafeSendBool(), Context, init(), RelayCtxGo(), StreamScannerHandler(), buildSSEBody(), setupStreamTest(), TestStreamScannerHandler_1000Chunks() (+32 more)
 
 ### Community 105 - "Community 105"
 Cohesion: 0.04
-Nodes (15): bte(), die(), ene, fte, gte(), hoe, Koe, mte (+7 more)
+Nodes (17): bte(), die(), Dne(), ene, gte(), hoe, ine(), Koe (+9 more)
 
 ### Community 106 - "Community 106"
-Cohesion: 0.07
-Nodes (47): BillingSettler, BuildInToolInfo, ChannelMeta, ClaudeConvertInfo, cloneRequestHeaders(), FailTaskInfo(), genBaseRelayInfo(), GenRelayInfo() (+39 more)
+Cohesion: 0.08
+Nodes (46): BillingSettler, BuildInToolInfo, ChannelMeta, ClaudeConvertInfo, cloneRequestHeaders(), FailTaskInfo(), genBaseRelayInfo(), GenRelayInfo() (+38 more)
 
 ### Community 107 - "Community 107"
 Cohesion: 0.09
@@ -1914,16 +1925,16 @@ Cohesion: 0.11
 Nodes (27): Adaptor, applyAuthTemplate(), applyClaudeHeaders(), applyUpstreamPathTemplate(), incomingRequestPath(), isJSONRequest(), joinBaseURLAndUpstreamPath(), resolveUpstreamTargetURL() (+19 more)
 
 ### Community 110 - "Community 110"
-Cohesion: 0.10
-Nodes (51): UsedVars(), Rand, BuildTieredTokenParams(), RelayInfo, TieredResult, TokenParams, Usage, BenchmarkRatioBilling_Equivalent() (+43 more)
+Cohesion: 0.16
+Nodes (35): RelayInfo, TieredResult, BillingSnapshot, RelayInfo, T, makeRelayInfo(), makeSnapshot(), TestBuildTieredTokenParams_Claude_WithCache() (+27 more)
 
 ### Community 111 - "Community 111"
-Cohesion: 0.08
-Nodes (55): ClaudeResponseInfo, TestBuildMessageDeltaPatchUsage(), TestPatchClaudeMessageDeltaUsageDataPreserveUnknownFields(), TestPatchClaudeMessageDeltaUsageDataZeroValueChecks(), TestShouldSkipClaudeMessageDeltaUsagePatch(), buildMessageDeltaPatchUsage(), buildOpenAIStyleUsageFromClaudeUsage(), cacheCreationTokensForOpenAIUsage() (+47 more)
+Cohesion: 0.07
+Nodes (56): ClaudeResponseInfo, TestBuildMessageDeltaPatchUsage(), TestPatchClaudeMessageDeltaUsageDataPreserveUnknownFields(), TestPatchClaudeMessageDeltaUsageDataZeroValueChecks(), TestShouldSkipClaudeMessageDeltaUsagePatch(), buildMessageDeltaPatchUsage(), buildOpenAIStyleUsageFromClaudeUsage(), cacheCreationTokensForOpenAIUsage() (+48 more)
 
 ### Community 112 - "Community 112"
-Cohesion: 0.15
-Nodes (25): OverviewSummaryGrid(), ModelDetailsPerformance(), formatLatency(), formatThroughput(), formatUptimePct(), getSuccessRateColor(), getSuccessRateDotClass(), getSuccessRateLevel() (+17 more)
+Cohesion: 0.08
+Nodes (40): OverviewSummaryGrid(), average(), ModelDetailsPerformance(), PerformanceRow, StatCard(), toUptimePct(), toUptimeSeries(), SparklineSize (+32 more)
 
 ### Community 113 - "Community 113"
 Cohesion: 0.04
@@ -1931,27 +1942,27 @@ Nodes (53): fp(), gs(), hd(), ks, lc, oc, op(), qd (+45 more)
 
 ### Community 114 - "Community 114"
 Cohesion: 0.04
-Nodes (83): ReloadPolicy(), StartPolicySync(), ValidatePasswordAndHash(), ApiErrorI18n(), ApiSuccessI18n(), GenerateBackupCodes(), GenerateQRCodeData(), generateRandomBackupCode() (+75 more)
+Nodes (88): Init(), ReloadPolicy(), StartPolicySync(), ApiErrorI18n(), ApiSuccessI18n(), DeleteKey(), GenerateVerificationCode(), Time (+80 more)
 
 ### Community 115 - "Community 115"
-Cohesion: 0.13
-Nodes (25): IsValidateRole(), AdminAuth(), authHelper(), Context, Permission, RequirePermission(), RootAuth(), SetupContextForToken() (+17 more)
+Cohesion: 0.14
+Nodes (23): AdminAuth(), authHelper(), Context, Permission, RequirePermission(), RootAuth(), SetupContextForToken(), TokenAuth() (+15 more)
 
 ### Community 116 - "Community 116"
-Cohesion: 0.07
-Nodes (44): Context, VideoProxy(), videoProxyError(), writeVideoDataURL(), Notify, NewNotify(), GetRootUser(), DisableChannel() (+36 more)
+Cohesion: 0.09
+Nodes (38): Context, VideoProxy(), videoProxyError(), writeVideoDataURL(), Notify, NewNotify(), RelayMidjourneyImage(), DoDownloadRequest() (+30 more)
 
 ### Community 117 - "Community 117"
-Cohesion: 0.11
-Nodes (28): ensureIncompleteResponse(), ExtractOutputTextFromResponses(), ExtractReasoningTextFromResponses(), fallbackCallID(), fallbackToolKey(), FinalizeResponsesToChatStream(), isResponsesToolOutputType(), NewResponsesToChatStreamState() (+20 more)
+Cohesion: 0.06
+Nodes (53): chatToResponsesOutputRef, chatToResponsesStreamTool, chatArgumentsRawMessage(), ChatCompletionsResponseToResponsesResponse(), ChatCompletionsStreamChunkToResponsesEvents(), chatToolCallToResponsesOutput(), FinalizeChatCompletionsStreamToResponses(), intPtr() (+45 more)
 
 ### Community 118 - "Community 118"
 Cohesion: 0.06
-Nodes (31): Any2Type(), Bytes2Size(), GenerateKey(), GenerateRandomCharsKey(), GetIp(), GetTimeString(), Reader, T (+23 more)
+Nodes (32): GetRandomString(), Any2Type(), Bytes2Size(), GenerateKey(), GenerateRandomCharsKey(), GetIp(), GetTimeString(), Reader (+24 more)
 
 ### Community 119 - "Community 119"
-Cohesion: 0.07
-Nodes (35): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+27 more)
+Cohesion: 0.08
+Nodes (28): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+20 more)
 
 ### Community 120 - "Community 120"
 Cohesion: 0.06
@@ -1966,8 +1977,8 @@ Cohesion: 0.08
 Nodes (39): SecureVerificationDialogProps, UsePasskeyManagementOptions, ApiCall, defaultMethods, initialState, InternalState, get2FAStatus(), arrayBufferToBase64Url() (+31 more)
 
 ### Community 123 - "Community 123"
-Cohesion: 0.08
-Nodes (71): UnmarshalJsonStr(), GetPointer(), GetLatestCodexCatalogSnapshot(), applyCodexDiscoveryLimits(), codexCatalogCandidateModelIDs(), codexCatalogModelsAfterFailedPromotion(), codexCatalogSignature(), codexCatalogStorageReady() (+63 more)
+Cohesion: 0.07
+Nodes (74): FindCodexCatalogCandidate(), GetCodexCatalogCandidatesByChannel(), GetLatestCodexCatalogSnapshot(), GetPromotedCodexCatalogCandidatesByChannel(), DeletedAt, CodexCatalogCandidate, CodexCatalogSnapshot, applyCodexDiscoveryLimits() (+66 more)
 
 ### Community 124 - "Community 124"
 Cohesion: 0.09
@@ -1975,7 +1986,7 @@ Nodes (31): Adaptor, checkIfChatComplete(), convertCozeChatRequest(), cozeChatHa
 
 ### Community 125 - "Community 125"
 Cohesion: 0.08
-Nodes (43): UseChatHandlerOptions, DEFAULT_CONFIG, DEFAULT_GROUP, DEFAULT_PARAMETER_ENABLED, MESSAGE_ACTION_BUTTON_STYLES, MESSAGE_ACTION_LABELS, STORAGE_KEYS, ParameterEnabled (+35 more)
+Nodes (44): UseChatHandlerOptions, useMessageActionGuard(), DEFAULT_CONFIG, DEFAULT_GROUP, DEFAULT_PARAMETER_ENABLED, MESSAGE_ACTION_BUTTON_STYLES, MESSAGE_ACTION_LABELS, STORAGE_KEYS (+36 more)
 
 ### Community 126 - "Community 126"
 Cohesion: 0.08
@@ -1987,35 +1998,35 @@ Nodes (34): AWS_BEDROCK_ANTHROPIC_COMPAT_TEMPLATE, CLAUDE_CLI_HEADER_PASSTHROUGH
 
 ### Community 128 - "Community 128"
 Cohesion: 0.07
-Nodes (9): bce, Dne(), IK, jK, JSXElement(), JSXEscape(), Qce(), Qk() (+1 more)
+Nodes (27): extractModelFromOperationName(), ExtractMultipartImage(), parseDataURI(), ParseImageInput(), TaskAdaptor, GetGeminiVersionSetting(), BaseBilling, Context (+19 more)
 
 ### Community 129 - "Community 129"
-Cohesion: 0.04
-Nodes (81): BillingSetting, GetBillingExpr(), GetBillingExprCopy(), GetBillingMode(), GetBillingModeCopy(), GetPricingSyncData(), SmokeTestExpr(), GetRatioConfig() (+73 more)
+Cohesion: 0.10
+Nodes (27): GetDefaultEndpointInfo(), EndpointType, EndpointInfo, T, TestPatchDollarCostPricesPreservesUnrelatedModelsAndIsIdempotent(), Pricing, GetModelSupportEndpointTypes(), GetPricing() (+19 more)
 
 ### Community 130 - "Community 130"
-Cohesion: 0.08
-Nodes (30): Adaptor, cohereHandler(), cohereRerankHandler(), cohereStreamHandler(), requestConvertRerank2Cohere(), requestOpenAI2Cohere(), stopReasonCohere2OpenAI(), CohereRequest (+22 more)
+Cohesion: 0.10
+Nodes (19): Adaptor, requestConvertRerank2Cohere(), requestOpenAI2Cohere(), CohereRequest, CohereRerankRequest, AudioRequest, ClaudeRequest, Context (+11 more)
 
 ### Community 131 - "Community 131"
 Cohesion: 0.02
-Nodes (176): createChannelColumn(), createDurationColumn(), createFailReasonColumn(), createProgressColumn(), buildDetailSegments(), DetailSegment, formatRatioCompact(), getGroupRatioText() (+168 more)
+Nodes (186): createChannelColumn(), createDurationColumn(), createFailReasonColumn(), createProgressColumn(), buildDetailSegments(), DetailSegment, formatRatioCompact(), getGroupRatioText() (+178 more)
 
 ### Community 132 - "Community 132"
-Cohesion: 0.15
-Nodes (23): getAffiliateCode(), redeemTopupCode(), transferAffiliateQuota(), AffiliateCodeResponse, AffiliateTransferRequest, AffiliateTransferResponse, AmountRequest, AmountResponse (+15 more)
+Cohesion: 0.03
+Nodes (88): AffiliateRewardsCard(), AffiliateRewardsCardProps, CreemProductsSectionProps, RechargeFormCard(), RechargeFormCardProps, WalletStatsCard(), WalletStatsCardProps, BillingHistoryDialog() (+80 more)
 
 ### Community 133 - "Community 133"
-Cohesion: 0.13
-Nodes (28): UpdateChannelUsedQuota(), UpdateUserUsedQuotaAndRequestCount(), GetAudioCompletionRatio(), GetAudioRatio(), GetCompletionRatio(), Context, NewAPIError, RelayInfo (+20 more)
+Cohesion: 0.06
+Nodes (71): BillingSetting, GetBillingExpr(), GetBillingExprCopy(), GetBillingMode(), GetBillingModeCopy(), GetPricingSyncData(), SmokeTestExpr(), GroupRatioInfo (+63 more)
 
 ### Community 134 - "Community 134"
-Cohesion: 0.08
-Nodes (29): Credentials, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+21 more)
+Cohesion: 0.10
+Nodes (21): Credentials, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+13 more)
 
 ### Community 135 - "Community 135"
-Cohesion: 0.03
-Nodes (109): acceptToken(), addActions(), _addGap(), advance(), advanceFully(), advanceStack(), allActions(), allows() (+101 more)
+Cohesion: 0.06
+Nodes (24): Route, Route, Route, Route, Route, BillingSettings(), Route, Route (+16 more)
 
 ### Community 136 - "Community 136"
 Cohesion: 0.04
@@ -2030,16 +2041,16 @@ Cohesion: 0.16
 Nodes (12): GetRandomInt(), Ability, filterAbilitiesByRequestPath(), GetAllEnableAbilityWithChannels(), GetChannel(), getChannelQuery(), getPriority(), Channel (+4 more)
 
 ### Community 139 - "Community 139"
-Cohesion: 0.09
-Nodes (23): Conversation(), ConversationContent(), ConversationContentProps, ConversationEmptyState(), ConversationEmptyStateProps, ConversationProps, ConversationScrollButton(), ConversationScrollButtonProps (+15 more)
+Cohesion: 0.11
+Nodes (18): Conversation(), ConversationContent(), ConversationContentProps, ConversationEmptyState(), ConversationEmptyStateProps, ConversationProps, ConversationScrollButton(), ConversationScrollButtonProps (+10 more)
 
 ### Community 140 - "Community 140"
-Cohesion: 0.08
-Nodes (17): AutoGroupList(), flattenRules(), GroupGroupRatioRules(), nestRules(), serializeGroupGroupRatio(), uid(), flattenRules(), GroupSpecialUsableRules() (+9 more)
+Cohesion: 0.06
+Nodes (23): AutoGroupList(), flattenRules(), GroupGroupRatioRules(), nestRules(), serializeGroupGroupRatio(), uid(), flattenRules(), GroupSpecialUsableRules() (+15 more)
 
 ### Community 141 - "Community 141"
-Cohesion: 0.12
-Nodes (27): EndpointInfo, decodeDollarCostPriceMap(), isOptionWriteRetryableError(), normalizeDollarCostOptionKeys(), PatchDollarCostPrices(), validateDollarCostPricePatches(), DollarCostPrice, Option (+19 more)
+Cohesion: 0.05
+Nodes (55): Context, MigrateConsoleSetting(), getLocalPricingSyncData(), IsChannelEnabledForAnyGroupModel(), IsChannelEnabledForGroupModel(), isChannelEnabledForGroupModelDB(), isChannelIDInList(), InitOptionMap() (+47 more)
 
 ### Community 142 - "Community 142"
 Cohesion: 0.07
@@ -2050,32 +2061,32 @@ Cohesion: 0.18
 Nodes (29): GetJsonType(), Interface2String(), appendToolCallToLastAssistant(), rawJSONPresent(), responsesArgumentsString(), responsesCallID(), responsesContentPartsToChatContent(), responsesCustomToolCallItemToChatToolCall() (+21 more)
 
 ### Community 144 - "Community 144"
-Cohesion: 0.02
-Nodes (71): ac(), accept(), aoe(), are(), atIndentedComment(), blockMap(), blockScalar(), blockSequence() (+63 more)
+Cohesion: 0.03
+Nodes (36): At(), beforeUpdate(), Cl, delete(), ES(), fu, hl(), ic() (+28 more)
 
 ### Community 145 - "Community 145"
-Cohesion: 0.11
-Nodes (28): attrs(), cot(), Cz(), dot(), fot(), getChild(), getChildren(), hdn() (+20 more)
+Cohesion: 0.15
+Nodes (26): RedisHSetField(), RedisKeyCacheSeconds(), cacheDecrUserQuota(), cacheGetUserBase(), cacheIncrUserQuota(), GetUserCache(), getUserCacheKey(), getUserGroupCache() (+18 more)
 
 ### Community 146 - "Community 146"
-Cohesion: 0.20
-Nodes (47): Log, Context, Task, RecalculateTaskQuota(), RecalculateTaskQuotaByTokens(), RefundTaskQuota(), resolveTokenKey(), taskAdjustFunding() (+39 more)
+Cohesion: 0.31
+Nodes (34): Log, countLogs(), getLastLog(), getSubscriptionUsed(), getTokenRemainQuota(), getTokenUsedQuota(), getUserQuota(), Context (+26 more)
 
 ### Community 147 - "Community 147"
-Cohesion: 0.10
-Nodes (35): GetAllUnFinishSyncTasks(), GetTimedOutUnfinishedTasks(), TaskBulkUpdateByID(), DispatchPlatformUpdate(), Channel, Context, SunoDataResponse, Task (+27 more)
+Cohesion: 0.11
+Nodes (35): GetAllUnFinishSyncTasks(), TaskBulkUpdateByID(), DispatchPlatformUpdate(), Channel, Context, SunoDataResponse, Task, TaskInfo (+27 more)
 
 ### Community 148 - "Community 148"
 Cohesion: 0.10
-Nodes (42): Decimal, prefixEntry, toolPriceIndex, ToolPriceSetting, GetGeminiInputAudioPricePerMillionTokens(), GetGPTImage1PriceOnceCall(), GetToolPrice(), GetToolPriceForModel() (+34 more)
+Nodes (39): Decimal, prefixEntry, toolPriceIndex, ToolPriceSetting, GetGeminiInputAudioPricePerMillionTokens(), GetGPTImage1PriceOnceCall(), GetToolPrice(), GetToolPriceForModel() (+31 more)
 
 ### Community 149 - "Community 149"
 Cohesion: 0.15
-Nodes (30): AIProxyUserOverviewResponse, APGC2DGPTUsageResponse, API2GPTUsageResponse, AutomaticallyUpdateChannels(), GetAuthHeader(), GetClaudeAuthHeader(), GetResponseBody(), Channel (+22 more)
+Nodes (31): AIProxyUserOverviewResponse, APGC2DGPTUsageResponse, API2GPTUsageResponse, AutomaticallyUpdateChannels(), GetAuthHeader(), GetClaudeAuthHeader(), GetResponseBody(), Channel (+23 more)
 
 ### Community 150 - "Community 150"
-Cohesion: 0.07
-Nodes (23): creation, Context, RelayInfo, Task, TaskInfo, BaseBilling, Context, Reader (+15 more)
+Cohesion: 0.08
+Nodes (31): HasImage, HasPrompt, createTaskError(), GetAPIVersion(), GetTaskRequest(), isKnownTaskField(), storeTaskRequest(), ValidateBasicTaskRequest() (+23 more)
 
 ### Community 151 - "Community 151"
 Cohesion: 0.05
@@ -2090,8 +2101,8 @@ Cohesion: 0.16
 Nodes (14): NotificationSettings(), deepClone(), DEFAULT_ADMIN_CONFIG, mergeAdminConfig(), sidebarEventTarget, useSidebar(), useUserPermissions(), renderQuotaWithPrompt() (+6 more)
 
 ### Community 154 - "Community 154"
-Cohesion: 0.09
-Nodes (21): Adaptor, CommonClaudeHeadersOperation(), shouldAppendClaudeBetaQuery(), GetClaudeSettings(), normalizeHeaderListValues(), ClaudeSettings, AudioRequest, ClaudeRequest (+13 more)
+Cohesion: 0.12
+Nodes (17): Adaptor, CommonClaudeHeadersOperation(), shouldAppendClaudeBetaQuery(), AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest (+9 more)
 
 ### Community 155 - "Community 155"
 Cohesion: 0.05
@@ -2111,35 +2122,35 @@ Nodes (39): 10. ensure_suffix - 确保后缀, 11. trim_space - 去除首尾空�
 
 ### Community 159 - "Community 159"
 Cohesion: 0.13
-Nodes (37): applyHeaderOverridePlaceholders(), applyHeaderOverrideToRequest(), applyUpstreamContentLength(), DoApiRequest(), DoFormRequest(), DoRequest(), DoTaskApiRequest(), DoWssRequest() (+29 more)
+Nodes (36): applyHeaderOverridePlaceholders(), applyHeaderOverrideToRequest(), applyUpstreamContentLength(), DoApiRequest(), DoFormRequest(), DoRequest(), DoTaskApiRequest(), DoWssRequest() (+28 more)
 
 ### Community 160 - "Community 160"
-Cohesion: 0.14
-Nodes (26): GeminiBatchEmbeddingRequest, GeminiEmbeddingRequest, GetAndValidateClaudeRequest(), GetAndValidateEmbeddingRequest(), GetAndValidateGeminiBatchEmbeddingRequest(), GetAndValidateGeminiEmbeddingRequest(), GetAndValidateGeminiRequest(), GetAndValidateRequest() (+18 more)
+Cohesion: 0.03
+Nodes (103): DataTableColumnHeader(), AmountDiscountData, AmountDiscountDialog(), createAmountDiscountDialogSchema(), AmountDiscountVisualEditor(), AmountDiscountVisualEditorProps, AmountOptionsVisualEditor(), AmountOptionsVisualEditorProps (+95 more)
 
 ### Community 161 - "Community 161"
-Cohesion: 0.05
-Nodes (10): Hee, Jee(), m8(), nae, Ofe(), tne, Vee(), Wee() (+2 more)
+Cohesion: 0.06
+Nodes (9): Hee, Jee(), nae, Ofe(), tne, Vee(), Wee(), yme() (+1 more)
 
 ### Community 162 - "Community 162"
-Cohesion: 0.07
-Nodes (32): Adaptor, DeleteOllamaModel(), FetchOllamaModels(), ollamaEmbeddingHandler(), openAIChatToOllamaChat(), openAIToGenerate(), requestOpenAI2Embeddings(), OllamaChatRequest (+24 more)
+Cohesion: 0.09
+Nodes (24): Adaptor, openAIChatToOllamaChat(), openAIToGenerate(), requestOpenAI2Embeddings(), OllamaChatRequest, OllamaEmbeddingRequest, OllamaGenerateRequest, AudioRequest (+16 more)
 
 ### Community 163 - "Community 163"
 Cohesion: 0.05
 Nodes (38): dependencies, axios, clsx, date-fns, dayjs, @douyinfe/semi-icons, @douyinfe/semi-ui, history (+30 more)
 
 ### Community 164 - "Community 164"
-Cohesion: 0.09
-Nodes (35): NewOpenAIVideo(), OpenAIVideo, OpenAIVideoError, GetByTaskId(), OpenAIVideoError, GetTaskAdaptor(), GetTaskPlatform(), Context (+27 more)
+Cohesion: 0.13
+Nodes (31): GetByTaskId(), GetTaskAdaptor(), GetTaskPlatform(), Context, TaskAdaptor, TaskPlatform, detectVideoFormat(), Context (+23 more)
 
 ### Community 165 - "Community 165"
-Cohesion: 0.12
-Nodes (23): ResetDiskCacheStats(), DiskCacheInfo, LogFileInfo, LogFilesResponse, MemoryStats, CleanupLogFiles(), ClearDiskCache(), ForceGC() (+15 more)
+Cohesion: 0.08
+Nodes (34): CleanupOldCacheFiles(), CleanupOldDiskCacheFiles(), ResetDiskCacheStats(), CreateDiskCacheFile(), EnsureDiskCacheDir(), GetDiskCacheDir(), GetDiskCacheInfo(), Duration (+26 more)
 
 ### Community 166 - "Community 166"
-Cohesion: 0.11
-Nodes (17): EntityLinkBaseProps, ModelLink(), ModelLinkProps, VendorLink(), VendorLinkProps, GrowthText(), GrowthTextProps, ModelLeaderboard() (+9 more)
+Cohesion: 0.03
+Nodes (92): Task(), TaskContent(), TaskContentProps, TaskItem(), TaskItemFile(), TaskItemFileProps, TaskItemProps, TaskProps (+84 more)
 
 ### Community 167 - "Community 167"
 Cohesion: 0.05
@@ -2151,43 +2162,43 @@ Nodes (37): 10.1 JWT Settings, 10.2 OAuth Providers, 10. Auth Configuration, 11.
 
 ### Community 169 - "Community 169"
 Cohesion: 0.11
-Nodes (37): GetChannelTypeName(), ChannelSpecialBase, attachTestBillingRequestInput(), buildTestLogOther(), buildTestRequest(), coerceTestUsage(), detectErrorFromTestResponseBody(), detectErrorMessageFromJSONBytes() (+29 more)
+Nodes (35): ChannelType2APIType(), GetChannelTypeName(), ChannelSpecialBase, attachTestBillingRequestInput(), buildTestLogOther(), buildTestRequest(), coerceTestUsage(), detectErrorFromTestResponseBody() (+27 more)
 
 ### Community 170 - "Community 170"
-Cohesion: 0.11
-Nodes (30): isCreemTopUpEnabled(), isCreemWebhookConfigured(), isCreemWebhookEnabled(), isEpayTopUpEnabled(), isEpayWebhookConfigured(), isEpayWebhookEnabled(), isPaymentComplianceConfirmed(), isStripeTopUpEnabled() (+22 more)
+Cohesion: 0.07
+Nodes (49): TopupGroupRatio2JSONString(), UpdateTopupGroupRatioByJSONString(), createWaffoPancakePairRequest, createWaffoPancakeSubscriptionProductRequest, isCreemTopUpEnabled(), isCreemWebhookConfigured(), isCreemWebhookEnabled(), isEpayTopUpEnabled() (+41 more)
 
 ### Community 172 - "Community 172"
-Cohesion: 0.09
-Nodes (37): OaiResponsesToChatBufferedStreamHandler(), OaiResponsesToChatHandler(), OaiResponsesToChatStreamHandler(), ClaudeStopReasonToOpenAIFinishReason(), OpenAIFinishReasonToClaudeStopReason(), Context, NewAPIError, RelayInfo (+29 more)
+Cohesion: 0.12
+Nodes (24): ClaudeStopReasonToOpenAIFinishReason(), OpenAIFinishReasonToClaudeStopReason(), buildClaudeUsageFromOpenAIUsage(), ClaudeToOpenAIRequest(), convertGeminiRoleToOpenAI(), extractTextFromGeminiParts(), GeminiToOpenAIRequest(), generateStopBlock() (+16 more)
 
 ### Community 173 - "Community 173"
-Cohesion: 0.09
-Nodes (35): chatToResponsesOutputRef, chatToResponsesStreamTool, OaiChatToResponsesHandler(), OaiChatToResponsesStreamHandler(), Context, NewAPIError, RelayInfo, Response (+27 more)
+Cohesion: 0.11
+Nodes (22): AdvancedCustomAuthType, AdvancedCustomConfig, AdvancedCustomConverter, AdvancedCustomRoute, AdvancedCustomEditMode, AdvancedCustomEditorDialogProps, FieldBlock(), getOptionLabel() (+14 more)
 
 ### Community 174 - "Community 174"
-Cohesion: 0.10
-Nodes (26): addActive(), addToNumericResult(), b8e(), cut(), decorate(), emitNamedEntityData(), emitNotTerminatedNamedEntity(), emitNumericEntity() (+18 more)
+Cohesion: 0.01
+Nodes (311): bQ(), hz(), nq(), pq(), wF(), WQ(), $4(), $7t() (+303 more)
 
 ### Community 175 - "Community 175"
-Cohesion: 0.08
-Nodes (22): BoolValue, hasVideoInMetadata(), GetVideoInputRatio(), ContentItem, MediaURL, requestPayload, responsePayload, responseTask (+14 more)
+Cohesion: 0.09
+Nodes (21): BoolValue, hasVideoInMetadata(), GetVideoInputRatio(), ContentItem, MediaURL, requestPayload, responsePayload, responseTask (+13 more)
 
 ### Community 176 - "Community 176"
 Cohesion: 0.12
 Nodes (35): GenerateHMAC(), DecrementDiskFiles(), IncrementDiskFiles(), FileType, LocalFileData, GetFileBase64FromUrl(), GetFileTypeFromUrl(), GetMimeTypeByExtension() (+27 more)
 
 ### Community 177 - "Community 177"
-Cohesion: 0.13
-Nodes (32): flowQuotaResponse, decodeFlowQuotaResponse(), ResponseRecorder, T, setupFlowControllerTestDB(), TestGetAllFlowQuotaDatesUsesAdminDimensions(), TestGetAllFlowQuotaDatesUsesRootDimensions(), TestGetUserFlowQuotaDatesRejectsInvalidTimeRange() (+24 more)
+Cohesion: 0.24
+Nodes (17): flowQuotaResponse, decodeFlowQuotaResponse(), ResponseRecorder, T, setupFlowControllerTestDB(), TestGetAllFlowQuotaDatesUsesAdminDimensions(), TestGetAllFlowQuotaDatesUsesRootDimensions(), TestGetUserFlowQuotaDatesRejectsInvalidTimeRange() (+9 more)
 
 ### Community 178 - "Community 178"
 Cohesion: 0.08
 Nodes (19): convertUSDToCurrency(), DeleteUserModal(), DemoteUserModal(), EnableDisableUserModal(), PromoteUserModal(), ResetPasskeyModal(), ResetTwoFAModal(), UserSubscriptionsModal() (+11 more)
 
 ### Community 179 - "Community 179"
-Cohesion: 0.09
-Nodes (41): KNOWN_ERROR_MESSAGES, PendingStreamChunks, useChatHandler(), useStreamRequest(), getDisplayContent(), getMessageContentState(), MessageContentState, MessageContentStateBase (+33 more)
+Cohesion: 0.08
+Nodes (43): KNOWN_ERROR_MESSAGES, PendingStreamChunks, AttachmentAction, getAttachmentActionNotice(), getSearchActionNotice(), InputToolNotice, getDisplayContent(), getMessageContentState() (+35 more)
 
 ### Community 180 - "Community 180"
 Cohesion: 0.11
@@ -2198,12 +2209,12 @@ Cohesion: 0.15
 Nodes (31): cmd_build(), cmd_build_image(), cmd_cli(), cmd_compose_build(), cmd_compose_down(), cmd_compose_up(), cmd_inspect_limits(), cmd_omni_run() (+23 more)
 
 ### Community 182 - "Community 182"
-Cohesion: 0.12
-Nodes (34): RefreshCodexChannelCredential(), Context, SyncCodexCatalog(), codexCatalogSyncRequest, BuildCodexCredentialMetadata(), ClassifyCodexCredentialIssue(), ClassifyCodexUpstreamResponse(), ClearCodexCredentialAuthIssue() (+26 more)
+Cohesion: 0.10
+Nodes (39): Context, SyncCodexCatalog(), fetchCodexChannelWhamData(), GetCodexChannelRateLimitResetCredits(), GetCodexChannelUsage(), Context, ResetCodexChannelUsage(), codexCatalogSyncRequest (+31 more)
 
 ### Community 183 - "Community 183"
-Cohesion: 0.11
-Nodes (19): checkMjTaskNeedUpdate(), GetAllMidjourney(), GetUserMidjourney(), Context, Midjourney, MidjourneyDto, midjourneyPollSummary, Midjourney (+11 more)
+Cohesion: 0.08
+Nodes (33): LoadingSkeleton(), LoadingSkeletonProps, countBy(), PricingSidebar(), FilterState, normalizeViewMode(), useFilters(), usePricingData() (+25 more)
 
 ### Community 184 - "Community 184"
 Cohesion: 0.06
@@ -2222,8 +2233,8 @@ Cohesion: 0.06
 Nodes (34): API Description, API Description, API Overview, API Overview, API Usage Guide, Asynchronous Long-Text Speech Generation (T2A Async), Available Interfaces, Capacity and Limits (+26 more)
 
 ### Community 188 - "Community 188"
-Cohesion: 0.08
-Nodes (52): BodyStorage, CodexCatalogMetadata, ApiError(), CleanupBodyStorage(), GetBodyStorage(), GetContextKey(), GetContextKeyBool(), GetContextKeyInt() (+44 more)
+Cohesion: 0.18
+Nodes (18): parseAdvancedCustomConfig(), buildSettingJSON(), buildSettingsJSON(), CHANNEL_FORM_DEFAULT_VALUES, channelFormSchema, formatGroups(), isCodexCredential(), isJsonObjectValue() (+10 more)
 
 ### Community 189 - "Community 189"
 Cohesion: 0.11
@@ -2238,12 +2249,12 @@ Cohesion: 0.16
 Nodes (14): BoundChannel, Model, GetAllModels(), GetBoundChannelsByModelsMap(), GetPreferredModelOwnerChannelTypes(), GetVendorModelCounts(), DeletedAt, normalizeLookupValues() (+6 more)
 
 ### Community 192 - "Community 192"
-Cohesion: 0.10
-Nodes (18): isNewAPIRelay(), CameraConfig, CameraControl, DynamicMask, requestPayload, responsePayload, TaskAdaptor, TrajectoryPoint (+10 more)
+Cohesion: 0.11
+Nodes (17): isNewAPIRelay(), CameraConfig, CameraControl, DynamicMask, requestPayload, responsePayload, TaskAdaptor, TrajectoryPoint (+9 more)
 
 ### Community 193 - "Community 193"
-Cohesion: 0.27
-Nodes (16): HasImage, HasPrompt, createTaskError(), GetAPIVersion(), GetTaskRequest(), isKnownTaskField(), storeTaskRequest(), ValidateBasicTaskRequest() (+8 more)
+Cohesion: 0.14
+Nodes (5): hE(), K9, wE(), Y9(), ZE()
 
 ### Community 194 - "Community 194"
 Cohesion: 0.10
@@ -2254,8 +2265,8 @@ Cohesion: 0.06
 Nodes (31): admin.atius.com.br.conf, all *.atius.com.br, Apache Proxy Config (SSO Context), API Client, AUTH — Atius (this repo), Auth Context, Auth Flow (End-to-End), Backend Routes (Fastify) (+23 more)
 
 ### Community 197 - "Community 197"
-Cohesion: 0.13
-Nodes (18): GetConsoleSetting(), ConsoleSetting, normalizeAPIInfoList(), TestDefaultAPIInfoIsValidAndIncludesResponses(), TestNormalizeAPIInfoListDoesNotDuplicateResponses(), TestNormalizeAPIInfoListInjectsResponsesAfterOpenAICompatible(), defaultAPIInfoEntry, GetAnnouncements() (+10 more)
+Cohesion: 0.14
+Nodes (23): GetConsoleSetting(), ConsoleSetting, normalizeAPIInfoList(), TestDefaultAPIInfoIsValidAndIncludesResponses(), TestNormalizeAPIInfoListDoesNotDuplicateResponses(), TestNormalizeAPIInfoListInjectsResponsesAfterOpenAICompatible(), defaultAPIInfoEntry, checkDangerousContent() (+15 more)
 
 ### Community 198 - "Community 198"
 Cohesion: 0.06
@@ -2266,8 +2277,8 @@ Cohesion: 0.12
 Nodes (17): Adaptor, applyDeepSeekV4ClaudeThinkingSuffix(), applyDeepSeekV4OpenAIThinkingSuffix(), AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest (+9 more)
 
 ### Community 200 - "Community 200"
-Cohesion: 0.11
-Nodes (17): imageRequestPayload, LogoInfo, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest (+9 more)
+Cohesion: 0.09
+Nodes (23): imageRequestPayload, LogoInfo, getPayloadHash(), hmacSHA256(), SetPayloadHash(), Sign(), AudioRequest, ClaudeRequest (+15 more)
 
 ### Community 201 - "Community 201"
 Cohesion: 0.08
@@ -2278,8 +2289,8 @@ Cohesion: 0.13
 Nodes (28): DecodeJson(), Reader, modelsDevCandidate, modelsDevCost, modelsDevModel, modelsDevProvider, asFloat64(), buildDifferences() (+20 more)
 
 ### Community 203 - "Community 203"
-Cohesion: 0.12
-Nodes (23): DiscoveryButton(), DiscoveryButtonProps, ProviderFormDialog(), ProviderTable(), ApiResponse, createCustomOAuthProvider(), deleteCustomOAuthProvider(), discoverOIDCEndpoints() (+15 more)
+Cohesion: 0.03
+Nodes (120): ConfirmDialogProps, useDeploymentsColumns(), DeploymentsTable(), route, DiscoveryButton(), DiscoveryButtonProps, PasskeyCard(), PasskeyCardProps (+112 more)
 
 ### Community 204 - "Community 204"
 Cohesion: 0.18
@@ -2298,16 +2309,16 @@ Cohesion: 0.10
 Nodes (13): TaskAdaptor, ModelConfig, BaseBilling, Context, Reader, RelayInfo, Request, Response (+5 more)
 
 ### Community 208 - "Community 208"
-Cohesion: 0.08
-Nodes (38): PlaygroundChatProps, useMessageActionGuard(), UsePlaygroundConversationOptions, appendUserMessagePair(), applyMessageEdit(), ApplyMessageEditResult, ChatMessageRenderState, createRegeneratedMessages() (+30 more)
+Cohesion: 0.10
+Nodes (27): UsePlaygroundConversationOptions, appendUserMessagePair(), applyMessageEdit(), ApplyMessageEditResult, ChatMessageRenderState, createRegeneratedMessages(), getChatMessageRenderState(), getEditingMessageContent() (+19 more)
 
 ### Community 209 - "Community 209"
 Cohesion: 0.13
 Nodes (4): Ib(), jb(), Nb(), Ub()
 
 ### Community 210 - "Community 210"
-Cohesion: 0.12
-Nodes (16): Adaptor, isHighspeedModel(), AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest (+8 more)
+Cohesion: 0.08
+Nodes (28): Adaptor, isHighspeedModel(), aspectRatioFromImageRequest(), gcd(), normalizeMiniMaxResponseFormat(), oaiImage2MiniMaxImageRequest(), parseImageSize(), reduceAspectRatio() (+20 more)
 
 ### Community 211 - "Community 211"
 Cohesion: 0.06
@@ -2326,8 +2337,8 @@ Cohesion: 0.06
 Nodes (30): New API, 🌟 Star History, 上游項目, ✨ 主要特性, 使用 Docker Compose（推薦）, ⚠️ 多機部署注意事項, 📖 [官方文件](https://docs.newapi.pro/zh/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api), 💬 幫助支援 (+22 more)
 
 ### Community 215 - "Community 215"
-Cohesion: 0.07
-Nodes (33): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+25 more)
+Cohesion: 0.11
+Nodes (16): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+8 more)
 
 ### Community 216 - "Community 216"
 Cohesion: 0.17
@@ -2346,12 +2357,12 @@ Cohesion: 0.12
 Nodes (15): Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+7 more)
 
 ### Community 220 - "Community 220"
-Cohesion: 0.07
-Nodes (33): CfRequest, Adaptor, cfHandler(), cfStreamHandler(), cfSTTHandler(), convertCf2CompletionsRequest(), OaiResponsesHandler(), OaiResponsesStreamHandler() (+25 more)
+Cohesion: 0.11
+Nodes (16): CfRequest, Adaptor, convertCf2CompletionsRequest(), AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest (+8 more)
 
 ### Community 221 - "Community 221"
-Cohesion: 0.11
-Nodes (16): average(), PerformanceRow, StatCard(), toUptimePct(), toUptimeSeries(), SparklineSize, UptimeSparkline(), UptimeSparklineProps (+8 more)
+Cohesion: 0.09
+Nodes (40): ModelCardGrid(), ModelCardGridProps, ModelCard, ModelCardProps, ModelDetailsContent(), ModelDetailsDrawer(), formatCompactLatency(), formatCompactNumber() (+32 more)
 
 ### Community 222 - "Community 222"
 Cohesion: 0.15
@@ -2362,24 +2373,24 @@ Cohesion: 0.07
 Nodes (29): API Memory Leaks, Backtest (divap_backtest.py), Browser Automation (MEXC), CONCERNS — Atius Monorepo, Database Connection Limits, Database Schema Churn, DB Queue Deadlock, Dual Database Pools (+21 more)
 
 ### Community 224 - "Community 224"
-Cohesion: 0.11
-Nodes (17): Adaptor, ParseOAuthKey(), OAuthKey, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest (+9 more)
+Cohesion: 0.12
+Nodes (15): Adaptor, ParseOAuthKey(), OAuthKey, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest (+7 more)
 
 ### Community 225 - "Community 225"
 Cohesion: 0.13
-Nodes (14): GetTheme(), ThemeAwarePath(), EmbedFolder(), File, FS, NewThemeAwareFS(), embedFileSystem, themeAwareFileSystem (+6 more)
+Nodes (15): GetTheme(), IsValidateRole(), ThemeAwarePath(), EmbedFolder(), File, FS, NewThemeAwareFS(), embedFileSystem (+7 more)
 
 ### Community 226 - "Community 226"
-Cohesion: 0.12
-Nodes (15): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+7 more)
+Cohesion: 0.13
+Nodes (13): AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header, ImageRequest (+5 more)
 
 ### Community 227 - "Community 227"
 Cohesion: 0.12
 Nodes (22): NewStreamStatus(), TestStreamStatus_HasErrors_Empty(), TestStreamStatus_HasErrors_NilSafe(), TestStreamStatus_IsNormalEnd(), TestStreamStatus_IsNormalEnd_NilSafe(), TestStreamStatus_RecordError_Basic(), TestStreamStatus_RecordError_CapAtMax(), TestStreamStatus_RecordError_Concurrent() (+14 more)
 
 ### Community 228 - "Community 228"
-Cohesion: 0.08
-Nodes (31): Adaptor, difyHandler(), difyStreamHandler(), requestOpenAI2Dify(), streamResponseDify2OpenAI(), uploadDifyFile(), DifyChatRequest, DifyChunkChatCompletionResponse (+23 more)
+Cohesion: 0.12
+Nodes (15): Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+7 more)
 
 ### Community 229 - "Community 229"
 Cohesion: 0.12
@@ -2394,8 +2405,8 @@ Cohesion: 0.12
 Nodes (15): Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+7 more)
 
 ### Community 232 - "Community 232"
-Cohesion: 0.08
-Nodes (27): Adaptor, palmHandler(), palmStreamHandler(), responsePaLM2OpenAI(), streamResponsePaLM2OpenAI(), PaLMChatResponse, AudioRequest, ClaudeRequest (+19 more)
+Cohesion: 0.12
+Nodes (15): Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+7 more)
 
 ### Community 233 - "Community 233"
 Cohesion: 0.07
@@ -2422,8 +2433,8 @@ Cohesion: 0.07
 Nodes (28): Architecture Pattern, Authentication, Backend, Backend — Go, Build, Caching, Classic Theme (`web/classic/`), Container / Build (+20 more)
 
 ### Community 239 - "Community 239"
-Cohesion: 0.08
-Nodes (58): aht(), atIndentedComment(), atLineEnd(), blockMap(), blockScalar(), blockSequence(), c1(), charAt() (+50 more)
+Cohesion: 0.20
+Nodes (29): atLineEnd(), charAt(), continueScalar(), G3e(), getLine(), h1(), hasChars(), lex() (+21 more)
 
 ### Community 240 - "Community 240"
 Cohesion: 0.15
@@ -2454,16 +2465,16 @@ Cohesion: 0.07
 Nodes (28): Q: 分组倍率如何生效？, Q: 如何为新模型设置倍率？, Q: 如何批量设置相似模型的倍率？, Q: 补全倍率的作用是什么？, 上游倍率同步, 倍率系统概述, 分组倍率优先级, 分组倍率设置 (+20 more)
 
 ### Community 247 - "Community 247"
-Cohesion: 0.12
-Nodes (16): hmacSHA256(), isNewAPIRelay(), requestPayload, responsePayload, responseTask, TaskAdaptor, BaseBilling, Context (+8 more)
+Cohesion: 0.13
+Nodes (15): hmacSHA256(), isNewAPIRelay(), requestPayload, responsePayload, responseTask, TaskAdaptor, BaseBilling, Context (+7 more)
 
 ### Community 248 - "Community 248"
 Cohesion: 0.12
-Nodes (15): buildAnthropicSample(), buildChatSample(), buildEmbeddingSample(), buildGeminiSample(), buildImageSample(), buildSample(), CodeSamplesSection(), Lang (+7 more)
+Nodes (14): buildAnthropicSample(), buildChatSample(), buildEmbeddingSample(), buildGeminiSample(), buildImageSample(), buildSample(), CodeSamplesSection(), Lang (+6 more)
 
 ### Community 249 - "Community 249"
-Cohesion: 0.12
-Nodes (15): Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest, Header (+7 more)
+Cohesion: 0.10
+Nodes (16): GetFullRequestURL(), Adaptor, AudioRequest, ClaudeRequest, Context, EmbeddingRequest, GeminiChatRequest, GeneralOpenAIRequest (+8 more)
 
 ### Community 250 - "Community 250"
 Cohesion: 0.12
@@ -2482,8 +2493,8 @@ Cohesion: 0.08
 Nodes (35): AliChatRequest, AliEmbedding, AliEmbeddingRequest, AliEmbeddingResponse, AliError, AliImageInput, AliImageParameters, AliImageRequest (+27 more)
 
 ### Community 255 - "Community 255"
-Cohesion: 0.08
-Nodes (26): AudioSetting, AudioSetting, MiniMaxBaseResp, MiniMaxExtraInfo, MiniMaxTTSData, MiniMaxTTSRequest, MiniMaxTTSResponse, PronunciationDict (+18 more)
+Cohesion: 0.09
+Nodes (20): AudioSetting, AudioSetting, MiniMaxBaseResp, MiniMaxExtraInfo, MiniMaxTTSData, MiniMaxTTSRequest, MiniMaxTTSResponse, PronunciationDict (+12 more)
 
 ### Community 256 - "Community 256"
 Cohesion: 0.08
@@ -2494,8 +2505,8 @@ Cohesion: 0.19
 Nodes (13): IP, isDomainListed(), isIPListed(), isPrivateIP(), NewSSRFProtectionFromFetchSetting(), parsePortRanges(), T, TestNewSSRFProtectionFromFetchSettingParsesPortRanges() (+5 more)
 
 ### Community 258 - "Community 258"
-Cohesion: 0.15
-Nodes (10): ContentSkeleton(), ContentSkeletonProps, QuerySkeletonProps, getChartThemeTokens(), LatencyTrendChart(), ThroughputBarChart(), UptimeTrendChart(), LatencyTimePoint (+2 more)
+Cohesion: 0.09
+Nodes (22): ContentSkeleton(), ContentSkeletonProps, QuerySkeletonProps, ContentLayoutConfig(), FontConfig(), PresetConfig(), RadiusConfig(), ScaleConfig() (+14 more)
 
 ### Community 259 - "Community 259"
 Cohesion: 0.12
@@ -2503,27 +2514,27 @@ Nodes (15): ShouldPreserveThinkingSuffix(), AudioRequest, ClaudeRequest, Context
 
 ### Community 260 - "Community 260"
 Cohesion: 0.16
-Nodes (12): generateAffiliateLink(), generatePresetAmounts(), getDefaultPaymentType(), isSafariBrowser(), isStripePayment(), isWaffoPancakePayment(), mergePresetAmounts(), submitPaymentForm() (+4 more)
+Nodes (17): ADVANCED_CUSTOM_ROUTE_SUMMARY_LABELS, advancedCustomConfigUsesRelativeUpstreamPath(), AdvancedCustomIncomingPathOption, AdvancedCustomTemplateOption, AdvancedCustomValidationError, getAdvancedCustomIncomingPathLabel(), getAdvancedCustomRouteSummaryLabel(), getAdvancedCustomRouteUpstreamPath() (+9 more)
 
 ### Community 261 - "Community 261"
 Cohesion: 0.08
 Nodes (27): GetNodeIdentity(), initNodeNameIdentity(), NodeIdentity, decodeSystemInstanceInfo(), DB, ListSystemInstances(), marshalSystemInstanceInfo(), UpsertSystemInstance() (+19 more)
 
 ### Community 262 - "Community 262"
-Cohesion: 0.08
-Nodes (44): TopupGroupRatio2JSONString(), UpdateTopupGroupRatioByJSONString(), createWaffoPancakePairRequest, createWaffoPancakeSubscriptionProductRequest, saveWaffoPancakeRequest, CreateWaffoPancakePair(), CreateWaffoPancakeSubscriptionProduct(), formatWaffoPancakeAmount() (+36 more)
+Cohesion: 0.10
+Nodes (41): countUserSubscriptionsForPaymentGuardTest(), getTopUpStatusForPaymentGuardTest(), getUserQuotaForPaymentGuardTest(), SubscriptionPlan, T, insertSubscriptionOrderForPaymentGuardTest(), insertSubscriptionPlanForPaymentGuardTest(), insertTopUpForPaymentGuardTest() (+33 more)
 
 ### Community 263 - "Community 263"
 Cohesion: 0.09
-Nodes (22): CodeBlock(), CodeBlockContext, CodeBlockContextType, CodeBlockCopyButton(), CodeBlockCopyButtonProps, CodeBlockEditor(), CodeBlockEditorProps, CodeBlockFrame() (+14 more)
+Nodes (23): CodeBlock(), CodeBlockContext, CodeBlockContextType, CodeBlockCopyButton(), CodeBlockCopyButtonProps, CodeBlockEditor(), CodeBlockEditorProps, CodeBlockFrame() (+15 more)
 
 ### Community 264 - "Community 264"
 Cohesion: 0.07
 Nodes (26): Backend, Backend Jest — Detailed Config, Backend (Node.js), Backend Tests, Browser Automation Testing, CI/CD Integration, Common Mocks, Coverage Approach (+18 more)
 
 ### Community 265 - "Community 265"
-Cohesion: 0.24
-Nodes (19): listModelsResponse, decodeListModelsResponse(), DB, OpenAIModels, Pricing, ResponseRecorder, T, initModelListColumnNames() (+11 more)
+Cohesion: 0.16
+Nodes (23): T, TestGetCodexChannelCredentialReturnsSanitizedMetadata(), T, TestFetchCodexChannelWhamDataClassifiesAuthWithoutLeakingBody(), listModelsResponse, decodeListModelsResponse(), DB, OpenAIModels (+15 more)
 
 ### Community 266 - "Community 266"
 Cohesion: 0.17
@@ -2554,8 +2565,8 @@ Cohesion: 0.09
 Nodes (16): channel(), cli(), atius-ai-router CLI — NewAPI management for agents, container(), container_list(), container_status(), get_newapi_containers(), Get list of new-api related containers. (+8 more)
 
 ### Community 273 - "Community 273"
-Cohesion: 0.11
-Nodes (37): GetDefaultEndpointInfo(), EndpointType, EndpointInfo, BuildCatalogEntries(), BuildCatalogEntry(), BuildCatalogEntryForModel(), capacityRank(), categoryRank() (+29 more)
+Cohesion: 0.13
+Nodes (34): BuildCatalogEntries(), BuildCatalogEntry(), BuildCatalogEntryForModel(), capacityRank(), categoryRank(), compareModels(), EndpointRoutes(), EndpointTypeLabel() (+26 more)
 
 ### Community 274 - "Community 274"
 Cohesion: 0.10
@@ -2599,7 +2610,7 @@ Nodes (8): MediaContent, Message, FileSource, MediaContent, MessageFile, Message
 
 ### Community 284 - "Community 284"
 Cohesion: 0.12
-Nodes (23): getStatus(), cacheStatus(), cloneHeaderNavDefaults(), DEFAULT_HEADER_NAV_MODULES, DEFAULTS, getCachedStatus(), getFreshModuleAccess(), getModuleAccess() (+15 more)
+Nodes (22): cacheStatus(), cloneHeaderNavDefaults(), DEFAULT_HEADER_NAV_MODULES, DEFAULTS, getCachedStatus(), getFreshModuleAccess(), getModuleAccess(), getModuleAccessFromStatus() (+14 more)
 
 ### Community 285 - "Community 285"
 Cohesion: 0.08
@@ -2610,8 +2621,8 @@ Cohesion: 0.22
 Nodes (11): NewHybridCache(), HybridCache, HybridCache[V], HybridCacheConfig, HotCache, Client, Duration, Namespace (+3 more)
 
 ### Community 287 - "Community 287"
-Cohesion: 0.25
-Nodes (18): appendBillingInfo(), appendFinalRequestFormat(), appendParamOverrideInfo(), appendRequestConversionChain(), appendRequestPath(), appendStreamStatus(), GenerateAudioOtherInfo(), GenerateClaudeOtherInfo() (+10 more)
+Cohesion: 0.22
+Nodes (17): aliImageHandler(), asyncTaskWait(), getImageBase64sFromForm(), oaiFormEdit2AliImageEdit(), oaiImage2AliImageRequest(), responseAli2OpenAIImage(), updateTask(), AliResponse (+9 more)
 
 ### Community 288 - "Community 288"
 Cohesion: 0.08
@@ -2678,8 +2689,8 @@ Cohesion: 0.09
 Nodes (22): Redis 高可用配置, 会话丢失问题, 会话安全配置, 健康检查, 前置要求, 扩容指南, 故障排除, 数据同步设置 (+14 more)
 
 ### Community 304 - "Community 304"
-Cohesion: 0.09
-Nodes (29): PromptInputFooter(), PromptInputMessage, PlaygroundChat(), ModelGroupSelector(), usePlaygroundConversation(), usePlaygroundOptions(), UsePlaygroundOptionsParams, usePlaygroundState() (+21 more)
+Cohesion: 0.06
+Nodes (49): PromptInputButton(), PromptInputFooter(), PromptInputMessage, PlaygroundChat(), ModelGroupSelector(), useChatHandler(), usePlaygroundConversation(), usePlaygroundOptions() (+41 more)
 
 ### Community 305 - "Community 305"
 Cohesion: 0.16
@@ -2694,8 +2705,8 @@ Cohesion: 0.11
 Nodes (13): Ao(), ar(), fo(), gn(), ho(), ko(), li(), onWorkspaceStateChanges() (+5 more)
 
 ### Community 308 - "Community 308"
-Cohesion: 0.11
-Nodes (13): Ao(), ar(), fo(), gn(), ho(), ko(), li(), onWorkspaceStateChanges() (+5 more)
+Cohesion: 0.13
+Nodes (9): ar(), fo(), ho(), li(), onWorkspaceStateChanges(), or(), si(), Su() (+1 more)
 
 ### Community 309 - "Community 309"
 Cohesion: 0.09
@@ -2706,8 +2717,8 @@ Cohesion: 0.09
 Nodes (21): Architectural interpretation, Current state, Dedicated DB tables, External repo findings, Gain assessment, High gain, Join strategy, JSON in options (+13 more)
 
 ### Community 311 - "Community 311"
-Cohesion: 0.18
-Nodes (17): aspectRatioFromImageRequest(), gcd(), miniMaxImageHandler(), normalizeMiniMaxResponseFormat(), oaiImage2MiniMaxImageRequest(), parseImageSize(), reduceAspectRatio(), responseMiniMax2OpenAIImage() (+9 more)
+Cohesion: 0.27
+Nodes (15): FlowQuotaData, fillFlowChannelNames(), fillFlowTokenNames(), flowQuotaBaseQuery(), getAdminFlowQuotaData(), GetFlowQuotaData(), getRootFlowQuotaData(), getSelfFlowQuotaData() (+7 more)
 
 ### Community 312 - "Community 312"
 Cohesion: 0.19
@@ -2718,12 +2729,12 @@ Cohesion: 0.15
 Nodes (17): ActionResponse, Feedback, FeedbackProps, rateButtonVariants, Result, translations, cache, LLMCopyButton() (+9 more)
 
 ### Community 314 - "Community 314"
-Cohesion: 0.22
-Nodes (14): addLink(), addNode(), applyTopNodeLimit(), assignLinkDisplayColors(), buildFlowGraph(), buildTopNodeSets(), buildUserFilterOptions(), colorAt() (+6 more)
+Cohesion: 0.13
+Nodes (5): CHANNEL_TYPES, ADVANCED_SETTINGS_FIELDS, ChannelFormErrorMap, CHANNEL_TYPE_CONFIGS, ChannelTypeConfig
 
 ### Community 315 - "Community 315"
-Cohesion: 0.05
-Nodes (45): ContentEmbedding, ContentEmbedding, FunctionCall, FunctionCallingConfig, FunctionCallingConfigMode, GeminiUsageMetadata, RawMessage, GeminiBatchEmbeddingResponse (+37 more)
+Cohesion: 0.10
+Nodes (21): ContentEmbedding, ContentEmbedding, FunctionCallingConfig, FunctionCallingConfigMode, GeminiBatchEmbeddingResponse, GeminiChatSafetySettings, GeminiChatTool, GeminiEmbeddingResponse (+13 more)
 
 ### Community 316 - "Community 316"
 Cohesion: 0.18
@@ -2743,47 +2754,47 @@ Nodes (21): AvailableReplica, AvailableReplicasResponse, ContainerConfig, Deploy
 
 ### Community 320 - "Community 320"
 Cohesion: 0.13
-Nodes (6): eV(), Fv(), Hv, jv(), mV(), pV()
+Nodes (5): eV(), Fv(), Hv, mV(), pV()
 
 ### Community 321 - "Community 321"
 Cohesion: 0.13
 Nodes (22): auth_check(), get_docs(), get_docs_index(), get_docs_json(), get_docs_json2(), get_openapi_json(), get_session_cookie(), make_unauthenticated_redirect() (+14 more)
 
 ### Community 322 - "Community 322"
-Cohesion: 0.27
-Nodes (8): AuthenticatorTransport, GetPasskeyByCredentialID(), Credential, DeletedAt, Time, NewPasskeyCredentialFromWebAuthn(), UpsertPasskeyCredential(), PasskeyCredential
+Cohesion: 0.11
+Nodes (38): aW(), bW(), CH(), cW(), DH(), dw(), eg(), ew() (+30 more)
 
 ### Community 323 - "Community 323"
-Cohesion: 0.16
-Nodes (12): DiskSpaceInfo, GetPerformanceMonitorConfig(), SetPerformanceMonitorConfig(), PerformanceMonitorConfig, GetSystemStatus(), StartSystemMonitor(), updateSystemStatus(), SystemStatus (+4 more)
+Cohesion: 0.11
+Nodes (19): DiskSpaceInfo, GetPerformanceMonitorConfig(), SetPerformanceMonitorConfig(), PerformanceMonitorConfig, GetSystemStatus(), StartSystemMonitor(), updateSystemStatus(), SystemStatus (+11 more)
 
 ### Community 324 - "Community 324"
 Cohesion: 0.10
 Nodes (19): ChainOfThought, ChainOfThoughtContent, ChainOfThoughtContentProps, ChainOfThoughtContext, ChainOfThoughtContextValue, ChainOfThoughtHeader, ChainOfThoughtHeaderProps, ChainOfThoughtImage (+11 more)
 
 ### Community 325 - "Community 325"
-Cohesion: 0.17
-Nodes (15): Branch(), BranchContext, BranchContextType, BranchMessages(), BranchMessagesProps, BranchNext(), BranchNextProps, BranchPage() (+7 more)
+Cohesion: 0.14
+Nodes (8): NewOpenAIVideo(), OpenAIVideo, OpenAIVideoError, OpenAIVideoError, Task, Task, Task, Task
 
 ### Community 326 - "Community 326"
 Cohesion: 0.17
 Nodes (20): buildRequestBody(), buildResponses(), buildSecurity(), deepClone(), extractDefinitionsFromApifoxProject(), extractSecuritySchemesFromApifoxProject(), groupByModuleId(), HttpEndpoint (+12 more)
 
 ### Community 327 - "Community 327"
-Cohesion: 0.26
-Nodes (23): build_channel_insert_sql(), build_endpoint_path(), build_phase19_provider_actions(), build_where(), CliError, cmd_create(), cmd_delete(), cmd_export() (+15 more)
+Cohesion: 0.27
+Nodes (22): build_channel_insert_sql(), build_endpoint_path(), build_phase19_provider_actions(), build_where(), CliError, cmd_create(), cmd_delete(), cmd_export() (+14 more)
 
 ### Community 328 - "Community 328"
 Cohesion: 0.10
 Nodes (20): `docs/MANUAL-OPERACAO-ROUTER-AI-ATIUS.md` (docs/config, operational request-response), `dto/embedding.go` (dto/utility, transform), `dto/embedding_test.go` (test, transform + metadata privacy), Fail-Closed TEI Cap Option, File Classification, Header Priority Then Auto Inference, Metadata, Metadata-Only Governor Boundary (+12 more)
 
 ### Community 329 - "Community 329"
-Cohesion: 0.23
-Nodes (7): getPrivacyPolicy(), getUserAgreement(), PrivacyPolicy(), LegalDocumentResponse, UserAgreement(), Route, Route
+Cohesion: 0.22
+Nodes (8): getPrivacyPolicy(), getUserAgreement(), LegalDocument(), PrivacyPolicy(), LegalDocumentResponse, UserAgreement(), Route, Route
 
 ### Community 330 - "Community 330"
-Cohesion: 0.22
-Nodes (18): accessCondition, accessCondition, accessPolicy, accessPolicyFailure, compareAny(), containsValue(), evaluateAccessCondition(), evaluateAccessPolicy() (+10 more)
+Cohesion: 0.10
+Nodes (24): accessCondition, GetUserByOAuthBinding(), User, accessCondition, accessPolicy, accessPolicyFailure, compareAny(), containsValue() (+16 more)
 
 ### Community 331 - "Community 331"
 Cohesion: 0.10
@@ -2806,8 +2817,8 @@ Cohesion: 0.15
 Nodes (19): _acquire_rate_queue_slot_sync(), _backend_pricing_item_to_info(), build_backend_pricing_map(), extract_xml_block(), fetch_backend_model_pricing(), _float_or_none(), _format_token_price(), get_logo_svg() (+11 more)
 
 ### Community 336 - "Community 336"
-Cohesion: 0.10
-Nodes (20): 2026-06-04 — v1.6 ✅ DONE + v1.8 ✅ DONE, Accumulated Context, Active execution note, Architecture Discovered, Blocker, Cross-references (Obsidian), Current Position, Decisions (+12 more)
+Cohesion: 0.09
+Nodes (21): 2026-06-04 — v1.6 ✅ DONE + v1.8 ✅ DONE, 2026-07-19 — v2.16 DONE + Codex metadata canonicalized, Accumulated Context, Active execution note, Architecture Discovered, Blocker, Cross-references (Obsidian), Current Position (+13 more)
 
 ### Community 337 - "Community 337"
 Cohesion: 0.10
@@ -2842,12 +2853,12 @@ Cohesion: 0.18
 Nodes (17): Client, Context, Config, New(), WithCapacity(), WithRate(), WithRequested(), Option (+9 more)
 
 ### Community 345 - "Community 345"
-Cohesion: 0.36
-Nodes (14): countUserSubscriptionsForPaymentGuardTest(), getTopUpStatusForPaymentGuardTest(), getUserQuotaForPaymentGuardTest(), SubscriptionPlan, T, insertSubscriptionOrderForPaymentGuardTest(), insertSubscriptionPlanForPaymentGuardTest(), insertTopUpForPaymentGuardTest() (+6 more)
+Cohesion: 0.07
+Nodes (32): CAPABILITY_LABEL_KEYS, DynamicFormattedPricesByTier, DynamicPriceOptions, DynamicPricingTier, formatCatalogTokenCount(), formatCatalogYearMonth(), getDynamicPriceFields(), GroupPricingSection() (+24 more)
 
 ### Community 346 - "Community 346"
-Cohesion: 0.11
-Nodes (35): codexOAuthSessionKey(), CompleteCodexOAuth(), CompleteCodexOAuthForChannel(), completeCodexOAuthWithChannelID(), GetCodexChannelCredential(), Context, parseCodexAuthorizationInput(), ProbeCodexChannelCredential() (+27 more)
+Cohesion: 0.12
+Nodes (33): codexOAuthSessionKey(), CompleteCodexOAuth(), CompleteCodexOAuthForChannel(), completeCodexOAuthWithChannelID(), GetCodexChannelCredential(), Context, parseCodexAuthorizationInput(), ProbeCodexChannelCredential() (+25 more)
 
 ### Community 347 - "Community 347"
 Cohesion: 0.10
@@ -2878,12 +2889,16 @@ Cohesion: 0.11
 Nodes (18): InputAudioTranscription, InputTokenDetails, OpenAIError, OutputTokenDetails, RealTimeTool, RealtimeUsage, RealtimeContent, RealtimeEvent (+10 more)
 
 ### Community 354 - "Community 354"
-Cohesion: 0.19
-Nodes (16): GetLangFromContext(), GetLocalizer(), Context, IsSupported(), normalizeLang(), ParseAcceptLanguage(), SetUserLangLoader(), SupportedLanguages() (+8 more)
+Cohesion: 0.20
+Nodes (15): GetLangFromContext(), GetLocalizer(), Context, IsSupported(), normalizeLang(), ParseAcceptLanguage(), SupportedLanguages(), T() (+7 more)
 
 ### Community 355 - "Community 355"
 Cohesion: 0.11
 Nodes (18): Advanced Roles, Basic Roles, Best Practices, Core Parameters, FAQ, **M2-her** Core Features, Model Overview, Parameter Description (+10 more)
+
+### Community 356 - "Community 356"
+Cohesion: 0.14
+Nodes (23): TestModelPriceHelperDollarCostUsesUSDPerMillion(), TestModelPriceHelperTieredUsesPreloadedRequestInput(), decodeDollarCostPriceMap(), isOptionWriteRetryableError(), normalizeDollarCostOptionKeys(), PatchDollarCostPrices(), validateDollarCostPricePatches(), DollarCostPrice (+15 more)
 
 ### Community 357 - "Community 357"
 Cohesion: 0.13
@@ -2910,12 +2925,12 @@ Cohesion: 0.18
 Nodes (10): sitemap(), GET(), GET(), getLocalePath(), getLLMText(), getPageImage(), source, NotFound() (+2 more)
 
 ### Community 363 - "Community 363"
-Cohesion: 0.16
-Nodes (18): ApplyParamOverrideWithRelayInfo(), BuildParamOverrideContext(), buildRequestHeadersContext(), GetEffectiveHeaderOverride(), getHeaderOverrideMap(), getParamOverrideMap(), isHeaderPassthroughRuleKeyForOverride(), sanitizeHeaderOverrideMap() (+10 more)
+Cohesion: 0.29
+Nodes (10): BuildParamOverrideContext(), buildRequestHeadersContext(), GetEffectiveHeaderOverride(), getHeaderOverrideMap(), getParamOverrideMap(), isHeaderPassthroughRuleKeyForOverride(), sanitizeHeaderOverrideMap(), syncRuntimeHeaderOverrideFromContext() (+2 more)
 
 ### Community 364 - "Community 364"
-Cohesion: 0.17
-Nodes (11): AnimateInView(), AnimateInViewProps, CTA(), CTAProps, Features(), FeaturesProps, HowItWorks(), CounterProps (+3 more)
+Cohesion: 0.18
+Nodes (10): AnimateInView(), AnimateInViewProps, HeroTerminalDemo(), CTA(), CTAProps, Features(), FeaturesProps, Hero() (+2 more)
 
 ### Community 365 - "Community 365"
 Cohesion: 0.11
@@ -2982,16 +2997,16 @@ Cohesion: 0.11
 Nodes (17): FORK_MIGRATION.md — atius-ai-router, GitHub Actions (Automated), Local Modifications, Manual Sync, Merge conflicts, Notes, Protected Files (Never Overwritten), Protected files overwritten (+9 more)
 
 ### Community 381 - "Community 381"
-Cohesion: 0.13
-Nodes (24): CreateBodyStorage(), CreateBodyStorageFromReader(), Closer, ReadSeeker, BodyStorage, GetDiskCacheConfig(), GetDiskCacheMaxSizeBytes(), GetDiskCachePath() (+16 more)
+Cohesion: 0.08
+Nodes (35): CreateBodyStorage(), CreateBodyStorageFromReader(), Closer, File, Mutex, Reader, ReadSeeker, newDiskStorage() (+27 more)
 
 ### Community 382 - "Community 382"
 Cohesion: 0.40
 Nodes (12): CriticalRateLimit(), DownloadRateLimit(), GlobalAPIRateLimit(), GlobalWebRateLimit(), Context, memoryRateLimiter(), rateLimitFactory(), redisRateLimiter() (+4 more)
 
 ### Community 383 - "Community 383"
-Cohesion: 0.17
-Nodes (4): isApiSuccess(), requestCreemPayment(), requestWaffoPancakePayment(), requestWaffoPayment()
+Cohesion: 0.37
+Nodes (14): UpdateChannelUsedQuota(), Context, RelayInfo, Task, LogTaskConsumption(), RecalculateTaskQuota(), RecalculateTaskQuotaByTokens(), RefundTaskQuota() (+6 more)
 
 ### Community 384 - "Community 384"
 Cohesion: 0.17
@@ -3010,12 +3025,12 @@ Cohesion: 0.25
 Nodes (3): CLIAnythingIntegrationTests, CompletedProcess, safe_env()
 
 ### Community 388 - "Community 388"
-Cohesion: 0.33
-Nodes (9): build_embeddings_overview_sql(), cmd_embeddings(), cmd_logs(), cmd_models(), cmd_providers(), cmd_query(), emit(), ensure_read_only() (+1 more)
+Cohesion: 0.21
+Nodes (18): build_embeddings_overview_sql(), cmd_embeddings(), cmd_endpoint_invoke(), cmd_log_api(), cmd_logs(), cmd_model_api(), cmd_models(), cmd_providers() (+10 more)
 
 ### Community 389 - "Community 389"
-Cohesion: 0.14
-Nodes (11): NavigationProgress(), ThemeCustomizationProvider(), Route, Route, GeneralError(), GeneralErrorProps, getHttpStatus(), NotFoundError() (+3 more)
+Cohesion: 0.13
+Nodes (12): NavigationProgress(), ThemeCustomizationProvider(), Route, Route, GeneralError(), GeneralErrorProps, getHttpStatus(), NotFoundError() (+4 more)
 
 ### Community 390 - "Community 390"
 Cohesion: 0.12
@@ -3047,7 +3062,7 @@ Nodes (17): devDependencies, embla-carousel-react, knip, oxfmt, oxlint, @rsbuild
 
 ### Community 397 - "Community 397"
 Cohesion: 0.21
-Nodes (4): Bb(), Mb(), Rb(), xb()
+Nodes (4): Bb(), jv(), Mb(), Rb()
 
 ### Community 398 - "Community 398"
 Cohesion: 0.12
@@ -3126,16 +3141,16 @@ Cohesion: 0.12
 Nodes (16): devDependencies, autoprefixer, code-inspector-plugin, eslint, eslint-plugin-header, eslint-plugin-react-hooks, i18next-cli, postcss (+8 more)
 
 ### Community 417 - "Community 417"
-Cohesion: 0.22
-Nodes (11): buildDashboardFlowData(), buildNodeFilterOptions(), buildSummary(), filterRows(), filterRowsByNodes(), formatNumber(), getFlowStages(), nodeFilterKey() (+3 more)
+Cohesion: 0.24
+Nodes (11): HTTPRequest, HTTPResponse, NewClient(), NewClientWithConfig(), NewDefaultHTTPClient(), NewEnterpriseClient(), DefaultHTTPClient, Client (+3 more)
 
 ### Community 418 - "Community 418"
 Cohesion: 0.23
 Nodes (8): StepNavigation(), showNotice(), Setup(), SetupWizard(), AdminStep(), CompleteStep(), DatabaseStep(), UsageModeStep()
 
 ### Community 419 - "Community 419"
-Cohesion: 0.20
-Nodes (3): Ek(), size(), Tk()
+Cohesion: 0.14
+Nodes (3): Kre(), Wre, Xre
 
 ### Community 420 - "Community 420"
 Cohesion: 0.28
@@ -3170,8 +3185,8 @@ Cohesion: 0.19
 Nodes (13): Carousel(), CarouselApi, CarouselContent(), CarouselContext, CarouselContextProps, CarouselItem(), CarouselNext(), CarouselOptions (+5 more)
 
 ### Community 429 - "Community 429"
-Cohesion: 0.24
-Nodes (4): WebAuthnUser, PasskeyCredential, Credential, User
+Cohesion: 0.18
+Nodes (6): JSONValue, DeletePrefillGroupByID(), GetAllPrefillGroups(), DeletedAt, Value, PrefillGroup
 
 ### Community 430 - "Community 430"
 Cohesion: 0.18
@@ -3242,8 +3257,8 @@ Cohesion: 0.13
 Nodes (14): Arquitetura de Routing, Arquivos Principais, Atius AI Router — Documentacao, Autenticacao, Configuracao do Banco, Endpoints Principais, Exemplo: Anthropic Messages (via SDK), Exemplo: Chat Completions (+6 more)
 
 ### Community 447 - "Community 447"
-Cohesion: 0.36
-Nodes (8): fetchCodexChannelWhamData(), GetCodexChannelRateLimitResetCredits(), GetCodexChannelUsage(), Context, ResetCodexChannelUsage(), T, TestFetchCodexChannelWhamDataClassifiesAuthWithoutLeakingBody(), codexWhamFetchFunc
+Cohesion: 0.27
+Nodes (6): getAboutContent(), AboutResponse, PublicLayout(), isLikelyHtml(), About(), Home()
 
 ### Community 448 - "Community 448"
 Cohesion: 0.14
@@ -3251,7 +3266,7 @@ Nodes (14): GoAPIFetchResponseData, GoAPITaskResponse, GoAPITaskResponseData, Ra
 
 ### Community 449 - "Community 449"
 Cohesion: 0.03
-Nodes (49): GetEnvOrDefault(), GetEnvOrDefaultBool(), GetEnvOrDefaultString(), initConstantEnv(), InitEnv(), printHelp(), StartPyroScope(), IsDiscordIdAlreadyTaken() (+41 more)
+Nodes (56): MessageWithRequestId(), Context, SubscriptionRequestCreemPay(), SubscriptionCreemPayRequest, LogDebug(), LogError(), Context, JimengRequestConvert() (+48 more)
 
 ### Community 450 - "Community 450"
 Cohesion: 0.24
@@ -3278,16 +3293,16 @@ Cohesion: 0.13
 Nodes (14): Arquitetura de Routing, Arquivos Principais, Atius AI Router — Documentacao, Autenticacao, Configuracao do Banco, Endpoints Principais, Exemplo: Anthropic Messages (via SDK), Exemplo: Chat Completions (+6 more)
 
 ### Community 456 - "Community 456"
-Cohesion: 0.08
-Nodes (44): LocalLogPreview(), Context, Playground(), addUsedChannel(), fastTokenCountMetaForPricing(), geminiRelayHandler(), getChannel(), Channel (+36 more)
+Cohesion: 0.07
+Nodes (49): LocalLogPreview(), GetPointer(), addUsedChannel(), fastTokenCountMetaForPricing(), geminiRelayHandler(), getChannel(), Channel, ChannelError (+41 more)
 
 ### Community 457 - "Community 457"
-Cohesion: 0.17
-Nodes (12): EmbeddingResponse, embeddingRequestOpenAI2Moka(), embeddingResponseMoka2OpenAI(), mokaEmbeddingHandler(), Context, EmbeddingRequest, GeneralOpenAIRequest, NewAPIError (+4 more)
+Cohesion: 0.02
+Nodes (187): ConvertRerankRequest(), RerankHandler(), AliRerankRequest, baiduEmbeddingHandler(), baiduHandler(), baiduStreamHandler(), embeddingResponseBaidu2OpenAI(), getBaiduAccessToken() (+179 more)
 
 ### Community 458 - "Community 458"
-Cohesion: 0.30
-Nodes (3): Ob(), wb, yb()
+Cohesion: 0.27
+Nodes (4): Ob(), wb, xb(), yb()
 
 ### Community 459 - "Community 459"
 Cohesion: 0.15
@@ -3386,8 +3401,8 @@ Cohesion: 0.24
 Nodes (10): GetEndpointTypesByChannelType(), EndpointType, T, TestGetEndpointTypesByChannelTypeCodexEmbeddingIsEmbeddingOnly(), TestGetEndpointTypesByChannelTypeCodexTextPrefersResponses(), TestGetEndpointTypesByChannelTypeDeepSeekIsMultiProtocol(), TestGetEndpointTypesByChannelTypeMiniMaxEmbeddingIsEmbeddingOnly(), TestGetEndpointTypesByChannelTypeMiniMaxTextIsMultiProtocol() (+2 more)
 
 ### Community 484 - "Community 484"
-Cohesion: 0.21
-Nodes (11): API_ENDPOINTS, ChatCompletionChunk, getStreamReadyStateError(), isStreamClosedReadyState(), isStreamDoneMessage(), parseStreamErrorDetails(), parseStreamMessageUpdates(), StreamErrorDetails (+3 more)
+Cohesion: 0.23
+Nodes (9): hardenIsolatedHtml(), HtmlContent(), HtmlContentProps, HtmlContentVariant, IsolatedHtmlContent(), sanitizeHtmlContent(), RichContent(), RichContentMode (+1 more)
 
 ### Community 485 - "Community 485"
 Cohesion: 0.44
@@ -3446,12 +3461,12 @@ Cohesion: 0.42
 Nodes (10): TestConvertToAliRequestWan25I2VKeepsLegacyImgURL(), TestConvertToAliRequestWan27I2VBuildsFirstAndLastFrameFromImages(), TestConvertToAliRequestWan27I2VBuildsMediaFromImage(), TestConvertToAliRequestWan27I2VFallsBackToFirstNonEmptyImage(), TestConvertToAliRequestWan27I2VKeepsExplicitMetadataMedia(), TestConvertToAliRequestWan27I2VPrefersImageBeforeImagesAndInputReference(), TestConvertToAliRequestWan27I2VRequiresMedia(), testRelayInfo() (+2 more)
 
 ### Community 500 - "Community 500"
-Cohesion: 0.10
-Nodes (11): Context, FileSource, TokenCountMeta, ToolConfig, GeminiBatchEmbeddingRequest, GeminiChatRequest, GeminiEmbeddingRequest, GeminiChatContent (+3 more)
+Cohesion: 0.22
+Nodes (4): Context, TokenCountMeta, GeminiBatchEmbeddingRequest, GeminiEmbeddingRequest
 
 ### Community 501 - "Community 501"
-Cohesion: 0.56
-Nodes (8): checkDangerousContent(), parseJSONArray(), validateAnnouncements(), validateApiInfo(), ValidateConsoleSettings(), validateFAQ(), validateUptimeKumaGroups(), validateURL()
+Cohesion: 0.18
+Nodes (10): Alias de imagem no CRI, Backup e restore, CPU durante rollout, Cutover k3s do Router em 2026-07-19, DiskPressure, Incidentes controlados, Resultado, Rollback preservado (+2 more)
 
 ### Community 502 - "Community 502"
 Cohesion: 0.14
@@ -3498,8 +3513,8 @@ Cohesion: 0.18
 Nodes (11): openai, POST(), AIAnnotationsToolSchema, AnswerConfidence, InkeepRecordTypes, KnownAnswerConfidence, LinkSchema, LinksSchema (+3 more)
 
 ### Community 513 - "Community 513"
-Cohesion: 0.31
-Nodes (8): failingReadCloser, newGeminiResponsesRelayInfo(), requireOrderedGeminiResponsesSubstrings(), TestGeminiResponsesHandlerClosesBodyOnReadError(), TestGeminiResponsesHandlerReturnsOpenAIResponsesJSON(), TestGeminiResponsesStreamHandlerReturnsOpenAIResponsesSSE(), RelayInfo, T
+Cohesion: 0.16
+Nodes (15): DollarCostPricePatchRequest, buildCompletionRatioMetaValue(), collectModelNamesFromOptionValue(), GetOptions(), Context, DollarCostPrice, isPaymentComplianceOptionKey(), isPositiveOptionValue() (+7 more)
 
 ### Community 514 - "Community 514"
 Cohesion: 0.31
@@ -3522,8 +3537,8 @@ Cohesion: 0.15
 Nodes (12): Atalhos de dominio, Backup e restore de tabela, CLIAnything - gestao 100% por CLI do router-ai-atius, Cobertura de endpoints administrativos, Comandos principais, Endpoints administrativos documentados, Gates obrigatorios, Modelo de seguranca (+4 more)
 
 ### Community 519 - "Community 519"
-Cohesion: 0.15
-Nodes (12): Arquitetura alvo inicial, Backup, Cutover manual, Dados e secrets, Decisoes bloqueantes, Estado atual, Go/no-go, K3S migration - router-ai-atius (+4 more)
+Cohesion: 0.18
+Nodes (10): Apply e rollout, Backup canonico, CPU e storage, Decisoes de arquitetura, Estado canonico, Evidencia do cutover, K3S runtime - router-ai-atius, Registro detalhado (+2 more)
 
 ### Community 520 - "Community 520"
 Cohesion: 0.15
@@ -3566,8 +3581,8 @@ Cohesion: 0.15
 Nodes (12): 1. Install OpenAI SDK, 2. Configure Environment Variables, 3. Call API, 4. Important Note, Compatible OpenAI API, Examples, Important Notes, Quick Start (+4 more)
 
 ### Community 530 - "Community 530"
-Cohesion: 0.36
-Nodes (6): FindCodexCatalogCandidate(), GetCodexCatalogCandidatesByChannel(), GetPromotedCodexCatalogCandidatesByChannel(), DeletedAt, CodexCatalogCandidate, CodexCatalogSnapshot
+Cohesion: 0.22
+Nodes (6): ToolConfig, GeminiChatRequest, GeminiChatContent, GeminiChatGenerationConfig, GeminiChatSafetySettings, GeminiChatTool
 
 ### Community 531 - "Community 531"
 Cohesion: 0.18
@@ -3623,7 +3638,7 @@ Nodes (12): Apache-2.0, Apache-2.0 OR MIT, BSD-2-Clause, BSD-3-Clause, Dependenc
 
 ### Community 544 - "Community 544"
 Cohesion: 0.24
-Nodes (12): backup_table(), build_redacted_write_preview(), cmd_backup(), cmd_channel(), is_legacy_split_channel(), psql_base_cmd(), CompletedProcess, Build a secret-safe INSERT...SELECT that reuses the source channel key. (+4 more)
+Nodes (13): backup_table(), build_redacted_write_preview(), cmd_backup(), cmd_channel(), dryrun_or_execute(), is_legacy_split_channel(), psql_base_cmd(), CompletedProcess (+5 more)
 
 ### Community 545 - "Community 545"
 Cohesion: 0.13
@@ -3666,8 +3681,8 @@ Cohesion: 0.17
 Nodes (8): AvailableReplicasResponse, DeploymentList, decodeData(), ListDeploymentsOptions, LocationsResponse, T, PriceEstimationRequest, PriceEstimationResponse
 
 ### Community 555 - "Community 555"
-Cohesion: 0.28
-Nodes (12): BenchmarkExprCompile(), BenchmarkExprRunCached(), cachedEntry, CompileFromCache(), CompileFromCacheByHash(), ExprVersion(), extractUsedVars(), getCompileEnv() (+4 more)
+Cohesion: 0.25
+Nodes (13): BenchmarkExprCompile(), BenchmarkExprRunCached(), TestInvalidateCache(), cachedEntry, CompileFromCache(), CompileFromCacheByHash(), ExprVersion(), extractUsedVars() (+5 more)
 
 ### Community 556 - "Community 556"
 Cohesion: 0.17
@@ -3726,8 +3741,8 @@ Cohesion: 0.17
 Nodes (11): 1. Go Binary (Required), 3. Electron Dependencies, Build Output, Building for Production, Configuration, Database Location, Development, New API Electron Desktop App (+3 more)
 
 ### Community 570 - "Community 570"
-Cohesion: 0.42
-Nodes (9): cmd_endpoint_invoke(), cmd_log_api(), cmd_model_api(), cmd_ratio(), cmd_task_api(), cmd_token_api(), cmd_vendor_api(), invoke_manifest_endpoint() (+1 more)
+Cohesion: 0.39
+Nodes (5): getHomePageContent(), HomePageContentResponse, HomePageContentResult, useHomePageContent(), isHttpUrl()
 
 ### Community 571 - "Community 571"
 Cohesion: 0.17
@@ -3806,12 +3821,12 @@ Cohesion: 0.18
 Nodes (10): Midjourney 配置, 全局限流, 其他功能配置, 其他设置, 分组速率限制配置示例, 按用户分组限流, 绘图计费, 绘图设置 (+2 more)
 
 ### Community 590 - "Community 590"
-Cohesion: 0.29
-Nodes (6): MessageWithRequestId(), Context, JimengRequestConvert(), abortWithMidjourneyMessage(), abortWithOpenAiMessage(), Context
+Cohesion: 0.31
+Nodes (5): Vendor, GetAllVendors(), GetVendorByID(), DeletedAt, SearchVendors()
 
 ### Community 591 - "Community 591"
-Cohesion: 0.36
-Nodes (11): normalizeHeaders(), RunExprByHash(), RunExprByHashWithRequest(), RunExprWithRequest(), runProgram(), timeInZone(), Program, RequestInput (+3 more)
+Cohesion: 0.35
+Nodes (10): normalizeHeaders(), RunExprByHash(), RunExprByHashWithRequest(), runProgram(), timeInZone(), Program, RequestInput, Time (+2 more)
 
 ### Community 592 - "Community 592"
 Cohesion: 0.18
@@ -3879,7 +3894,7 @@ Nodes (11): PHASE-20-AUTO-FORMAT-DETECTION, PHASE-20-BASEURL-V1-NORMALIZATION, P
 
 ### Community 608 - "Community 608"
 Cohesion: 0.04
-Nodes (56): ConvertRerankRequest(), RerankHandler(), AliRerankRequest, GetTrustQuota(), GetStringIfEmpty(), IsJsonObject(), maskHostForPlainDomain(), maskHostForURL() (+48 more)
+Nodes (78): UnmarshalBodyReusable(), GetTrustQuota(), Context, Playground(), EmbeddingResponse, FundingSource, GeminiBatchEmbeddingRequest, GeminiEmbeddingRequest (+70 more)
 
 ### Community 609 - "Community 609"
 Cohesion: 0.18
@@ -3934,8 +3949,8 @@ Cohesion: 0.20
 Nodes (3): BoolValue, IntValue, StringValue
 
 ### Community 622 - "Community 622"
-Cohesion: 0.51
-Nodes (9): T, setupUserUpdateTestState(), TestEnsureEmailAvailableRejectsExistingEmailCaseInsensitive(), TestInsertKeepsBlankPasswordForPasswordlessUser(), TestInsertRejectsDuplicateEmailWithoutUniqueIndex(), TestResetUserPasswordByEmailRequiresSingleActiveMatch(), TestUpdateUserSettingOnlyUpdatesSetting(), TestUserUpdateDoesNotOverwriteAccountingFields() (+1 more)
+Cohesion: 0.29
+Nodes (7): FunctionCall, RawMessage, GeminiFileData, GeminiFunctionResponse, GeminiPart, GeminiPartCodeExecutionResult, GeminiPartExecutableCode
 
 ### Community 623 - "Community 623"
 Cohesion: 0.20
@@ -3985,13 +4000,9 @@ Nodes (9): 与 newapi Skill 的区别, 令牌与兑换码管理, 关注进展, �
 Cohesion: 0.20
 Nodes (9): 充值与兑换 (Recharge & Redemption), 安全相关 (Security Related), 核心概念 (Core Concepts), 模型相关 (Model Related), 渠道管理 (Channel Management), 用户管理 (User Management), 翻译术语表 (Translation Glossary), 翻译注意事项 (Translation Guidelines) (+1 more)
 
-### Community 635 - "Community 635"
-Cohesion: 0.39
-Nodes (6): parseAmountOptions(), parseCreemProducts(), parseJsonArray(), parsePaymentMethods(), parseWaffoPayMethods(), getTopupInfo()
-
 ### Community 636 - "Community 636"
-Cohesion: 0.53
-Nodes (8): auditAuthMethod(), auditContentEN(), auditOperatorInfo(), Context, markAuditLogged(), recordManageAudit(), recordManageAuditFor(), recordUserSecurityAudit()
+Cohesion: 0.24
+Nodes (14): auditAuthMethod(), auditContentEN(), auditOperatorInfo(), Context, markAuditLogged(), recordManageAudit(), recordManageAuditFor(), recordUserSecurityAudit() (+6 more)
 
 ### Community 637 - "Community 637"
 Cohesion: 0.20
@@ -4002,8 +4013,8 @@ Cohesion: 0.20
 Nodes (10): 6.1 Animate SVG Wrapper Instead of SVG Element, 6.2 CSS content-visibility for Long Lists, 6.3 Hoist Static JSX Elements, 6.4 Optimize SVG Precision, 6.5 Prevent Hydration Mismatch Without Flickering, 6.6 Suppress Expected Hydration Mismatches, 6.7 Use Activity Component for Show/Hide, 6.8 Use Explicit Conditional Rendering (+2 more)
 
 ### Community 639 - "Community 639"
-Cohesion: 0.36
-Nodes (8): flowNodeFilterFromSankeyDatum(), flowSankeyDatumValue(), isFlowNodeKind(), isSankeyLinkDatum(), recordValue(), sankeyDatumFlag(), sankeyDatumSource(), sankeyDatumValue()
+Cohesion: 0.50
+Nodes (7): T, TestRelayErrorHandlerKeepsInvalidJSONBodyInDebugLog(), TestRelayErrorHandlerKeepsOpenAIErrorMessage(), TestRelayErrorHandlerKeepsStructuredErrorMessage(), TestRelayErrorHandlerTruncatesInvalidJSONBodyInLog(), TestResetStatusCode(), withDebugEnabled()
 
 ### Community 640 - "Community 640"
 Cohesion: 0.20
@@ -4258,8 +4269,8 @@ Cohesion: 0.25
 Nodes (4): BaseRequest, Request, Context, TokenCountMeta
 
 ### Community 705 - "Community 705"
-Cohesion: 0.31
-Nodes (5): Vendor, GetAllVendors(), GetVendorByID(), DeletedAt, SearchVendors()
+Cohesion: 0.18
+Nodes (17): ChatCompletionsStreamResponse, Context, GeneralOpenAIRequest, NewAPIError, OpenAITextResponse, RelayInfo, Response, Usage (+9 more)
 
 ### Community 706 - "Community 706"
 Cohesion: 0.25
@@ -4274,8 +4285,8 @@ Cohesion: 0.39
 Nodes (7): operationResponse, operationVideo, submitResponse, VeoImageInput, VeoInstance, VeoParameters, VeoRequestPayload
 
 ### Community 709 - "Community 709"
-Cohesion: 0.52
-Nodes (6): collectDisallowedStatusCodeRedirects(), collectInvalidStatusCodeEntries(), collectNewDisallowedStatusCodeRedirects(), NON_REDIRECTABLE_STATUS_CODES, parseStatusCodeKey(), parseStatusCodeMappingTarget()
+Cohesion: 0.38
+Nodes (5): HmacSha256(), HmacSha256Raw(), Sha1(), Sha1Raw(), affinityFingerprint()
 
 ### Community 710 - "Community 710"
 Cohesion: 0.25
@@ -4334,8 +4345,8 @@ Cohesion: 0.32
 Nodes (7): ChatCompletionsRequestToResponsesRequest(), convertChatResponseFormatToResponsesText(), normalizeChatImageURLToString(), GeneralOpenAIRequest, OpenAIResponsesRequest, RawMessage, ResponseFormat
 
 ### Community 724 - "Community 724"
-Cohesion: 0.50
-Nodes (7): ConsumeCodexWhamRateLimitResetCredit(), FetchCodexWhamRateLimitResetCredits(), FetchCodexWhamUsage(), Client, Context, Request, setCodexWhamRequestHeaders()
+Cohesion: 0.20
+Nodes (16): difyHandler(), difyStreamHandler(), requestOpenAI2Dify(), streamResponseDify2OpenAI(), uploadDifyFile(), DifyChatRequest, DifyChunkChatCompletionResponse, ChatCompletionsStreamResponse (+8 more)
 
 ### Community 725 - "Community 725"
 Cohesion: 0.43
@@ -4350,12 +4361,12 @@ Cohesion: 0.29
 Nodes (4): mockAdaptor, RelayInfo, Response, TaskInfo
 
 ### Community 728 - "Community 728"
-Cohesion: 0.48
-Nodes (6): T, TestChannelFieldsAreClassified(), TestChannelHasSensitiveChanges(), TestChannelStatusValidation(), TestClearChannelReadOnlyFields(), TestUpdateChannelRejectsStatusField()
+Cohesion: 0.29
+Nodes (7): GeminiUsageMetadata, GeminiChatCandidate, GeminiChatContent, GeminiChatPromptFeedback, GeminiChatResponse, GeminiChatSafetyRating, GeminiChatSafetyRating
 
 ### Community 729 - "Community 729"
-Cohesion: 0.25
-Nodes (7): Dry-run, k8s/router-ai-atius, Restore rehearsal, Secrets, Shadow apply, Stateful warnings, TEI
+Cohesion: 0.18
+Nodes (10): Backup, Dry-run, Imagem, k8s/router-ai-atius, Restore rehearsal, Rollback, Secrets, Shadow apply (+2 more)
 
 ### Community 730 - "Community 730"
 Cohesion: 0.32
@@ -4378,8 +4389,8 @@ Cohesion: 0.54
 Nodes (7): _env(), _env_bool(), _latest_channel_names(), main(), _scrub(), _short_text(), _wait_for_channel_name()
 
 ### Community 735 - "Community 735"
-Cohesion: 0.36
-Nodes (7): GetCacheStats(), GetPerformanceSetting(), init(), syncToCommon(), UpdateAndSync(), PerformanceSetting, DiskCacheStats
+Cohesion: 0.33
+Nodes (6): AdvancedCustomEditorDialog(), cloneAdvancedCustomConfig(), getAdvancedCustomTemplateConfig(), stringifyAdvancedCustomConfig(), parseGroups(), transformChannelToFormDefaults()
 
 ### Community 736 - "Community 736"
 Cohesion: 0.46
@@ -4450,8 +4461,8 @@ Cohesion: 0.29
 Nodes (6): 单个渠道测试, 执行批量操作, 批量操作, 批量测试, 渠道测试, 选择渠道
 
 ### Community 753 - "Community 753"
-Cohesion: 0.40
-Nodes (4): AttachmentAction, getAttachmentActionNotice(), getSearchActionNotice(), InputToolNotice
+Cohesion: 0.33
+Nodes (3): GeminiChatGenerationConfig, GeminiThinkingConfig, MediaResolution
 
 ### Community 754 - "Community 754"
 Cohesion: 0.38
@@ -4502,8 +4513,8 @@ Cohesion: 0.29
 Nodes (6): 🔗 关联任务 / Related Issue, 📝 变更描述 / Description, 🚀 变更类型 / Type of change, ✅ 提交前检查项 / Checklist, ⚠️ 提交说明 / PR Notice, 📸 运行证明 / Proof of Work
 
 ### Community 766 - "Community 766"
-Cohesion: 0.52
-Nodes (6): detectScheme(), hostWithoutPort(), resolveOrigins(), resolveRPID(), PasskeySettings, Request
+Cohesion: 0.19
+Nodes (16): UsedVars(), Rand, BuildTieredTokenParams(), TokenParams, Usage, BenchmarkRatioBilling_Equivalent(), BenchmarkRatioBilling_Parallel(), BenchmarkTieredBilling_ComplexExpr() (+8 more)
 
 ### Community 767 - "Community 767"
 Cohesion: 0.29
@@ -4610,8 +4621,8 @@ Cohesion: 0.29
 Nodes (6): Data Scaling, Difficulty and Diversity of Data Distribution, Future Work, Quality of CoT and Response, Submitting Feedback, What makes good reasoning data
 
 ### Community 793 - "Community 793"
-Cohesion: 0.43
-Nodes (6): getPayloadHash(), hmacSHA256(), SetPayloadHash(), Sign(), Context, Request
+Cohesion: 0.13
+Nodes (11): AutoSMTPAuth(), Auth, ServerInfo, smtpServerSupportsAuth(), Auth, ServerInfo, isOutlookServer(), LoginAuth() (+3 more)
 
 ### Community 794 - "Community 794"
 Cohesion: 0.52
@@ -4622,8 +4633,8 @@ Cohesion: 0.29
 Nodes (7): PHASE-32-CODEX-CREDENTIAL-HEALTH, PHASE-32-CODEX-OAUTH-REGENERATE, PHASE-32-CODEX-UI-SINGLE-ENDPOINT, PHASE-32-CODEX-UPSTREAM-AUTH-ERRORS, PHASE-32-FORK-SYNC-GUARD, Phase 32 Requirements, PHASE-32-VALIDATION-DOCS-SHIP
 
 ### Community 796 - "Community 796"
-Cohesion: 0.53
-Nodes (5): checkTelegramAuthorization(), Context, TelegramBind(), TelegramLogin(), IsTelegramIdAlreadyTaken()
+Cohesion: 0.60
+Nodes (5): filterGeminiResponsesInput(), filterGeminiResponsesTools(), geminiRawJSONPresent(), preprocessGeminiOpenAIResponsesRequest(), OpenAIResponsesRequest
 
 ### Community 797 - "Community 797"
 Cohesion: 0.29
@@ -4747,7 +4758,7 @@ Nodes (4): Container, decodeWithFlexibleTimes(), normalizeTimeString(), normaliz
 
 ### Community 828 - "Community 828"
 Cohesion: 0.33
-Nodes (5): UseBillingHistoryOptions, completeOrder(), getAllBillingHistory(), getUserBillingHistory(), TopupRecord
+Nodes (4): CounterProps, StatItem, Stats(), StatsProps
 
 ### Community 829 - "Community 829"
 Cohesion: 0.33
@@ -4766,16 +4777,12 @@ Cohesion: 0.33
 Nodes (5): 使用MySQL数据库, 使用SQLite数据库（不推荐）, 基本要求, 直接使用Docker镜像部署, 访问系统
 
 ### Community 833 - "Community 833"
-Cohesion: 0.33
-Nodes (5): calculateAmount(), calculateStripeAmount(), calculateWaffoPancakeAmount(), requestPayment(), requestStripePayment()
+Cohesion: 0.40
+Nodes (4): Artefatos, Entregas, Incidentes Resolvidos, Phase 29 Summary
 
 ### Community 834 - "Community 834"
 Cohesion: 0.33
 Nodes (5): Build, Development, Learn More, new-api-docs-v1, Project Structure
-
-### Community 835 - "Community 835"
-Cohesion: 0.33
-Nodes (5): buildFlowFilterOptions(), buildFlowSankeySpec(), rows, topLimitRows, tooltipMetricLines()
 
 ### Community 836 - "Community 836"
 Cohesion: 0.40
@@ -4938,12 +4945,12 @@ Cohesion: 0.33
 Nodes (5): 📦 数据库与升级问题, ❓ 没有找到您的问题？, 🔧 渠道配置问题, 🌐 部署与连接问题, 💰 额度相关问题
 
 ### Community 876 - "Community 876"
-Cohesion: 0.40
-Nodes (4): DecompressRequestMiddleware(), HandlerFunc, Reader, readCloser
+Cohesion: 0.12
+Nodes (15): BodyStorageCleanup(), HandlerFunc, DecompressRequestMiddleware(), HandlerFunc, Reader, HTTPStats, readCloser, GetStats() (+7 more)
 
 ### Community 877 - "Community 877"
-Cohesion: 0.40
-Nodes (5): HTTPStats, GetStats(), HandlerFunc, StatsMiddleware(), StatsInfo
+Cohesion: 0.50
+Nodes (3): Decisao, Phase 29 Verification Report, Segurança
 
 ### Community 880 - "Community 880"
 Cohesion: 0.33
@@ -4962,8 +4969,8 @@ Cohesion: 0.47
 Nodes (3): CopyTokensModal(), DeleteTokensModal(), TokensActions()
 
 ### Community 884 - "Community 884"
-Cohesion: 0.40
-Nodes (5): channelNode(), deletedTokenLabel(), numberValue(), tokenNode(), userNode()
+Cohesion: 0.50
+Nodes (3): Phase 30 Summary, Resultado, Rollback
 
 ### Community 885 - "Community 885"
 Cohesion: 0.47
@@ -5209,6 +5216,10 @@ Nodes (4): Code blocks, Code blocks, Inline code, Submitting Feedback
 Cohesion: 0.40
 Nodes (4): Monthly, Submitting Feedback, Token Plan, Yearly
 
+### Community 947 - "Community 947"
+Cohesion: 0.50
+Nodes (3): Decisao Final, Phase 30 Verification Report, Risco Residual Aceito
+
 ### Community 948 - "Community 948"
 Cohesion: 0.40
 Nodes (5): linux, category, extraResources, icon, target
@@ -5266,8 +5277,12 @@ Cohesion: 0.40
 Nodes (3): MultiKeyMode, Value, ChannelInfo
 
 ### Community 962 - "Community 962"
-Cohesion: 0.60
-Nodes (4): PopSessionData(), SaveSessionData(), Context, SessionData
+Cohesion: 0.67
+Nodes (3): ApiKeys(), apiKeySearchSchema, Route
+
+### Community 963 - "Community 963"
+Cohesion: 0.15
+Nodes (12): GetRatioConfig(), Context, H, IsExposeRatioEnabled(), SetExposeRatioEnabled(), cloneGinH(), GetExposedData(), exposedCache (+4 more)
 
 ### Community 965 - "Community 965"
 Cohesion: 0.60
@@ -6158,8 +6173,8 @@ Cohesion: 0.50
 Nodes (3): Get Voice, OpenAPI, Submitting Feedback
 
 ### Community 1193 - "Community 1193"
-Cohesion: 0.50
-Nodes (4): buildLegacyParamOverride(), shouldAuditParamPath(), shouldEnableParamOverrideAudit(), TestShouldAuditParamPathUsesFieldBoundaryPrefixMatching()
+Cohesion: 0.22
+Nodes (13): GetGrokSettings(), GrokSettings, calcViolationFeeQuota(), ChargeViolationFeeIfNeeded(), Context, ErrorCode, NewAPIError, RelayInfo (+5 more)
 
 ### Community 1194 - "Community 1194"
 Cohesion: 0.50
@@ -6172,6 +6187,10 @@ Nodes (3): TestClaudeSettingsWriteHeadersDeduplicatesAcrossCommaSeparatedAndRepe
 ### Community 1197 - "Community 1197"
 Cohesion: 0.50
 Nodes (3): OpenRouterEnterpriseResponse, RequestReasoning, RawMessage
+
+### Community 1198 - "Community 1198"
+Cohesion: 0.31
+Nodes (12): T, Task, insertTask(), TestSnapshot_Roundtrip(), TestSnapshotEqual_DifferentData(), TestSnapshotEqual_DifferentProgress(), TestSnapshotEqual_DifferentStatus(), TestSnapshotEqual_NilVsEmpty() (+4 more)
 
 ### Community 1199 - "Community 1199"
 Cohesion: 0.83
@@ -6209,6 +6228,10 @@ Nodes (3): Drawing Billing, Drawing Settings, Midjourney Configuration
 Cohesion: 0.67
 Nodes (3): conexao.js — Queue System, Connection Architecture (Node), Pool Config
 
+### Community 1224 - "Community 1224"
+Cohesion: 0.43
+Nodes (6): isNumber(), mergeRanges(), ParsedHttpStatusCodeRules, parseHttpStatusCodeRules(), parseToken(), StatusCodeRange
+
 ### Community 1225 - "Community 1225"
 Cohesion: 0.67
 Nodes (3): ContainerConfig, DeploymentRequest, RegistryConfig
@@ -6216,6 +6239,10 @@ Nodes (3): ContainerConfig, DeploymentRequest, RegistryConfig
 ### Community 1226 - "Community 1226"
 Cohesion: 0.67
 Nodes (3): ContainerEvent, ContainerList, Container
+
+### Community 1236 - "Community 1236"
+Cohesion: 0.20
+Nodes (3): Dde(), lde(), rne
 
 ### Community 1244 - "Community 1244"
 Cohesion: 0.67
@@ -6293,29 +6320,45 @@ Nodes (3): v0.9.7, New Contributors, What's Changed
 Cohesion: 0.67
 Nodes (3): Verify Basic Auth credentials. Raises 401 if invalid or missing., verify_basic_auth(), HTTPBasicCredentials
 
-### Community 2146 - "Community 2146"
-Cohesion: 0.60
-Nodes (5): filterGeminiResponsesInput(), filterGeminiResponsesTools(), geminiRawJSONPresent(), preprocessGeminiOpenAIResponsesRequest(), OpenAIResponsesRequest
+### Community 2144 - "Community 2144"
+Cohesion: 0.67
+Nodes (3): GeminiImageRequest, GeminiImageInstance, GeminiImageParameters
+
+### Community 2145 - "Community 2145"
+Cohesion: 0.67
+Nodes (3): ToolConfig, FunctionCallingConfig, RetrievalConfig
+
+### Community 2147 - "Community 2147"
+Cohesion: 0.29
+Nodes (5): ResetPassword(), Route, ResetPasswordSearchParams, Route, UserResetPassword()
+
+### Community 2149 - "Community 2149"
+Cohesion: 0.33
+Nodes (5): UsageLogs(), logTypeSearchSchema, logTypeValues, Route, usageLogsSearchSchema
+
+### Community 2152 - "Community 2152"
+Cohesion: 0.17
+Nodes (8): ThemeSwitch(), Route, Route, Route, Route, ForbiddenError(), MaintenanceError(), UnauthorisedError()
 
 ## Knowledge Gaps
-- **10754 isolated node(s):** `mtime`, `ast_hash`, `semantic_hash`, `mtime`, `ast_hash` (+10749 more)
+- **10785 isolated node(s):** `mtime`, `ast_hash`, `semantic_hash`, `mtime`, `ast_hash` (+10780 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **204 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **207 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `createElement()` connect `Community 4` to `Community 1`, `Community 97`, `Community 9`, `Community 17`, `Community 51`?**
+- **Why does `createElement()` connect `Community 4` to `Community 1`, `Community 2`, `Community 39`, `Community 17`, `Community 18`, `Community 55`, `Community 27`?**
   _High betweenness centrality (0.112) - this node is a cross-community bridge._
-- **Why does `__()` connect `Community 1` to `Community 97`, `Community 4`, `Community 39`, `Community 135`, `Community 9`, `Community 10`, `Community 174`, `Community 239`, `Community 17`, `Community 49`, `Community 145`, `Community 20`, `Community 23`, `Community 24`, `Community 27`?**
+- **Why does `__()` connect `Community 1` to `Community 97`, `Community 322`, `Community 4`, `Community 39`, `Community 9`, `Community 10`, `Community 174`, `Community 239`, `Community 17`, `Community 49`, `Community 20`, `Community 23`, `Community 55`, `Community 24`, `Community 27`?**
   _High betweenness centrality (0.089) - this node is a cross-community bridge._
-- **Why does `cn()` connect `Community 3` to `Community 2`, `Community 131`, `Community 258`, `Community 389`, `Community 263`, `Community 8`, `Community 7`, `Community 11`, `Community 139`, `Community 274`, `Community 19`, `Community 18`, `Community 21`, `Community 152`, `Community 26`, `Community 38`, `Community 166`, `Community 40`, `Community 41`, `Community 42`, `Community 428`, `Community 304`, `Community 817`, `Community 51`, `Community 64`, `Community 66`, `Community 324`, `Community 325`, `Community 460`, `Community 80`, `Community 81`, `Community 83`, `Community 340`, `Community 87`, `Community 218`, `Community 92`, `Community 221`, `Community 98`, `Community 101`, `Community 364`, `Community 112`, `Community 755`, `Community 252`, `Community 127`?**
-  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Community 3` to `Community 2`, `Community 131`, `Community 258`, `Community 389`, `Community 263`, `Community 8`, `Community 11`, `Community 139`, `Community 18`, `Community 19`, `Community 274`, `Community 152`, `Community 26`, `Community 160`, `Community 38`, `Community 166`, `Community 40`, `Community 428`, `Community 173`, `Community 304`, `Community 817`, `Community 51`, `Community 183`, `Community 64`, `Community 66`, `Community 324`, `Community 203`, `Community 460`, `Community 80`, `Community 81`, `Community 83`, `Community 340`, `Community 87`, `Community 345`, `Community 218`, `Community 92`, `Community 221`, `Community 735`, `Community 98`, `Community 484`, `Community 100`, `Community 2152`, `Community 364`, `Community 112`, `Community 755`, `Community 252`, `Community 127`?**
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
 - **What connects `mtime`, `ast_hash`, `semantic_hash` to the rest of the system?**
-  _10842 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _10873 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.0016542597187758478 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.001639344262295082 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.004276615104640583 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.004517701786952341 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.01240418118466899 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.01254997579647525 - nodes in this community are weakly interconnected._

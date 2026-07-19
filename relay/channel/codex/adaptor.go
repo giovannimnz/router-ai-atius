@@ -143,7 +143,7 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	if info.IsStream {
 		return openai.OaiResponsesStreamHandler(c, info, resp)
 	}
-	return openai.OaiResponsesHandler(c, info, resp)
+	return openai.OaiResponsesBufferedStreamHandler(c, info, resp)
 }
 
 func (a *Adaptor) GetModelList() []string {

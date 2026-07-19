@@ -1019,6 +1019,13 @@ func recordCapacityField(reading *capacityReading, key string, value float64) {
 	case "total_pods":
 		reading.TotalPods = int(value)
 		reading.HasPods = true
+	case "queue":
+		// TEI exposes queue depth but not CPU/memory utilization. Any queued
+		// request means its currently constrained serving capacity is saturated.
+		reading.HasCapacity = true
+		if value > 0 && reading.UsedPercent < 100 {
+			reading.UsedPercent = 100
+		}
 	}
 }
 
@@ -1070,6 +1077,8 @@ func capacityFieldKind(key string) (string, bool) {
 		normalized == "replicas",
 		strings.HasSuffix(normalized, "replicastotal"):
 		return "total_pods", false
+	case strings.HasSuffix(normalized, "queuesize"):
+		return "queue", false
 	default:
 		return "", false
 	}

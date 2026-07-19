@@ -7,8 +7,9 @@ metadata:
     app.kubernetes.io/name: router-ai-atius
     app.kubernetes.io/part-of: atius-router
   annotations:
-    router.atius.com.br/storage-warning: "local-path is single-node, RWO, reclaim Delete, and not HA"
+    router.atius.com.br/storage-warning: "local-path is single-node, RWO, reclaim Retain, and not HA"
 spec:
+  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:
@@ -25,6 +26,11 @@ metadata:
     app.kubernetes.io/part-of: atius-router
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: router-ai-atius
@@ -34,10 +40,35 @@ spec:
         app.kubernetes.io/name: router-ai-atius
         app.kubernetes.io/part-of: atius-router
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: atius-srv-1
       containers:
         - name: router-ai-atius
-          image: ghcr.io/giovannimnz/router-ai-atius:latest
+          image: ghcr.io/giovannimnz/router-ai-atius:v2.17.3
           imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              url_encode() {
+                encoded=
+                for hex in $(printf '%s' "$1" | od -An -tx1); do
+                  case "$hex" in
+                    2d|2e|3[0-9]|4[1-9a-f]|5[0-9a]|5f|6[1-9a-f]|7[0-9a]|7e)
+                      octal="$(printf '%03o' "$(printf '%d' "0x${hex}")")"
+                      encoded="${encoded}$(printf '%b' "\\${octal}")"
+                      ;;
+                    *)
+                      encoded="${encoded}%$(printf '%s' "$hex" | tr '[:lower:]' '[:upper:]')"
+                      ;;
+                  esac
+                done
+                printf '%s' "$encoded"
+              }
+              export SQL_DSN="postgresql://admin:$(url_encode "$POSTGRES_PASSWORD")@router-ai-atius-postgres:5432/DBRouterAiAtius?sslmode=disable"
+              export REDIS_CONN_STRING="redis://:$(url_encode "$REDIS_PASSWORD")@router-ai-atius-redis:6379"
+              exec /new-api
           ports:
             - containerPort: 3000
               name: http
@@ -45,10 +76,6 @@ spec:
             - configMapRef:
                 name: router-ai-atius-config
           env:
-            - name: SQL_DSN
-              value: postgresql://admin:$(POSTGRES_PASSWORD)@router-ai-atius-postgres:5432/DBRouterAiAtius?sslmode=disable
-            - name: REDIS_CONN_STRING
-              value: redis://:$(REDIS_PASSWORD)@router-ai-atius-redis:6379
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -400,27 +400,27 @@ Plans:
 
 ---
 
-## v2.16 — k3s shadow, cutover, and planning hygiene [PLANNED]
+## v2.16 — k3s shadow, cutover, and planning hygiene ✓
 
-**Status:** Planned
+**Status:** Complete (2026-07-19)
 
 ### Phase 29: k3s-shadow-restore-and-go-no-go
 
 **Goal:** Executar a parte manual que ficou deliberadamente fora da `Phase 22`: criar secrets fora do git, rodar restore rehearsal real, aplicar o shadow deployment no namespace `router-ai-atius`, validar smoke local/sombra e registrar uma decisão formal de go/no-go antes de qualquer mudança no edge público.
-**Status:** Planned
+**Status:** Complete (2026-07-19)
 **Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
 **Requirements:** PHASE-22-K3S-PREFLIGHT, PHASE-22-STATEFUL-DATA, PHASE-22-RUNTIME-PARITY
 **Depends on:** Phase 22
-**Plans:** 0 plans
+**Plans:** 0 plans; execution evidence in `29-SUMMARY.md` and `29-VERIFICATION.md`
 
 ### Phase 30: k3s-public-cutover-and-rollback-soak
 
 **Goal:** Se a `Phase 29` passar, executar o cutover manual do Apache para o backend k3s, validar smoke público completo, manter o Podman como rollback ativo durante soak, e registrar a decisão final de permanência ou rollback.
-**Status:** Planned
+**Status:** Complete (2026-07-19)
 **Milestone:** v2.16 — k3s shadow, cutover, and planning hygiene
 **Requirements:** PHASE-22-CUTOVER-ROLLBACK, PHASE-20-GO-ONLY-V1-MODELS, PHASE-25-CLIENT-SMOKE-VALIDATION
 **Depends on:** Phase 29
-**Plans:** 0 plans
+**Plans:** 0 plans; execution evidence in `30-SUMMARY.md` and `30-VERIFICATION.md`
 
 ### Phase 31: planning-health-normalization-and-legacy-archive
 

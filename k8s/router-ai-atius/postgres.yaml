@@ -23,8 +23,9 @@ metadata:
     app.kubernetes.io/name: router-ai-atius-postgres
     app.kubernetes.io/part-of: atius-router
   annotations:
-    router.atius.com.br/storage-warning: "local-path is single-node, RWO, reclaim Delete, and not HA"
+    router.atius.com.br/storage-warning: "local-path is single-node, RWO, reclaim Retain, and not HA"
 spec:
+  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:
@@ -51,9 +52,11 @@ spec:
         app.kubernetes.io/name: router-ai-atius-postgres
         app.kubernetes.io/part-of: atius-router
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: atius-srv-1
       containers:
         - name: postgres
-          image: docker.io/library/postgres:15-alpine
+          image: docker.io/library/postgres@sha256:5530681ea5d3e2ed4ce396f9b5cb443efbac6baf2a8a19c0c0635e40ae7eadce
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432

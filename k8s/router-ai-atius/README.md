@@ -1,11 +1,13 @@
 # k8s/router-ai-atius
 
-Estado desta arvore:
+Estado desta arvore desde 2026-07-19:
 
-- manifestos para shadow deployment e cutover planejado
+- runtime publico implantado no k3s fixo do `atius-srv-1`
 - namespace dedicado `router-ai-atius`
 - sem secrets reais em git
-- sem ingress controller nesta fase
+- Apache como edge, sem ingress controller adicional
+- release `ghcr.io/giovannimnz/router-ai-atius:v2.17.3`
+- app, PostgreSQL e Redis limitados a `500m` por pod
 
 ## Secrets
 
@@ -33,6 +35,9 @@ scripts/k3s-router-validate-manifests.sh
 RUN_K3S_ROUTER_APPLY=1 scripts/k3s-router-apply-shadow.sh
 ```
 
+O script e util para recriacao/rehearsal. Em producao, valide primeiro
+`DiskPressure=False`; nao adicione toleration de disk pressure.
+
 ## Restore rehearsal
 
 Antes de qualquer cutover:
@@ -49,6 +54,7 @@ Antes de qualquer cutover:
 
 - Postgres usa `local-path` e portanto nao e HA.
 - PVC do router tambem usa `local-path`.
+- Os PVs ativos usam reclaim `Retain` para impedir remocao junto com o PVC.
 - Redis nesta trilha inicial e efemero para shadow; se producao exigir
   restauracao de estado, isso deve ser promovido para passo explicito no
   cutover.
@@ -58,6 +64,27 @@ Antes de qualquer cutover:
 ## TEI
 
 - TEI e dependencia externa desta fase.
-- O endpoint base sugerido fica no ConfigMap como
-  `http://tei-gte.ai-search.svc.cluster.local`.
+- O endpoint efetivo fica no ConfigMap como `http://10.21.1.21:3115`, pela
+  faixa OCI DRG.
+- Health e capacidade sao lidos sem auth em `/health` e `/metrics`.
+  `te_queue_size=0` indica fila livre; qualquer valor positivo bloqueia
+  scale-up como saturacao observavel, sem inferir CPU/memoria inexistentes.
 - Nao mudar recursos do TEI a partir desta arvore.
+
+## Imagem
+
+O Deployment usa a tag de release e `imagePullPolicy: IfNotPresent`. A release
+deve existir na GHCR e pode ser preimportada no namespace CRI `k8s.io` para
+rollout offline; nao use `Never`, pois isso impede recuperacao apos GC local.
+
+## Backup
+
+`scripts/k3s-router-backup.sh` detecta o runtime pelo backend Apache. Use
+`ROUTER_BACKUP_SOURCE=k3s` ou `podman` para forcar uma fonte durante rehearsal
+ou rollback. Os dumps usam `umask 077` e nunca exportam Kubernetes Secrets.
+
+## Rollback
+
+O Router Podman permanece preservado e parado. Restaurar os vhosts salvos em
+`/var/backups/router-ai-atius/`, validar Apache e iniciar
+`container-router-ai-atius.service`; consultar `docs/K3S-MIGRATION.md`.

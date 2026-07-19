@@ -4,10 +4,10 @@ milestone: v2.17
 milestone_name: — Codex OAuth lifecycle and upstream auth diagnostics
 current_phase: null
 status: Awaiting next milestone
-stopped_at: Phase 32 complete
-last_updated: "2026-07-12T17:25:58.448Z"
-last_activity: 2026-07-12
-last_activity_desc: Milestone v2.17 completed and archived
+stopped_at: Phases 29 and 30 complete; runtime public on k3s
+last_updated: "2026-07-19T20:21:06Z"
+last_activity: 2026-07-19
+last_activity_desc: v2.16 closed after restore, shadow, public cutover, and soak validation
 progress:
   total_phases: 1
   completed_phases: 1
@@ -20,12 +20,21 @@ progress:
 
 ## Current Position
 
-Phase: Milestone v2.17 complete
+Phase: Milestones v2.16 and v2.17 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-12 — Milestone v2.17 completed and archived
+Last activity: 2026-07-19 — Phases 29/30 completed; public runtime moved to k3s
 
 ## What Was Done
+
+### 2026-07-19 — v2.16 DONE + Codex metadata canonicalized
+
+- Restore final de `DBRouterAiAtius` no PostgreSQL k3s validado por contagens exatas das tabelas criticas.
+- Shadow stack e cutover Apache concluidos para o Service `router-ai-atius` (`10.43.102.221:3000`).
+- App, PostgreSQL e Redis estao fixados em `atius-srv-1`, com `500m` de request/limit por pod e PVCs `local-path`/`Retain`.
+- Podman foi parado, nao removido, e permanece como rollback operacional.
+- Catalogo Codex usa OAuth ativo como fonte primaria: se houver contexto e saida usa ambos; se houver apenas contexto, complementa somente a saida pela documentacao oficial OpenAI.
+- `/v1/responses` non-stream do Codex agora converte o stream SSE upstream para JSON terminal e passou em runtime publico.
 
 ### 2026-06-04 — v1.6 ✅ DONE + v1.8 ✅ DONE
 
@@ -39,10 +48,10 @@ Last activity: 2026-07-12 — Milestone v2.17 completed and archived
 - Validado em runtime: log do new-api mostra
   `i18n initialized with languages: zh-CN, zh-TW, en, pt`
 
-**v1.8 — Podman Migration** (closed, reconciled 2026-06-29):
+**v1.8 — Podman Migration** (historical, reconciled 2026-06-29; rollback since 2026-07-19):
 
-- Runtime production is already rootless Podman in
-  `/home/ubuntu/GitHub/containers/router-ai-atius`.
+- Rootless Podman remains installed and stopped as rollback in
+  `/home/ubuntu/GitHub/containers/router-ai-atius`; it is no longer the public runtime.
 
 - User systemd source of truth: `container-router-ai-atius.service`.
 - Production pod: `atius-ai-router`; containers: `router-ai-atius`, `postgres`,
@@ -78,22 +87,17 @@ Last activity: 2026-07-12 — Milestone v2.17 completed and archived
 
 ```
 Apache (router.atius.com.br:443)
-├── /v1/*          → router-ai-atius Go backend: 127.0.0.1:3000/v1/*
-├── /api/*         → router-ai-atius Go backend: 127.0.0.1:3000/api/*
-├── /health        → router-ai-atius Go backend: 127.0.0.1:3000/api/status
-├── /login         → router-ai-atius Go backend: 127.0.0.1:3000/sign-in
-├── /logoff        → router-ai-atius Go backend: 127.0.0.1:3000/logout
-└── /              → router-ai-atius Go backend: 127.0.0.1:3000/ (SPA)
+├── app/API/health/login → k3s Service 10.43.102.221:3000
+└── docs                 → local 127.0.0.1:3003
 
-Runtime (rootless Podman, current host):
-router-ai-atius        Go AI gateway       local 127.0.0.1:3000
-postgres               PostgreSQL          pod-internal
-redis                  Redis               pod-internal
+Runtime (k3s, namespace router-ai-atius, node atius-srv-1):
+router-ai-atius            Go AI gateway       1 replica, 500m
+router-ai-atius-postgres   PostgreSQL 17        StatefulSet, 500m
+router-ai-atius-redis      Redis                Deployment, 500m
 
-Pod:     atius-ai-router
-DB:      DBRouterAiAtius
-Unit:    container-router-ai-atius.service
-Runbook: docs/PODMAN.md
+DB:       DBRouterAiAtius
+Rollback: container-router-ai-atius.service (inactive, preserved)
+Runbook:  docs/K3S-MIGRATION.md
 ```
 
 ## Phase Status (v1.6 — closed)
@@ -143,30 +147,20 @@ Runbook: docs/PODMAN.md
 | v2.13 | Router DB/catalog recovery on canonical host DB | ✅ done 2026-07-08 |
 | v2.14 | Branch hygiene and mainline reconciliation | ✅ done 2026-07-08 |
 | v2.15 | K3s transition and deferred runtime validation | ✅ done 2026-07-09 (preparation package only; no public cutover) |
-| v2.16 | K3s shadow, cutover, and planning hygiene | 🚧 in progress — Phase 31 done; 29/30 pending |
+| v2.16 | K3s shadow, cutover, and planning hygiene | ✅ done 2026-07-19 — Phases 29/30/31 complete |
 | v2.17 | Codex OAuth lifecycle and upstream auth diagnostics | ✅ done 2026-07-12 — Router-owned OAuth, probe, refresh e smokes completos |
 
 ## Next actions
 
-1. **Phase 29 — k3s shadow, restore, and go/no-go**:
-   - preencher secrets do namespace `router-ai-atius`
-   - executar restore rehearsal e shadow deploy real
-   - rodar smoke local/sombra e registrar go/no-go
-2. **Optional handoff v2.12 Phase 21 — feat-pt-native-pr**:
+1. **Optional handoff v2.12 Phase 21 — feat-pt-native-pr**:
    - Usar `origin/feat/phase21-pt-native-upstream`, não `feat/pt-native`
    - Validar o diff contra `upstream/main`
    - Abrir PR novo limpo contra `QuantumNous/new-api` somente se/quando aprovado
-3. **Phase 30 — public cutover and rollback soak**:
-   - mover Apache apenas se a Phase 29 produzir go real
-   - validar smoke publico completo
-   - manter Podman como rollback durante soak
-4. **Podman runtime guardrail**:
-   - Keep production lifecycle on `systemctl --user restart container-router-ai-atius.service`
-   - Keep dev/runtime checks on `podman-compose.yml` + `scripts/podman-validate.sh`
-   - Treat `docker-compose*.yml` as upstream/legacy compatibility unless a future
-     phase explicitly removes or renames them.
-
-5. **Limpar backup tag** `backup/before-squash-20260604` (>= 7 dias prod estavel)
+2. **K3s runtime guardrail**:
+   - operar pelo namespace `router-ai-atius` e validar sempre `500m` por pod
+   - manter `container-router-ai-atius.service` parado e preservado durante o soak estendido
+   - executar backup por `scripts/k3s-router-backup.sh` antes de mudancas de dados
+3. **Limpar backup tag** `backup/before-squash-20260604` apos confirmar que ainda nao e necessaria.
 
 ## Cross-references (Obsidian)
 
@@ -179,7 +173,7 @@ Runbook: docs/PODMAN.md
 - `61-Incidents/2026-06-04-translation-pt-br-status` — pt-BR 100% verificado
 
 ---
-*Last updated: 2026-07-10 07:45 -0300 after Phase 32 Codex OAuth lifecycle planning context*
+*Last updated: 2026-07-19 17:21 -0300 after Phases 29/30 k3s completion.*
 
 ## Performance Metrics
 
@@ -220,6 +214,9 @@ Runbook: docs/PODMAN.md
 - [Phase 32]: Codex channel type `57` needs a dedicated OAuth lifecycle UI; generic `Base URL` and `API Key` surfaces are regressions for this fork.
 - [Phase 32]: Future local expiration is not enough to declare a Codex credential valid; upstream auth probe/error state must participate in channel health.
 - [Phase 32]: Copying an access token from Codex CLI is break-glass only, not a durable Router credential.
+- [Codex metadata]: Active OAuth output is authoritative when present; official OpenAI metadata may fill only a missing output limit and must not overwrite OAuth context.
+- [Phase 29]: Single-node `local-path` is accepted for this deployment, with explicit `Retain`, node pinning, tested backup/restore, and no HA claim.
+- [Phase 30]: Apache targets the k3s Service; Podman remains stopped and intact as the immediate rollback path during extended soak.
 
 ## Accumulated Context
 
@@ -240,11 +237,13 @@ Runbook: docs/PODMAN.md
 - Phase 26 execution finalized on `2026-07-08`: dynamic Codex discovery now reads the active account’s `/backend-api/codex/models`, persists snapshots/candidates locally, gates promotion on a live `Ok` probe, overlays promoted metadata into `/v1/models`, and schedules daily sync at `04:00` without making the public catalog depend on live upstream reads.
 - Phase 27 execution finalized on `2026-07-08`: CI/auth/release guidance is now explicitly pinned to official OpenAI/Codex docs, `sync.yml` uses the first-class `effort` input for `openai/codex-action`, PT-BR operator docs capture API-key default automation, and ChatGPT-managed auth remains restricted to trusted private runners.
 - Phase 32 execution completed on `2026-07-12`: UI/API/runtime/docs/fork-sync were validated live, the `401 token_invalidated` incident is no longer active, and the temporary fallback was replaced by a Router-owned OAuth credential with refresh token; probe, refresh and local/public smokes passed.
+- Phase 29 execution completed on `2026-07-19`: the k3s stateful stack was restored from the effective production DSN, critical table counts matched, shadow health/catalog/embedding/Codex smokes passed, and the decision was GO.
+- Phase 30 execution completed on `2026-07-19`: Apache moved to Service `10.43.102.221:3000`, public smokes and non-stream Responses passed after the initial soak, and Podman stayed inactive but preserved for rollback.
 
 ## Session
 
-**Last session:** 2026-07-12T12:47:27-03:00
-**Stopped at:** Phase 32 complete
+**Last session:** 2026-07-19T17:21:06-03:00
+**Stopped at:** Phases 29/30 complete; k3s public runtime validated
 **Resume file:** None
 
 ## Project Reference
@@ -252,7 +251,7 @@ Runbook: docs/PODMAN.md
 See: `.planning/PROJECT.md` (updated 2026-07-12)
 
 **Core value:** Keep the router operational and upstream-compatible while making every change traceable to a narrow, validated plan.
-**Current focus:** Milestone v2.17 complete; next operational track remains Phase 29 k3s shadow/restore/go-no-go.
+**Current focus:** Milestones v2.16 and v2.17 complete; optional Phase 21 upstream handoff remains separate.
 
 ## Operator Next Steps
 

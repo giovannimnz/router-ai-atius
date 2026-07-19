@@ -15,11 +15,11 @@ Keep the router operational and upstream-compatible while making every change tr
 - Native Go `/v1/models` routing, provider catalog controls, Codex OAuth routing, and governed `embedding-gte-v1` are established fork behaviors that must not regress.
 - PT-BR language work has prior local evidence, but Phase 21 must revalidate it against current `upstream/main` before any upstream PR handoff.
 - Phase 32: o channel Codex type `57` usa UI dedicada, OAuth Router-owned com `refresh_token`, probe upstream, refresh automatico e erros de auth upstream distintos da API key interna do Router.
+- Phases 29/30: o runtime publico opera no k3s fixado em `atius-srv-1`, com PostgreSQL/Redis no namespace `router-ai-atius` e Podman preservado inativo como rollback.
+- Metadata Codex: contexto e saida publicados pelo OAuth ativo prevalecem; quando o OAuth publica apenas contexto, somente `max_completion_tokens` e preenchido pela fonte oficial OpenAI.
 
 ### Active
 
-- [ ] Phase 29: executar restore rehearsal e shadow deployment k3s com decisão formal de go/no-go.
-- [ ] Phase 30: realizar cutover público somente após go da Phase 29, com rollback e soak explícitos.
 - [ ] Phase 21: hand off the already-implemented PT-BR native lane through one clean upstream PR branch.
 - [ ] Phase 21: keep the upstream PR candidate free of `.planning`, Graphify, Obsidian, runtime, DB/catalog, Podman, provider-routing, or Atius-only content.
 
@@ -31,7 +31,7 @@ Keep the router operational and upstream-compatible while making every change tr
 
 ## Context
 
-The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Production currently uses rootless Podman and the canonical host PostgreSQL/PgBouncer path. Phase 32 shipped the durable Codex OAuth lifecycle; the next runtime track is the k3s shadow/restore gate in Phase 29.
+The project uses Go 1.22+, Gin, GORM, React frontends under `web/default` and `web/classic`, Bun for default frontend scripts, and GSD planning under `.planning/`. Production runs in the single-node k3s namespace `router-ai-atius`, fixed to `atius-srv-1`; the stopped rootless Podman unit remains the immediate rollback path. Phase 32 shipped the durable Codex OAuth lifecycle, and Phases 29/30 completed the restore, shadow, public cutover, and initial soak gates.
 
 The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implementation must start from a clean worktree or branch based on current `upstream/main`.
 
@@ -57,6 +57,8 @@ The main checkout may be dirty with unrelated fork/runtime work. Phase 21 implem
 | Credencial Codex valida exige probe e capacidade de renovacao | Expiracao local futura nao prova autenticidade upstream nem autorrenovacao | Validated in Phase 32 |
 | Access token do Codex CLI e somente break-glass | Copiar o refresh token compartilharia rotacao e poderia quebrar o CLI | Replaced by Router-owned OAuth in Phase 32 |
 | Validacao live deve confirmar o DSN efetivo do runtime | Bancos homonimos local e canonico podem produzir evidencia divergente | Validated in Phase 32 |
+| OAuth Codex ativo e a fonte primaria de contexto | Preserva os limites reais publicados para a conta; a fonte oficial complementa apenas a saida ausente | Validated in catalog and public API |
+| Runtime publico permanece no k3s de `atius-srv-1` | Atende o alvo operacional sem migracao de host; PVCs `local-path` usam `Retain` e nao pretendem HA | Validated in Phases 29/30 |
 
 ---
-*Last updated: 2026-07-12 after Phase 32 OAuth lifecycle completion.*
+*Last updated: 2026-07-19 after Codex metadata canonicalization and Phases 29/30 completion.*

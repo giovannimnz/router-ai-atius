@@ -39,7 +39,7 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependencias do fork-sync
-        run: python3 -m pip install pyyaml deep-translator
+        run: python3 -m pip install click prompt-toolkit pg8000 pyyaml rich deep-translator
 
       - name: Salvar versoes temporarias
         run: |

@@ -174,20 +174,22 @@ Regras praticas:
 - MiniMax embeddings pode retornar `429` quando o upstream bloquear por quota/RPM persistente; nesse caso manter `embo-01` fora do catalogo ativo e manter o provider MiniMax desabilitado no estado final.
 - `MiniMax` e `DeepSeek` devem preferir `base_url` no provider root (`https://api.minimax.io`, `https://api.deepseek.com`), mas o relay Go tambem aceita base URL com `/v1` e normaliza automaticamente. Nao usar sufixos especificos como `/anthropic` no canal consolidado.
 
-## Governor de embeddings Go-native
+## Governor de embeddings e reranking Go-native
 
 Estado atualizado em 2026-07-05:
 
 - O governor de embeddings roda dentro do proprio processo Go do router; nao ha sidecar, middleware Python, container adicional ou rota `model-detailed` no caminho canonico.
-- Implementacao principal: `service/embeddinggovernor/` e integracao em `relay/embedding_handler.go`.
-- Escopo default: somente `embedding-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
-- `embedding-gte-v1` e o unico alias publico governado; `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1` nao muda durante a recuperacao/catalog restore.
+- Implementacao principal: `service/embeddinggovernor/`, com integracao em `relay/embedding_handler.go` e `relay/rerank_handler.go`.
+- Escopo default: `embedding-gte-v1` e `reranker-gte-multilingual-v1`. Outros modelos passam pelo relay normal sem fila do governor.
+- Os dois aliases publicos locais devem permanecer em `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-multilingual-v1` durante recovery, catalog restore e deploy.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/capacidade/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
 - Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
   2. thresholds locais derivados do request (`InputCount >= 2` ou `InputChars >= 12000`).
 - Nao exponha um alias publico `*-batch`: sem alias publico batch; batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
 - arrays governados de `embedding-gte-v1` acima de `4` itens fazem fail-closed no relay antes do acquire do governor ou dispatch upstream. O header `interactive` nao bypassa esse cap, porque o TEI local nao tem caminho seguro de recomposicao transparente de resposta para batches maiores.
+- O reranker usa `X-Rerank-Workload` e compartilha o mesmo governor. O canal Advanced Custom converte `POST /v1/rerank` de `query`/`documents` para o contrato TEI `query`/`texts`, depois converte `score` para `results[].relevance_score`.
+- Requests de `reranker-gte-multilingual-v1` acima de `20` documentos fazem fail-closed antes do acquire ou dispatch. O relay reaplica `top_n` e `return_documents`, sem expor o contrato nativo do TEI.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
 - Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
@@ -204,7 +206,7 @@ Variaveis de ambiente suportadas:
 
 ```bash
 EMBEDDING_GOVERNOR_ENABLED=true
-EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1
+EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-multilingual-v1
 EMBEDDING_GOVERNOR_BATCH_MODELS=
 EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true
 EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2
@@ -451,15 +453,24 @@ não exibe `Base URL`, `API Key`, reveal/copy ou o JSON secreto desse canal.
 
 - `Atualizar credencial` usa o `refresh_token` já salvo. Se ele estiver ausente
   ou invalidado, a ação correta é `Regenerar credencial`.
-- `Regenerar credencial` inicia Authorization Code + PKCE. Abra a URL somente no
-  Brave/Chrome já autenticado, conclua o consentimento e cole no diálogo a URL
-  final de callback ou o par `code#state`.
+- `Regenerar credencial` inicia por padrão o device authorization oficial. A
+  interface mostra `https://auth.openai.com/codex/device`, o código temporário e
+  faz polling até a autorização terminar; o Router troca e salva a credencial
+  sem importar `auth.json` ou tokens do Codex CLI.
+- `Alternativa manual pelo navegador` mantém Authorization Code + PKCE como
+  fallback. O diálogo e o campo de callback ficam disponíveis sem depender de
+  popup: use o link explícito e cole a URL final ou o par `code#state`.
 - `Probe upstream authentication` valida explicitamente a credencial no
   upstream. Ler metadata não executa probe.
 - `codex_upstream_token_invalidated` significa que o upstream rejeitou o token
   do channel Codex. Não é falha da API key interna usada pelo cliente do Router.
 - `codex_upstream_refresh_token_invalidated` ou `refresh_token_missing` exigem
   regeneração. Uma expiração local futura não prevalece sobre a falha upstream.
+- Refreshes do mesmo channel são serializados por processo e por lock da linha
+  no banco antes de consumir/gravar refresh tokens rotativos. Mesmo assim, não
+  copie a credencial do Router para outros hosts: cada cliente deve realizar sua
+  própria autorização, pois cópias divergentes da mesma família OAuth podem ser
+  invalidadas por uma renovação externa.
 - Break-glass: pode-se usar temporariamente apenas o `access_token` do Codex CLI,
   sem copiar `refresh_token`; esse fallback não tem renovação automática e deve
   ser substituído pela regeneração própria do Router.

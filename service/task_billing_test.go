@@ -32,6 +32,9 @@ func TestMain(m *testing.M) {
 	model.LOG_DB = db
 
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	if err := model.InitLogDB(); err != nil {
+		panic("failed to initialize test log db: " + err.Error())
+	}
 	common.RedisEnabled = false
 	common.BatchUpdateEnabled = false
 	common.LogConsumeEnabled = true
@@ -43,7 +46,9 @@ func TestMain(m *testing.M) {
 		&model.Log{},
 		&model.Channel{},
 		&model.TopUp{},
+		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
+		&model.SubscriptionPreConsumeRecord{},
 		&model.SystemTask{},
 		&model.SystemTaskLock{},
 	); err != nil {
@@ -66,7 +71,9 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM logs")
 		model.DB.Exec("DELETE FROM channels")
 		model.DB.Exec("DELETE FROM top_ups")
+		model.DB.Exec("DELETE FROM subscription_pre_consume_records")
 		model.DB.Exec("DELETE FROM user_subscriptions")
+		model.DB.Exec("DELETE FROM subscription_plans")
 		model.DB.Exec("DELETE FROM system_task_locks")
 		model.DB.Exec("DELETE FROM system_tasks")
 	})
@@ -94,14 +101,27 @@ func seedToken(t *testing.T, id int, userId int, key string, remainQuota int) {
 
 func seedSubscription(t *testing.T, id int, userId int, amountTotal int64, amountUsed int64) {
 	t.Helper()
+	plan := &model.SubscriptionPlan{
+		Id:                  id,
+		Title:               "test_plan",
+		DurationUnit:        "month",
+		DurationValue:       1,
+		Enabled:             true,
+		AllowWalletOverflow: common.GetPointer(true),
+		TotalAmount:         amountTotal,
+		QuotaResetPeriod:    "never",
+	}
+	require.NoError(t, model.DB.Create(plan).Error)
 	sub := &model.UserSubscription{
-		Id:          id,
-		UserId:      userId,
-		AmountTotal: amountTotal,
-		AmountUsed:  amountUsed,
-		Status:      "active",
-		StartTime:   time.Now().Unix(),
-		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
+		Id:                  id,
+		UserId:              userId,
+		PlanId:              id,
+		AmountTotal:         amountTotal,
+		AmountUsed:          amountUsed,
+		Status:              "active",
+		StartTime:           time.Now().Unix(),
+		EndTime:             time.Now().Add(30 * 24 * time.Hour).Unix(),
+		AllowWalletOverflow: true,
 	}
 	require.NoError(t, model.DB.Create(sub).Error)
 }

@@ -47,6 +47,7 @@ CONTAINER_NAME="${PODMAN_ADMIN_CONTAINER_NAME:-router-ai-atius}"
 EXPECTED_CONTAINERS_RAW="${PODMAN_ADMIN_EXPECTED_CONTAINERS:-router-ai-atius redis postgres}"
 UNIT_NAME="${PODMAN_ADMIN_UNIT_NAME:-container-router-ai-atius.service}"
 CLIANYTHING="${PODMAN_ADMIN_CLIANYTHING:-$ROOT_DIR/bin/clianything}"
+ATIUS_USER_QUOTA_GUARD="$ROOT_DIR/scripts/atius-user-quota-guard.sh"
 OMNI_CLI_DIR="${PODMAN_ADMIN_OMNI_CLI_DIR:-/home/ubuntu/GitHub/omni-srv-admin/cli}"
 read -r -a EXPECTED_CONTAINERS <<<"$EXPECTED_CONTAINERS_RAW"
 
@@ -81,6 +82,11 @@ require_cmd() {
     echo "missing required command: $1" >&2
     exit 3
   fi
+}
+
+audit_user_quota_invariant() {
+  [[ -x "$ATIUS_USER_QUOTA_GUARD" ]] || fail_policy "user quota guard is missing or not executable: $ATIUS_USER_QUOTA_GUARD"
+  "$ATIUS_USER_QUOTA_GUARD" audit
 }
 
 fail_policy() {
@@ -538,6 +544,7 @@ cmd_profile_run() {
 }
 
 cmd_compose_up() {
+  audit_user_quota_invariant
   local build_flag=""
   local -a services=()
   while (($#)); do
@@ -559,10 +566,12 @@ cmd_compose_down() {
 }
 
 cmd_compose_build() {
+  audit_user_quota_invariant
   run_compose -f "$COMPOSE_FILE" build "$@"
 }
 
 cmd_run_container() {
+  audit_user_quota_invariant
   require_cmd podman
   reject_limit_args "podman run" "$@"
   run_profiled podman run \
@@ -575,6 +584,7 @@ cmd_run_container() {
 }
 
 cmd_build() {
+  audit_user_quota_invariant
   require_cmd podman
   reject_limit_args "podman build" "$@"
   run_profiled podman build \
@@ -629,6 +639,7 @@ cmd_omni_run() {
 }
 
 cmd_prod_restart() {
+  audit_user_quota_invariant
   require_cmd systemctl
   systemctl --user daemon-reload
   systemctl --user restart "${UNIT_NAME}"

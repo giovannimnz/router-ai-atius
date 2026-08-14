@@ -22,6 +22,9 @@
 # Shell scripts
 *.sh text eol=lf
 
+# Canonical recovery patches contain diff markers and source indentation.
+patches/*.patch text eol=lf -whitespace
+
 # Binary files
 *.png binary
 *.jpg binary

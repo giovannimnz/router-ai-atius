@@ -16,6 +16,7 @@ trap 'rm -rf "$build_dir"' EXIT
 
 echo "building backend for ${version}"
 cd "$repo_root"
+"$repo_root/scripts/atius-user-quota-guard.sh" audit
 
 "$go_bin" mod download
 "$go_bin" build -buildvcs=false -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=${version}'" -o "$build_dir/new-api-${version}"

@@ -1,0 +1,264 @@
+diff --git a/relay/mjproxy_handler.go b/relay/mjproxy_handler.go
+index 2bde25050..b40992e71 100644
+--- a/relay/mjproxy_handler.go
++++ b/relay/mjproxy_handler.go
+@@ -211,20 +211,6 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
+ 		}
+ 	}
+ 
+-	userQuota, err := model.GetUserQuota(info.UserId, false)
+-	if err != nil {
+-		return &dto.MidjourneyResponse{
+-			Code:        4,
+-			Description: err.Error(),
+-		}
+-	}
+-
+-	if userQuota-priceData.Quota < 0 {
+-		return &dto.MidjourneyResponse{
+-			Code:        4,
+-			Description: "quota_not_enough",
+-		}
+-	}
+ 	requestURL := getMjRequestPath(c.Request.URL.String())
+ 	baseURL := c.GetString("base_url")
+ 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
+@@ -518,21 +504,6 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
+ 		}
+ 	}
+ 
+-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+-	if err != nil {
+-		return &dto.MidjourneyResponse{
+-			Code:        4,
+-			Description: err.Error(),
+-		}
+-	}
+-
+-	if consumeQuota && userQuota-priceData.Quota < 0 {
+-		return &dto.MidjourneyResponse{
+-			Code:        4,
+-			Description: "quota_not_enough",
+-		}
+-	}
+-
+ 	midjResponseWithStatus, responseBody, err := service.DoMidjourneyHttpRequest(c, time.Second*60, fullRequestURL)
+ 	if err != nil {
+ 		return &midjResponseWithStatus.Response
+diff --git a/service/billing_session.go b/service/billing_session.go
+index 32344eaf4..2911b4a9a 100644
+--- a/service/billing_session.go
++++ b/service/billing_session.go
+@@ -216,7 +216,7 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
+ 		// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
+ 		errMsg := err.Error()
+ 		if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
+-			return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
++			return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeSubscriptionQuotaUnavailable, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+ 		}
+ 		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+ 	}
+@@ -241,7 +241,7 @@ func (s *BillingSession) reserveFunding(delta int) error {
+ 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
+ 			return types.NewErrorWithStatusCode(
+ 				fmt.Errorf("订阅额度不足或未配置订阅: %s", err.Error()),
+-				types.ErrorCodeInsufficientUserQuota,
++				types.ErrorCodeSubscriptionQuotaUnavailable,
+ 				http.StatusForbidden,
+ 				types.ErrOptionWithSkipRetry(),
+ 				types.ErrOptionWithNoRecordErrorLog(),
+@@ -302,7 +302,7 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
+ 
+ 	switch s.funding.Source() {
+ 	case BillingSourceWallet:
+-		return s.relayInfo.UserQuota > trustQuota
++		return true
+ 	case BillingSourceSubscription:
+ 		// 订阅不能启用信任旁路。原因：
+ 		// 1. PreConsumeUserSubscription 要求 amount>0 来创建预扣记录并锁定订阅
+@@ -346,26 +346,8 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
+ 
+ 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
+ 
+-	// 钱包路径需要先检查用户额度
++	// Wallet quota is accounting state, never an authorization decision.
+ 	tryWallet := func() (*BillingSession, *types.NewAPIError) {
+-		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+-		if err != nil {
+-			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+-		}
+-		if userQuota <= 0 {
+-			return nil, types.NewErrorWithStatusCode(
+-				fmt.Errorf("用户额度不足, 剩余额度: %s", logger.FormatQuota(userQuota)),
+-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+-				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+-		}
+-		if userQuota-preConsumedQuota < 0 {
+-			return nil, types.NewErrorWithStatusCode(
+-				fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
+-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+-				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+-		}
+-		relayInfo.UserQuota = userQuota
+-
+ 		session := &BillingSession{
+ 			relayInfo: relayInfo,
+ 			funding:   &WalletFunding{userId: relayInfo.UserId},
+@@ -398,20 +380,21 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
+ 		return session, nil
+ 	}
+ 
++	trySubscriptionWithWalletFallback := func() (*BillingSession, *types.NewAPIError) {
++		session, apiErr := trySubscription()
++		if apiErr != nil && apiErr.GetErrorCode() == types.ErrorCodeSubscriptionQuotaUnavailable {
++			return tryWallet()
++		}
++		return session, apiErr
++	}
++
+ 	switch pref {
+ 	case "subscription_only":
+-		return trySubscription()
++		return trySubscriptionWithWalletFallback()
+ 	case "wallet_only":
+ 		return tryWallet()
+ 	case "wallet_first":
+-		session, err := tryWallet()
+-		if err != nil {
+-			if err.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
+-				return trySubscription()
+-			}
+-			return nil, err
+-		}
+-		return session, nil
++		return tryWallet()
+ 	case "subscription_first":
+ 		fallthrough
+ 	default:
+@@ -422,21 +405,6 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
+ 		if !hasSub {
+ 			return tryWallet()
+ 		}
+-		session, apiErr := trySubscription()
+-		if apiErr != nil {
+-			if apiErr.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
+-				// 仅当用户的活跃订阅允许钱包回退时才回退到钱包，否则返回订阅额度不足错误
+-				allowOverflow, overflowErr := model.UserActiveSubscriptionsAllowWalletOverflow(relayInfo.UserId)
+-				if overflowErr != nil {
+-					return nil, types.NewError(overflowErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+-				}
+-				if allowOverflow {
+-					return tryWallet()
+-				}
+-				return nil, apiErr
+-			}
+-			return nil, apiErr
+-		}
+-		return session, nil
++		return trySubscriptionWithWalletFallback()
+ 	}
+ }
+diff --git a/service/pre_consume_quota.go b/service/pre_consume_quota.go
+index d1c83656a..0bc7e5bc7 100644
+--- a/service/pre_consume_quota.go
++++ b/service/pre_consume_quota.go
+@@ -28,39 +28,20 @@ func ReturnPreConsumedQuota(c *gin.Context, relayInfo *relaycommon.RelayInfo) {
+ 	}
+ }
+ 
+-// PreConsumeQuota checks if the user has enough quota to pre-consume.
+-// It returns the pre-consumed quota if successful, or an error if not.
++// PreConsumeQuota pre-consumes quota from the wallet path.
++// Wallet balance is allowed to go negative; only token quota may block.
+ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommon.RelayInfo) *types.NewAPIError {
+-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+-	if err != nil {
+-		return types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+-	}
+-	if userQuota <= 0 {
+-		return types.NewErrorWithStatusCode(fmt.Errorf("用户额度不足, 剩余额度: %s", logger.FormatQuota(userQuota)), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+-	}
+-	if userQuota-preConsumedQuota < 0 {
+-		return types.NewErrorWithStatusCode(fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+-	}
+-
+ 	trustQuota := common.GetTrustQuota()
+ 
+-	relayInfo.UserQuota = userQuota
+-	if userQuota > trustQuota {
+-		// 用户额度充足，判断令牌额度是否充足
+-		if !relayInfo.TokenUnlimited {
+-			// 非无限令牌，判断令牌额度是否充足
+-			tokenQuota := c.GetInt("token_quota")
+-			if tokenQuota > trustQuota {
+-				// 令牌额度充足，信任令牌
+-				preConsumedQuota = 0
+-				logger.LogInfo(c, fmt.Sprintf("用户 %d 剩余额度 %s 且令牌 %d 额度 %d 充足, 信任且不需要预扣费", relayInfo.UserId, logger.FormatQuota(userQuota), relayInfo.TokenId, tokenQuota))
+-			}
+-		} else {
+-			// in this case, we do not pre-consume quota
+-			// because the user has enough quota
++	if !relayInfo.TokenUnlimited {
++		tokenQuota := c.GetInt("token_quota")
++		if tokenQuota > trustQuota {
+ 			preConsumedQuota = 0
+-			logger.LogInfo(c, fmt.Sprintf("用户 %d 额度充足且为无限额度令牌, 信任且不需要预扣费", relayInfo.UserId))
++			logger.LogInfo(c, fmt.Sprintf("用户 %d 的令牌 %d 额度 %d 充足, 信任且不需要预扣费", relayInfo.UserId, relayInfo.TokenId, tokenQuota))
+ 		}
++	} else {
++		preConsumedQuota = 0
++		logger.LogInfo(c, fmt.Sprintf("用户 %d 使用无限额度令牌, 信任且不需要预扣费", relayInfo.UserId))
+ 	}
+ 
+ 	if preConsumedQuota > 0 {
+@@ -72,7 +53,7 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
+ 		if err != nil {
+ 			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+ 		}
+-		logger.LogInfo(c, fmt.Sprintf("用户 %d 预扣费 %s, 预扣费后剩余额度: %s", relayInfo.UserId, logger.FormatQuota(preConsumedQuota), logger.FormatQuota(userQuota-preConsumedQuota)))
++		logger.LogInfo(c, fmt.Sprintf("用户 %d 预扣费 %s（wallet 允许负余额）", relayInfo.UserId, logger.FormatQuota(preConsumedQuota)))
+ 	}
+ 	relayInfo.FinalPreConsumedQuota = preConsumedQuota
+ 	return nil
+diff --git a/service/quota.go b/service/quota.go
+index 862805d7c..d2f222dc3 100644
+--- a/service/quota.go
++++ b/service/quota.go
+@@ -90,11 +90,6 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
+ 	if relayInfo.UsePrice {
+ 		return nil
+ 	}
+-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+-	if err != nil {
+-		return err
+-	}
+-
+ 	token, err := model.GetTokenByKey(strings.TrimPrefix(relayInfo.TokenKey, "sk-"), false)
+ 	if err != nil {
+ 		return err
+@@ -138,10 +133,6 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
+ 
+ 	quota := calculateAudioQuota(quotaInfo)
+ 
+-	if userQuota < quota {
+-		return fmt.Errorf("user quota is not enough, user quota: %s, need quota: %s", logger.FormatQuota(userQuota), logger.FormatQuota(quota))
+-	}
+-
+ 	if !token.UnlimitedQuota && token.RemainQuota < quota {
+ 		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+ 	}
+diff --git a/types/error.go b/types/error.go
+index 3014f2b4d..8406fd1ca 100644
+--- a/types/error.go
++++ b/types/error.go
+@@ -86,8 +86,8 @@ const (
+ 	ErrorCodeUpdateDataError ErrorCode = "update_data_error"
+ 
+ 	// quota error
+-	ErrorCodeInsufficientUserQuota      ErrorCode = "insufficient_user_quota"
+-	ErrorCodePreConsumeTokenQuotaFailed ErrorCode = "pre_consume_token_quota_failed"
++	ErrorCodeSubscriptionQuotaUnavailable ErrorCode = "subscription_quota_unavailable"
++	ErrorCodePreConsumeTokenQuotaFailed   ErrorCode = "pre_consume_token_quota_failed"
+ )
+ 
+ type NewAPIError struct {

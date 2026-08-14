@@ -35,6 +35,11 @@ Repair uses `patches/atius-user-quota-unlimited.patch`, creates a temporary
 backup first, applies only when `git apply --check` succeeds, and audits again.
 Source drift fails closed and requires a manual semantic port.
 
+The audit also rejects direct `userQuota`/`.UserQuota` access in wallet,
+subscription and Midjourney admission code, plus the complete
+`PreWssConsumeQuota` function. Notification/accounting access later in
+`service/quota.go` remains allowed.
+
 ## Verification
 
 1. Run the guard audit.

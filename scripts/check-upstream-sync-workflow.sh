@@ -12,6 +12,8 @@ docker_nightly_workflow="${workflow_dir}/docker-image-nightly.yml"
 gitee_sync_workflow="${workflow_dir}/sync-to-gitee.yml"
 next_version_script="$repo_root/scripts/next-fork-version.sh"
 guard_script="$repo_root/scripts/fork-sync-guard.sh"
+user_quota_guard="$repo_root/scripts/atius-user-quota-guard.sh"
+user_quota_patch="$repo_root/patches/atius-user-quota-unlimited.patch"
 sync_fork_script="$repo_root/scripts/sync-fork.sh"
 auto_sync_deploy_script="$repo_root/scripts/auto-sync-deploy.sh"
 pull_restart_script="$repo_root/scripts/pull-and-restart.sh"
@@ -22,6 +24,21 @@ if [[ ! -f "$workflow" ]]; then
   echo "workflow not found: $workflow" >&2
   exit 1
 fi
+
+[[ -x "$user_quota_guard" ]] || {
+  echo "user quota guard must exist and be executable: $user_quota_guard" >&2
+  exit 1
+}
+[[ -s "$user_quota_patch" ]] || {
+  echo "canonical user quota patch must exist: $user_quota_patch" >&2
+  exit 1
+}
+"$user_quota_guard" audit
+
+grep -Fq 'audit_user_quota' "$guard_script" || {
+  echo "fork sync guard must audit the Atius user quota invariant before push/dispatch" >&2
+  exit 1
+}
 
 if [[ ! -x "$guard_script" ]]; then
   echo "fork sync guard must exist and be executable: $guard_script" >&2

@@ -70,6 +70,9 @@ truth.
 5. After restart, verify the selected image ID and repeat the original
    authenticated request against both `127.0.0.1:3000` and
    `https://router.atius.com.br`.
+   When the live release also carries governed reranking, verify the candidate
+   tree contains `relay/channel/advancedcustom/tei_rerank.go`, the runtime unit
+   keeps both governed aliases, and `/v1/rerank` still passes before cutover.
 6. Confirm the request reaches upstream or succeeds; a local
    `insufficient_user_quota` or `quota_not_enough` response is a failed gate.
 7. Verify the Router and `omni-srv-admin` commits are reachable from their

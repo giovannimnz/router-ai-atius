@@ -18,9 +18,10 @@ die() {
 }
 
 audit_runtime() {
-  local file matches
+  local file matches direct_balance_matches
   local failed=0
   local pattern='GetUserQuota|ErrorCodeInsufficientUserQuota|quota_not_enough|user quota is not enough|userQuota[[:space:]]*<|userQuota[[:space:]]*-[^;]*<[[:space:]]*0'
+  local direct_balance_pattern='(^|[^[:alnum:]_])userQuota([^[:alnum:]_]|$)|\.UserQuota([^[:alnum:]_]|$)'
 
   for file in "${runtime_files[@]}"; do
     [[ -f "$repo_root/$file" ]] || {
@@ -29,6 +30,22 @@ audit_runtime() {
       continue
     }
     matches="$(grep -nE "$pattern" "$repo_root/$file" || true)"
+    if [[ "$file" == "service/quota.go" ]]; then
+      # UserQuota remains valid in notification/accounting code later in this
+      # file. Only the realtime admission function must be balance-blind.
+      direct_balance_matches="$(awk '
+        /^func PreWssConsumeQuota\(/ { in_wss = 1 }
+        in_wss && /^func / && $0 !~ /^func PreWssConsumeQuota\(/ { exit }
+        in_wss && ($0 ~ /(^|[^[:alnum:]_])userQuota([^[:alnum:]_]|$)/ || $0 ~ /\.UserQuota([^[:alnum:]_]|$)/) {
+          printf "%d:%s\n", NR, $0
+        }
+      ' "$repo_root/$file")"
+    else
+      direct_balance_matches="$(grep -nE "$direct_balance_pattern" "$repo_root/$file" || true)"
+    fi
+    if [[ -n "$direct_balance_matches" ]]; then
+      matches="${matches:+$matches$'\n'}$direct_balance_matches"
+    fi
     if [[ -n "$matches" ]]; then
       echo "atius-user-quota-guard: forbidden local balance blocker in $file:" >&2
       echo "$matches" >&2

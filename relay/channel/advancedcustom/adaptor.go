@@ -31,13 +31,16 @@ type Adaptor struct {
 	claudeAdaptor claude.Adaptor
 	geminiAdaptor gemini.Adaptor
 
-	resolved  bool
-	converted bool
-	route     dto.AdvancedCustomRoute
-	converter string
+	info       *relaycommon.RelayInfo
+	resolved   bool
+	converted  bool
+	route      dto.AdvancedCustomRoute
+	converter  string
+	rerankTopN int
 }
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
+	a.info = info
 	a.openaiAdaptor.Init(info)
 	a.claudeAdaptor.Init(info)
 	a.geminiAdaptor.Init(info)
@@ -152,8 +155,18 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dto.RerankRequest) (any, error) {
-	a.converted = true
-	return a.openaiAdaptor.ConvertRerankRequest(c, relayMode, request)
+	converter, err := a.resolveForConversion(c, a.info)
+	if err != nil {
+		return nil, err
+	}
+	if converter == dto.AdvancedCustomConverterNone {
+		return a.openaiAdaptor.ConvertRerankRequest(c, relayMode, request)
+	}
+	if converter != dto.AdvancedCustomConverterJinaRerankToTEINative {
+		return nil, fmt.Errorf("converter %q does not support rerank requests", converter)
+	}
+	a.rerankTopN = normalizedRerankTopN(request.TopN, len(request.Documents))
+	return newTEIRerankRequest(request), nil
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
@@ -215,6 +228,8 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 
 	switch a.converter {
+	case dto.AdvancedCustomConverterJinaRerankToTEINative:
+		return doTEIRerankResponse(c, resp, info, a.rerankTopN)
 	case dto.AdvancedCustomConverterNone:
 		return a.doNativeResponse(c, resp, info)
 	case dto.AdvancedCustomConverterAnthropicMessagesToOpenAIChatCompletions,

@@ -80,6 +80,7 @@ const (
 	AdvancedCustomConverterOpenAIResponsesToOpenAIChatCompletions       = "openai_responses_to_openai_chat_completions"
 	AdvancedCustomConverterGeminiGenerateContentToOpenAIChatCompletions = "gemini_generate_content_to_openai_chat_completions"
 	AdvancedCustomConverterOpenAIChatCompletionsToGeminiGenerateContent = "openai_chat_completions_to_gemini_generate_content"
+	AdvancedCustomConverterJinaRerankToTEINative                        = "jina_rerank_to_tei_native"
 )
 
 const (
@@ -164,7 +165,8 @@ func IsAdvancedCustomConverterAllowed(converter string) bool {
 		AdvancedCustomConverterOpenAIChatCompletionsToOpenAIResponses,
 		AdvancedCustomConverterOpenAIResponsesToOpenAIChatCompletions,
 		AdvancedCustomConverterGeminiGenerateContentToOpenAIChatCompletions,
-		AdvancedCustomConverterOpenAIChatCompletionsToGeminiGenerateContent:
+		AdvancedCustomConverterOpenAIChatCompletionsToGeminiGenerateContent,
+		AdvancedCustomConverterJinaRerankToTEINative:
 		return true
 	default:
 		return false
@@ -262,6 +264,10 @@ func validateAdvancedCustomConverterPath(index int, incomingPath string, convert
 		}
 	case AdvancedCustomConverterGeminiGenerateContentToOpenAIChatCompletions:
 		if strings.Contains(incomingPath, ":generateContent") || strings.Contains(incomingPath, ":streamGenerateContent") {
+			return nil
+		}
+	case AdvancedCustomConverterJinaRerankToTEINative:
+		if incomingPath == "/v1/rerank" {
 			return nil
 		}
 	}

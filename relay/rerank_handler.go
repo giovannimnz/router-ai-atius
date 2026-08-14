@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -11,11 +13,16 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/embeddinggovernor"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
+
+var acquireRerankGovernor = embeddinggovernor.Acquire
+
+const maxGovernedTEIRerankDocuments = 20
 
 func RerankHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
@@ -23,6 +30,19 @@ func RerankHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	rerankReq, ok := info.Request.(*dto.RerankRequest)
 	if !ok {
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected dto.RerankRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	publicModelName := rerankReq.Model
+	if embeddinggovernor.IsGovernedModel(publicModelName) && len(rerankReq.Documents) > maxGovernedTEIRerankDocuments {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("%s supports at most %d documents per request", publicModelName, maxGovernedTEIRerankDocuments),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	inputChars := len(rerankReq.Query)
+	for _, document := range rerankReq.Documents {
+		inputChars += len(fmt.Sprint(document))
 	}
 
 	request, err := common.DeepCopy(rerankReq)
@@ -77,9 +97,32 @@ func RerankHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		info.UpstreamRequestBodySize = size
 		requestBody = body
 	}
+	lease, reject := acquireRerankGovernor(c.Request.Context(), embeddinggovernor.Request{
+		Model:       publicModelName,
+		ChannelID:   c.GetInt("channel_id"),
+		ChannelName: c.GetString("channel_name"),
+		Workload:    c.GetHeader("X-Rerank-Workload"),
+		InputCount:  len(rerankReq.Documents),
+		InputChars:  inputChars,
+	})
+	if reject != nil {
+		if reject.RetryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(int(reject.RetryAfter.Seconds())))
+		}
+		return types.NewErrorWithStatusCode(fmt.Errorf("%s", reject.Message), types.ErrorCode(reject.Code), reject.StatusCode, types.ErrOptionWithSkipRetry())
+	}
+	governorStartedAt := time.Now()
+	finishGovernor := func(success bool, statusCode int) {
+		if lease == nil {
+			return
+		}
+		lease.Finish(success, statusCode, time.Since(governorStartedAt))
+		lease = nil
+	}
 
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
+		finishGovernor(false, http.StatusInternalServerError)
 		return types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
 	}
 
@@ -88,6 +131,7 @@ func RerankHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
+			finishGovernor(false, httpResp.StatusCode)
 			newAPIError = service.RelayErrorHandler(c.Request.Context(), httpResp, false)
 			// reset status code 重置状态码
 			service.ResetStatusCode(newAPIError, statusCodeMappingStr)
@@ -97,10 +141,16 @@ func RerankHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 	usage, newAPIError := adaptor.DoResponse(c, httpResp, info)
 	if newAPIError != nil {
+		statusCode := http.StatusInternalServerError
+		if httpResp != nil {
+			statusCode = httpResp.StatusCode
+		}
+		finishGovernor(false, statusCode)
 		// reset status code 重置状态码
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError
 	}
+	finishGovernor(true, http.StatusOK)
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
 	return nil
 }

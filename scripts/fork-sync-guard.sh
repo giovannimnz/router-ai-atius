@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ATIUS_USER_QUOTA_GUARD="$SCRIPT_DIR/atius-user-quota-guard.sh"
 FORK_REPO="${FORK_REPO:-giovannimnz/router-ai-atius}"
 UPSTREAM_REPO="${UPSTREAM_REPO:-QuantumNous/new-api}"
 FORK_REMOTE="${FORK_REMOTE:-origin}"
@@ -12,6 +14,11 @@ UPSTREAM_PUSH_URL="${UPSTREAM_PUSH_URL:-DISABLED}"
 die() {
   echo "fork-sync-guard: $*" >&2
   exit 1
+}
+
+audit_user_quota() {
+  [[ -x "$ATIUS_USER_QUOTA_GUARD" ]] || die "user quota guard is missing or not executable"
+  "$ATIUS_USER_QUOTA_GUARD" audit
 }
 
 ensure_actions_repo() {
@@ -49,6 +56,7 @@ push_fork() {
   [[ "$remote" == "$FORK_REMOTE" ]] || die "refusing to push to '$remote'; only '$FORK_REMOTE' is allowed"
   ensure_actions_repo
   ensure_local_fork_remote
+  audit_user_quota
   git push "$remote" "$@"
 }
 
@@ -57,6 +65,7 @@ workflow_run() {
   shift || true
   [[ -n "$workflow" ]] || die "workflow name required"
   ensure_actions_repo
+  audit_user_quota
   gh workflow run "$workflow" --repo "$FORK_REPO" "$@"
 }
 
@@ -69,6 +78,9 @@ case "${1:-}" in
     ;;
   configure-remotes)
     configure_remotes
+    ;;
+  user-quota-audit)
+    audit_user_quota
     ;;
   push)
     shift
@@ -84,6 +96,7 @@ usage:
   scripts/fork-sync-guard.sh ensure-actions-repo
   scripts/fork-sync-guard.sh ensure-local-fork-remote
   scripts/fork-sync-guard.sh configure-remotes
+  scripts/fork-sync-guard.sh user-quota-audit
   scripts/fork-sync-guard.sh push origin <refspec...>
   scripts/fork-sync-guard.sh workflow-run <workflow.yml> [gh workflow args...]
 USAGE

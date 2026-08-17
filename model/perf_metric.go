@@ -3,6 +3,7 @@ package model
 import (
 	"time"
 
+	"github.com/QuantumNous/new-api/constant"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -48,14 +49,37 @@ func UpsertPerfMetric(metric *PerfMetric) error {
 	}).Create(metric).Error
 }
 
+func canonicalPerfModelName(modelName string) string {
+	if modelName == constant.LegacyAtiusLocalRerankerModel {
+		return constant.AtiusLocalRerankerModel
+	}
+	return modelName
+}
+
+func canonicalPerfModelSQL() string {
+	return "CASE WHEN model_name = '" + constant.LegacyAtiusLocalRerankerModel +
+		"' THEN '" + constant.AtiusLocalRerankerModel + "' ELSE model_name END"
+}
+
 func GetPerfMetrics(modelName string, group string, startTs int64, endTs int64) ([]PerfMetric, error) {
 	var metrics []PerfMetric
+	canonicalModel := canonicalPerfModelName(modelName)
+	modelExpr := canonicalPerfModelSQL()
 	query := DB.Model(&PerfMetric{}).
-		Where("model_name = ? AND bucket_ts >= ? AND bucket_ts <= ?", modelName, startTs, endTs)
+		Select(modelExpr+" as model_name, "+commonGroupCol+", bucket_ts, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(ttft_sum_ms) as ttft_sum_ms, SUM(ttft_count) as ttft_count, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms").
+		Where("bucket_ts >= ? AND bucket_ts <= ?", startTs, endTs)
+	if canonicalModel == constant.AtiusLocalRerankerModel {
+		query = query.Where("model_name IN ?", []string{constant.AtiusLocalRerankerModel, constant.LegacyAtiusLocalRerankerModel})
+	} else {
+		query = query.Where("model_name = ?", canonicalModel)
+	}
 	if group != "" {
 		query = query.Where(commonGroupCol+" = ?", group)
 	}
-	err := query.Order("bucket_ts ASC").Find(&metrics).Error
+	err := query.
+		Group(modelExpr + ", " + commonGroupCol + ", bucket_ts").
+		Order("bucket_ts ASC").
+		Find(&metrics).Error
 	return metrics, err
 }
 
@@ -80,8 +104,9 @@ type PerfMetricSummaryBucket struct {
 
 func GetPerfMetricsSummaryAll(startTs int64, endTs int64, groups []string) ([]PerfMetricSummary, error) {
 	var summaries []PerfMetricSummary
+	modelExpr := canonicalPerfModelSQL()
 	query := DB.Model(&PerfMetric{}).
-		Select("model_name, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms").
+		Select(modelExpr+" as model_name, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms").
 		Where("bucket_ts >= ? AND bucket_ts <= ?", startTs, endTs)
 	if groups != nil {
 		if len(groups) == 0 {
@@ -90,7 +115,7 @@ func GetPerfMetricsSummaryAll(startTs int64, endTs int64, groups []string) ([]Pe
 		query = query.Where(commonGroupCol+" IN ?", groups)
 	}
 	err := query.
-		Group("model_name").
+		Group(modelExpr).
 		Having("SUM(request_count) > 0").
 		Find(&summaries).Error
 	return summaries, err
@@ -98,8 +123,9 @@ func GetPerfMetricsSummaryAll(startTs int64, endTs int64, groups []string) ([]Pe
 
 func GetPerfMetricsSummaryBucketsAll(startTs int64, endTs int64, groups []string) ([]PerfMetricSummaryBucket, error) {
 	var summaries []PerfMetricSummaryBucket
+	modelExpr := canonicalPerfModelSQL()
 	query := DB.Model(&PerfMetric{}).
-		Select("model_name, bucket_ts, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms").
+		Select(modelExpr+" as model_name, bucket_ts, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms").
 		Where("bucket_ts >= ? AND bucket_ts <= ?", startTs, endTs)
 	if groups != nil {
 		if len(groups) == 0 {
@@ -108,7 +134,7 @@ func GetPerfMetricsSummaryBucketsAll(startTs int64, endTs int64, groups []string
 		query = query.Where(commonGroupCol+" IN ?", groups)
 	}
 	err := query.
-		Group("model_name, bucket_ts").
+		Group(modelExpr + ", bucket_ts").
 		Having("SUM(request_count) > 0").
 		Order("bucket_ts ASC").
 		Find(&summaries).Error

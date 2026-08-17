@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { ExternalLink, Loader2 } from 'lucide-react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -31,39 +31,106 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 
+import type { CodexDeviceAuthorization } from '../../types'
+
 interface CodexRegenerateDialogProps {
   open: boolean
   channelName: string
+  deviceAuthorization?: CodexDeviceAuthorization
+  isStarting: boolean
   onOpenChange: (open: boolean) => void
+  onPollDevice: () => Promise<'pending' | 'completed'>
+  onStartBrowserFallback: () => Promise<string>
   onComplete: (input: string) => Promise<boolean>
-}
-
-type OpenAuthorizationWindow = (
-  url: string,
-  target: string,
-  features: string
-) => Window | null
-
-export function openOAuthAuthorizationWindow(
-  authorizeUrl: string,
-  openWindow: OpenAuthorizationWindow
-) {
-  return openWindow(authorizeUrl, '_blank', 'noopener,noreferrer') !== null
 }
 
 export function CodexRegenerateDialog({
   open,
   channelName,
+  deviceAuthorization,
+  isStarting,
   onOpenChange,
+  onPollDevice,
+  onStartBrowserFallback,
   onComplete,
 }: CodexRegenerateDialogProps) {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [isCompleting, setIsCompleting] = useState(false)
+  const [isPolling, setIsPolling] = useState(false)
+  const [isStartingFallback, setIsStartingFallback] = useState(false)
+  const [browserAuthorizeUrl, setBrowserAuthorizeUrl] = useState('')
+  const [flowError, setFlowError] = useState('')
+
+  useEffect(() => {
+    if (!open || !deviceAuthorization || browserAuthorizeUrl) return
+    let active = true
+    let inFlight = false
+    const poll = async () => {
+      if (!active || inFlight) return
+      inFlight = true
+      setIsPolling(true)
+      try {
+        const status = await onPollDevice()
+        if (active && status === 'completed') {
+          setInput('')
+          setBrowserAuthorizeUrl('')
+          setFlowError('')
+          onOpenChange(false)
+        }
+      } catch (error) {
+        if (active) {
+          setFlowError(
+            error instanceof Error
+              ? error.message
+              : t('Device authorization polling failed')
+          )
+        }
+      } finally {
+        inFlight = false
+        if (active) setIsPolling(false)
+      }
+    }
+    const interval = window.setInterval(
+      poll,
+      Math.max(2, deviceAuthorization.interval_seconds) * 1000
+    )
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [
+    browserAuthorizeUrl,
+    deviceAuthorization,
+    onOpenChange,
+    onPollDevice,
+    open,
+    t,
+  ])
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && !isCompleting) setInput('')
+    if (!nextOpen && !isCompleting) {
+      setInput('')
+      setBrowserAuthorizeUrl('')
+      setFlowError('')
+    }
     onOpenChange(nextOpen)
+  }
+
+  const handleStartBrowserFallback = async () => {
+    setFlowError('')
+    setIsStartingFallback(true)
+    try {
+      setBrowserAuthorizeUrl(await onStartBrowserFallback())
+    } catch (error) {
+      setFlowError(
+        error instanceof Error
+          ? error.message
+          : t('Failed to start browser authorization')
+      )
+    } finally {
+      setIsStartingFallback(false)
+    }
   }
 
   const handleComplete = async () => {
@@ -74,11 +141,51 @@ export function CodexRegenerateDialog({
     try {
       if (await onComplete(transientInput)) {
         setInput('')
+        setBrowserAuthorizeUrl('')
+        setFlowError('')
         onOpenChange(false)
       }
     } finally {
       setIsCompleting(false)
     }
+  }
+
+  let deviceAuthorizationContent: ReactNode = null
+  if (isStarting && !deviceAuthorization) {
+    deviceAuthorizationContent = (
+      <div className='flex items-center gap-2 py-4 text-sm'>
+        <Loader2 className='h-4 w-4 animate-spin' />
+        {t('Starting device authorization...')}
+      </div>
+    )
+  } else if (deviceAuthorization) {
+    deviceAuthorizationContent = (
+      <div className='space-y-3 rounded-md border p-4'>
+        <div>
+          <p className='text-sm font-medium'>{t('Device login code')}</p>
+          <code className='mt-1 block text-2xl font-semibold tracking-widest'>
+            {deviceAuthorization.user_code}
+          </code>
+        </div>
+        <Button
+          render={
+            <a
+              href={deviceAuthorization.verification_url}
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
+        >
+          {t('Open device login')}
+          <ExternalLink className='ml-2 h-4 w-4' />
+        </Button>
+        <p className='text-muted-foreground text-xs'>
+          {isPolling
+            ? t('Waiting for OpenAI authorization...')
+            : t('This window will detect authorization automatically.')}
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -90,12 +197,52 @@ export function CodexRegenerateDialog({
           </DialogTitle>
           <DialogDescription>
             {t(
-              'Complete OpenAI authorization for channel {{channel}} in the new browser tab.',
+              'Authorize channel {{channel}} with a Router-owned OpenAI session.',
               { channel: channelName }
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className='space-y-2'>
+
+        {deviceAuthorizationContent}
+
+        <div className='space-y-3 border-t pt-4'>
+          <div>
+            <p className='text-sm font-medium'>
+              {t('Manual browser fallback')}
+            </p>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Use this only if device login is unavailable. The callback field remains accessible without popups.'
+              )}
+            </p>
+          </div>
+          {!browserAuthorizeUrl ? (
+            <Button
+              type='button'
+              variant='outline'
+              onClick={handleStartBrowserFallback}
+              disabled={isStartingFallback}
+            >
+              {isStartingFallback && (
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              )}
+              {t('Prepare browser fallback')}
+            </Button>
+          ) : (
+            <Button
+              variant='outline'
+              render={
+                <a
+                  href={browserAuthorizeUrl}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                />
+              }
+            >
+              {t('Open browser authorization')}
+              <ExternalLink className='ml-2 h-4 w-4' />
+            </Button>
+          )}
           <label htmlFor='codex-oauth-callback' className='text-sm font-medium'>
             {t('Authorization callback')}
           </label>
@@ -114,6 +261,11 @@ export function CodexRegenerateDialog({
           <p className='text-muted-foreground text-xs'>
             {t('Tokens are never displayed on this screen.')}
           </p>
+          {flowError && (
+            <p className='text-destructive text-sm' role='alert'>
+              {flowError}
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button

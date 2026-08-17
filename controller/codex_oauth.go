@@ -24,6 +24,8 @@ type codexOAuthCompleteRequest struct {
 	Input string `json:"input"`
 }
 
+const codexDeviceAuthorizationTTL = 15 * time.Minute
+
 func codexOAuthSessionKey(channelID int, field string) string {
 	return fmt.Sprintf("codex_oauth_%s_%d", field, channelID)
 }
@@ -70,6 +72,130 @@ func StartCodexOAuthForChannel(c *gin.Context) {
 		return
 	}
 	startCodexOAuthWithChannelID(c, channelID)
+}
+
+func StartCodexDeviceOAuthForChannel(c *gin.Context) {
+	channelID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, fmt.Errorf("invalid channel id: %w", err))
+		return
+	}
+	channelProxy, ok := getCodexOAuthChannelProxy(c, channelID)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	flow, err := service.StartCodexDeviceAuthorization(ctx, channelProxy)
+	if err != nil {
+		common.SysError("failed to start codex device authorization: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "failed to start device authorization"})
+		return
+	}
+
+	session := sessions.Default(c)
+	session.Set(codexOAuthSessionKey(channelID, "device_auth_id"), flow.DeviceAuthID)
+	session.Set(codexOAuthSessionKey(channelID, "device_user_code"), flow.UserCode)
+	session.Set(codexOAuthSessionKey(channelID, "device_created_at"), time.Now().Unix())
+	if err := session.Save(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"flow":             "device_code",
+			"verification_url": flow.VerificationURL,
+			"user_code":        flow.UserCode,
+			"interval_seconds": int(flow.Interval.Seconds()),
+			"expires_at":       flow.ExpiresAt.Format(time.RFC3339),
+		},
+	})
+}
+
+func PollCodexDeviceOAuthForChannel(c *gin.Context) {
+	channelID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, fmt.Errorf("invalid channel id: %w", err))
+		return
+	}
+	channelProxy, ok := getCodexOAuthChannelProxy(c, channelID)
+	if !ok {
+		return
+	}
+	session := sessions.Default(c)
+	deviceAuthID, _ := session.Get(codexOAuthSessionKey(channelID, "device_auth_id")).(string)
+	userCode, _ := session.Get(codexOAuthSessionKey(channelID, "device_user_code")).(string)
+	createdAt := codexOAuthSessionUnix(session.Get(codexOAuthSessionKey(channelID, "device_created_at")))
+	if strings.TrimSpace(deviceAuthID) == "" || strings.TrimSpace(userCode) == "" || createdAt == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "device authorization not started or session expired"})
+		return
+	}
+	if time.Since(time.Unix(createdAt, 0)) > codexDeviceAuthorizationTTL {
+		clearCodexDeviceOAuthSession(session, channelID)
+		_ = session.Save()
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "device authorization expired; start again"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	poll, err := service.PollCodexDeviceAuthorization(ctx, deviceAuthID, userCode, channelProxy)
+	if err != nil {
+		common.SysError("failed to poll codex device authorization: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "device authorization polling failed"})
+		return
+	}
+	if poll.Pending {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "pending", "data": gin.H{"status": "pending"}})
+		return
+	}
+	tokenRes, err := service.ExchangeCodexDeviceAuthorizationCode(ctx, poll.AuthorizationCode, poll.CodeVerifier, channelProxy)
+	if err != nil {
+		common.SysError("failed to exchange codex device authorization code: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "device authorization exchange failed; start again"})
+		return
+	}
+	clearCodexDeviceOAuthSession(session, channelID)
+	_ = session.Save()
+	saveCodexOAuthTokenResult(c, channelID, tokenRes)
+}
+
+func getCodexOAuthChannelProxy(c *gin.Context, channelID int) (string, bool) {
+	ch, err := model.GetChannelById(channelID, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return "", false
+	}
+	if ch == nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "channel not found"})
+		return "", false
+	}
+	if ch.Type != constant.ChannelTypeCodex {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "channel type is not Codex"})
+		return "", false
+	}
+	return ch.GetSetting().Proxy, true
+}
+
+func codexOAuthSessionUnix(value any) int64 {
+	switch v := value.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
+}
+
+func clearCodexDeviceOAuthSession(session sessions.Session, channelID int) {
+	session.Delete(codexOAuthSessionKey(channelID, "device_auth_id"))
+	session.Delete(codexOAuthSessionKey(channelID, "device_user_code"))
+	session.Delete(codexOAuthSessionKey(channelID, "device_created_at"))
 }
 
 func GetCodexChannelCredential(c *gin.Context) {
@@ -241,6 +367,10 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 		return
 	}
 
+	saveCodexOAuthTokenResult(c, channelID, tokenRes)
+}
+
+func saveCodexOAuthTokenResult(c *gin.Context, channelID int, tokenRes *service.CodexOAuthTokenResult) {
 	accountID, ok := service.ExtractCodexAccountIDFromJWT(tokenRes.AccessToken)
 	if !ok {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "failed to extract account_id from access_token"})
@@ -263,6 +393,7 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 		return
 	}
 
+	session := sessions.Default(c)
 	session.Delete(codexOAuthSessionKey(channelID, "state"))
 	session.Delete(codexOAuthSessionKey(channelID, "verifier"))
 	session.Delete(codexOAuthSessionKey(channelID, "created_at"))

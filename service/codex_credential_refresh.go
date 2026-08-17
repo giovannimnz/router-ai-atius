@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,11 +14,18 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/types"
+	"golang.org/x/sync/singleflight"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+var codexCredentialRefreshGroup singleflight.Group
 
 type CodexCredentialRefreshOptions struct {
 	ResetCaches bool
 }
+
+type codexChannelOAuthRefreshFunc func(context.Context, string, string) (*CodexOAuthTokenResult, error)
 
 type CodexOAuthKey struct {
 	IDToken      string `json:"id_token,omitempty"`
@@ -339,72 +347,109 @@ func NormalizeCodexUpstreamAuthError(err *types.NewAPIError) *types.NewAPIError 
 }
 
 func RefreshCodexChannelCredential(ctx context.Context, channelID int, opts CodexCredentialRefreshOptions) (*CodexOAuthKey, *model.Channel, error) {
-	ch, err := model.GetChannelById(channelID, true)
-	if err != nil {
-		return nil, nil, err
-	}
-	if ch == nil {
-		return nil, nil, fmt.Errorf("channel not found")
-	}
-	if ch.Type != constant.ChannelTypeCodex {
-		return nil, nil, fmt.Errorf("channel type is not Codex")
-	}
+	return refreshCodexChannelCredential(ctx, channelID, opts, RefreshCodexOAuthTokenWithProxy)
+}
 
-	oauthKey, err := parseCodexOAuthKey(strings.TrimSpace(ch.Key))
-	if err != nil {
-		return nil, nil, err
+func refreshCodexChannelCredential(ctx context.Context, channelID int, opts CodexCredentialRefreshOptions, refreshOAuth codexChannelOAuthRefreshFunc) (*CodexOAuthKey, *model.Channel, error) {
+	type refreshResult struct {
+		key     *CodexOAuthKey
+		channel *model.Channel
 	}
-	if strings.TrimSpace(oauthKey.RefreshToken) == "" {
-		return nil, nil, fmt.Errorf("codex channel: refresh_token is required to refresh credential")
-	}
+	value, err, _ := codexCredentialRefreshGroup.Do(strconv.Itoa(channelID), func() (any, error) {
+		var refreshed refreshResult
+		var channelForHealth *model.Channel
+		txErr := model.DB.Transaction(func(tx *gorm.DB) error {
+			var ch model.Channel
+			query := tx.Where("id = ?", channelID)
+			if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+				query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			if err := query.First(&ch).Error; err != nil {
+				return err
+			}
+			channelForHealth = &ch
+			if ch.Type != constant.ChannelTypeCodex {
+				return fmt.Errorf("channel type is not Codex")
+			}
+			oauthKey, err := parseCodexOAuthKey(strings.TrimSpace(ch.Key))
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(oauthKey.RefreshToken) == "" {
+				return fmt.Errorf("codex channel: refresh_token is required to refresh credential")
+			}
 
-	refreshCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+			refreshCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			res, err := refreshOAuth(refreshCtx, oauthKey.RefreshToken, ch.GetSetting().Proxy)
+			if err != nil {
+				return err
+			}
 
-	res, err := RefreshCodexOAuthTokenWithProxy(refreshCtx, oauthKey.RefreshToken, ch.GetSetting().Proxy)
-	if err != nil {
-		if healthErr := RecordCodexCredentialIssue(ch, ClassifyCodexCredentialIssue(err, 0)); healthErr != nil {
-			return nil, nil, errors.Join(err, fmt.Errorf("failed to persist Codex auth health: %w", healthErr))
+			oauthKey.AccessToken = res.AccessToken
+			oauthKey.RefreshToken = res.RefreshToken
+			oauthKey.LastRefresh = time.Now().Format(time.RFC3339)
+			oauthKey.Expired = res.ExpiresAt.Format(time.RFC3339)
+			if strings.TrimSpace(oauthKey.Type) == "" {
+				oauthKey.Type = "codex"
+			}
+			if strings.TrimSpace(oauthKey.AccountID) == "" {
+				if accountID, ok := ExtractCodexAccountIDFromJWT(oauthKey.AccessToken); ok {
+					oauthKey.AccountID = accountID
+				}
+			}
+			if strings.TrimSpace(oauthKey.Email) == "" {
+				if email, ok := ExtractEmailFromJWT(oauthKey.AccessToken); ok {
+					oauthKey.Email = email
+				}
+			}
+			encoded, err := common.Marshal(oauthKey)
+			if err != nil {
+				return err
+			}
+
+			setting := ch.GetSetting()
+			health := dto.CodexCredentialHealth{}
+			if setting.CodexCredentialHealth != nil {
+				health = *setting.CodexCredentialHealth
+			}
+			health.LastUpstreamStatus = 0
+			health.LastUpstreamAuthCode = ""
+			health.LastUpstreamAuthAt = ""
+			health.RequiresRegeneration = false
+			health.RegenerationReason = ""
+			setting.CodexCredentialHealth = &health
+			ch.SetSetting(setting)
+			if ch.Setting == nil {
+				return errors.New("codex credential health setting is empty")
+			}
+			if err := tx.Model(&model.Channel{}).Where("id = ?", ch.Id).Updates(map[string]any{
+				"key":     string(encoded),
+				"setting": *ch.Setting,
+			}).Error; err != nil {
+				return err
+			}
+			ch.Key = string(encoded)
+			refreshed = refreshResult{key: oauthKey, channel: &ch}
+			return nil
+		})
+		if txErr != nil {
+			if channelForHealth != nil {
+				if healthErr := RecordCodexCredentialIssue(channelForHealth, ClassifyCodexCredentialIssue(txErr, 0)); healthErr != nil {
+					return nil, errors.Join(txErr, fmt.Errorf("failed to persist Codex auth health: %w", healthErr))
+				}
+			}
+			return nil, txErr
 		}
-		return nil, nil, err
-	}
-
-	oauthKey.AccessToken = res.AccessToken
-	oauthKey.RefreshToken = res.RefreshToken
-	oauthKey.LastRefresh = time.Now().Format(time.RFC3339)
-	oauthKey.Expired = res.ExpiresAt.Format(time.RFC3339)
-	if strings.TrimSpace(oauthKey.Type) == "" {
-		oauthKey.Type = "codex"
-	}
-
-	if strings.TrimSpace(oauthKey.AccountID) == "" {
-		if accountID, ok := ExtractCodexAccountIDFromJWT(oauthKey.AccessToken); ok {
-			oauthKey.AccountID = accountID
-		}
-	}
-	if strings.TrimSpace(oauthKey.Email) == "" {
-		if email, ok := ExtractEmailFromJWT(oauthKey.AccessToken); ok {
-			oauthKey.Email = email
-		}
-	}
-
-	encoded, err := common.Marshal(oauthKey)
+		return &refreshed, nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-
-	if err := model.DB.Model(&model.Channel{}).Where("id = ?", ch.Id).Update("key", string(encoded)).Error; err != nil {
-		return nil, nil, err
-	}
-	ch.Key = string(encoded)
-	if err := ClearCodexCredentialAuthIssue(ch); err != nil {
-		return nil, nil, fmt.Errorf("credential refreshed but failed to clear Codex auth health: %w", err)
-	}
-
+	refreshed := value.(*refreshResult)
 	if opts.ResetCaches {
 		model.InitChannelCache()
 		ResetProxyClientCache()
 	}
-
-	return oauthKey, ch, nil
+	return refreshed.key, refreshed.channel, nil
 }

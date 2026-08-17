@@ -15,4 +15,6 @@ docs
 data/
 db-data/
 backups/
+logs/
+runtime/
 !THIRD-PARTY-LICENSES.md

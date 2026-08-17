@@ -16,7 +16,7 @@
 | Runbook oficial de CI/auth/release Codex | `/home/ubuntu/GitHub/containers/router-ai-atius/docs/CODEX-CI-AUTH-RELEASE.md` |
 
 Registro dedicado do corte full-Go 2026-06-18: `docs/FULL-GO-V1-MODELS-CUTOVER-2026-06-18.md`.
-Registro dedicado do provider `OpenAI - Codex`, aliases `-1m`, mapping upstream e custos long-context: `docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md`.
+Registro dedicado do provider `ChatGPT - Codex`, aliases `-1m`, mapping upstream e custos long-context: `docs/OPENAI-CODEX-PROVIDER-1M-CONTEXT.md`.
 Runtime k3s e rollback: `docs/K3S-MIGRATION.md` e `docs/K3S-CUTOVER-2026-07-19.md`.
 
 ## Status atual validado
@@ -83,7 +83,7 @@ Estado validado pelo banco:
 |---|---:|---:|---|---|
 | `MiniMax` | `35` | disabled | `https://api.minimax.io` | restaurado como canal consolidado unico, mas mantido desabilitado no estado final |
 | `DeepSeek` | `43` | enabled | `https://api.deepseek.com` | `deepseek-v4-pro`, `deepseek-v4-flash` via canal consolidado unico |
-| `OpenAI - Codex` | `57` | enabled | OAuth local / sem `base_url` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.3-codex-spark` |
+| `ChatGPT - Codex` | `57` | enabled | OAuth local / sem `base_url` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.3-codex-spark` |
 | `MiniMax - Anthropic-Compatible`, `MiniMax - Embeddings`, `DeepSeek - Anthropic-Compatible`, `Codex - Embeddings` | legado | disabled | historico | rotas substituidas pelos canais unificados |
 
 Comando:
@@ -160,7 +160,7 @@ curl -sS -H "Authorization: Bearer $ATIUS_ROUTER_TOKEN" 'http://127.0.0.1:3000/v
 
 Estado validado em 2026-06-18:
 
-- `text-embedding-3-small` e `text-embedding-3-large` pertencem ao channel 5 `OpenAI - Codex`, tipo `57`, mas estao desativados no runtime atual porque o upstream retornou `429 insufficient_quota`.
+- `text-embedding-3-small` e `text-embedding-3-large` pertencem ao channel 5 `ChatGPT - Codex`, tipo `57`, mas estao desativados no runtime atual porque o upstream retornou `429 insufficient_quota`.
 - O channel 5 compartilha a mesma credencial OAuth do Codex para chat/responses e embeddings. Nao copiar chave para outro canal.
 - `Codex - Embeddings` pode existir como canal desabilitado para historico/fallback manual, mas nao deve virar rota ativa.
 - `/v1/embeddings` no backend Go roteia para o adaptador Codex OAuth e usa `https://api.openai.com/v1/embeddings` no upstream.
@@ -172,9 +172,9 @@ Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
 - Para clientes Anthropic-Compatible, usar `/v1/messages` com `base_url=https://router.atius.com.br` ou `https://router.atius.com.br/v1` conforme SDK/cliente.
-- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. No runtime atual, o provider ativo e `Local TEI - GTE Embeddings` com o alias publico `embedding-gte-v1`, dimensao `768`, apontando para `http://10.100.100.4:3115`.
+- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. O provider dedicado `Atius Local Embeddings`, tipo `59`, consolida o alias publico `embedding-gte-v1` (dimensao `768`) e `reranker-gte-multilingual-v1`, apontando para os servicos TEI do `horistic-srv`. `http://10.100.100.4:3115` fica apenas como fallback/reserva explicitamente validado, nao como upstream primario do router.
 - Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
-- Provider de embeddings Codex: `OpenAI - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
+- Provider de embeddings Codex: `ChatGPT - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
 - MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido (`/v1/chat/completions`, `/v1/messages`, `/v1/embeddings`).
 - `/v1/models` sem token deve retornar 401. Isso nao indica falha.
@@ -190,6 +190,7 @@ Estado atualizado em 2026-07-05:
 - Implementacao principal: `service/embeddinggovernor/`, com integracao em `relay/embedding_handler.go` e `relay/rerank_handler.go`.
 - Escopo default: `embedding-gte-v1` e `reranker-gte-multilingual-v1`. Outros modelos passam pelo relay normal sem fila do governor.
 - Os dois aliases publicos locais devem permanecer em `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-multilingual-v1` durante recovery, catalog restore, upstream sync e deploy.
+- Canal TEI live consolidado no router: `Atius Local Embeddings`, tipo `59`, com os modelos `embedding-gte-v1` e `reranker-gte-multilingual-v1`. A rota `/v1/embeddings` segue para `TEI_BASE_URL` (fallback `http://10.21.1.21:3115`) e `/v1/rerank` segue para `TEI_RERANKER_BASE_URL` (fallback `http://10.21.1.21:31216`) com conversor `jina_rerank_to_tei_native` e sem autenticacao upstream. Os canais legados `9` e `10` foram removidos apos validacao E2E.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/capacidade/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
 - Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
@@ -450,9 +451,9 @@ Valido em 2026-06-18:
 
 - OpenAI SDK local contra `http://127.0.0.1:3000/v1` com `MiniMax-M3`: OK.
 - Anthropic SDK local contra `http://127.0.0.1:3000` com `MiniMax-M3`: OK.
-- `/v1/responses` publico com `gpt-5.6-sol` via `OpenAI - Codex`: OK em streaming e nao streaming desde `v2.17.3`.
+- `/v1/responses` publico com `gpt-5.6-sol` via `ChatGPT - Codex`: OK em streaming e nao streaming desde `v2.17.3`.
 - Router Go deve rotear Anthropic/OpenAI automaticamente via canal unico do provider quando o provider estiver ativo. Contrato final da Phase 24: `DeepSeek` channel 2 ativo; `MiniMax` channel 1 restaurado, mas desabilitado.
-- `OpenAI - Codex` esta ativo no channel 5 com modelos `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` e `gpt-5.3-codex-spark`; modelos com `visibility: hide` nao voltam ao catalogo.
+- `ChatGPT - Codex` esta ativo no channel 5 com modelos `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5` e `gpt-5.3-codex-spark`; modelos com `visibility: hide` nao voltam ao catalogo.
 - Embeddings Codex devem usar o mesmo channel 5 e a mesma credencial OAuth do Codex, sem servico/container adicional nem copia de chave; runtime atual deixa `text-embedding-3-*` desativado por `429 insufficient_quota`.
 - `data/codex-home/.codex/auth.json` existe e tem `auth_mode: chatgpt`; esse arquivo e credencial de runtime e nao deve ser copiado para docs/logs.
 - O smoke principal presente neste checkout e `scripts/smoke-provider-consolidation.py`; ele exige `ATIUS_ROUTER_TOKEN` via env para chamadas reais e valida a matriz ativa OpenAI/Anthropic/Codex.
@@ -511,7 +512,7 @@ O fork-sync do `omni-srv-admin` usa merge strategy `theirs`. Por isso, toda cust
 - `common/endpoint_type.go` e `common/endpoint_type_test.go`: MiniMax/DeepSeek multiprotocolo e `embo-01` como embeddings-only.
 - `dto/embedding.go`, `relay/channel/minimax/` e `relay/channel/deepseek/`: roteamento Go-native de embeddings MiniMax e URLs OpenAI/Anthropic por provider unico.
 - `relay/embedding_handler.go` e `service/embeddinggovernor/`: governor Go-native de embeddings locais, sem sidecar Python.
-- `constant/channel.go`, `web/default/src/features/channels/constants.ts`, `web/classic/src/constants/channel.constants.js` e locales i18n: label `OpenAI - Codex`.
+- `constant/channel.go`, `web/default/src/features/channels/constants.ts`, `web/classic/src/constants/channel.constants.js` e locales i18n: label `ChatGPT - Codex`.
 - `tools/clianything.py` e `tests/test_clianything.py`: `phase19-apply` deve consolidar canais e nunca recriar providers duplicados como rota ativa.
 - `relay/channel/codex/`: adaptador Codex OAuth com suporte a embeddings.
 - `service/codex_*.go`: refresh OAuth e protecao de referencias `shared:codex`.
@@ -539,7 +540,8 @@ Estado atualizado em 2026-06-26 apos a instalacao do TEI local:
 - Wrapper ativo: `/home/ubuntu/.local/bin/gbrain`.
 - O wrapper define `GBRAIN_STATEMENT_TIMEOUT=0`, `GBRAIN_IDLE_TX_TIMEOUT=0`, `OPENAI_BASE_URL=http://127.0.0.1:3000/v1` e `OPENAI_API_KEY` a partir de `~/.gbrain/config.json`.
 - `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-gte-v1` e `embedding_dimensions: 768`.
-- O GBrain deve chegar direto ao Go router; o endpoint ativo de embeddings e o canal `Local TEI - GTE Embeddings`, alias `embedding-gte-v1`, upstream `http://10.100.100.4:3115`.
+- O GBrain deve chegar direto ao Go router; o provider ativo e `Atius Local Embeddings`, tipo `59`, com alias `embedding-gte-v1` e upstream primario `http://10.21.1.21:3115` no `horistic-srv`.
+- O mesmo provider encaminha `reranker-gte-multilingual-v1` ao upstream `http://10.21.1.21:31216`, compartilhando o envelope do governor e aplicando a conversao Jina -> TEI nativa.
 - O governor Go-native protege esse caminho antes de despachar a chamada ao TEI.
 - `embo-01` e `text-embedding-3-*` ficam como historico/desativados ate MiniMax/Codex aceitarem chamadas reais sem `429`.
 - Backup antes da mudanca: `/home/ubuntu/.gbrain/config.json.bak-router-embeddings-20260615_030827`.
@@ -614,7 +616,7 @@ Sem `ATIUS_ROUTER_TOKEN`, os scripts de smoke retornam `exit 2` antes de chamar 
 Ultima bateria operacional estrita em 2026-06-18 (historico pre-Phase 24):
 
 - MiniMax ativo naquele momento: `MiniMax-M3`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.7` passaram via OpenAI-compatible e Anthropic-compatible.
-- OpenAI - Codex ativo: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark` passaram via OpenAI-compatible.
+- ChatGPT - Codex ativo: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex-spark` passaram via OpenAI-compatible.
 - DeepSeek ficou desativado naquele momento porque a chave upstream cadastrada retornou `401 invalid api key`.
 - Embeddings ficam fora do catalogo ativo: `embo-01` por `429 rate limit exceeded(RPM)` e `text-embedding-3-*` por `429 insufficient_quota`.
 - Rotas desativadas foram cobertas por negativo no smoke e nao devem gerar log de selecao de canal antigo.

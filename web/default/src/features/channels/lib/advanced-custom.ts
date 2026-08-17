@@ -25,6 +25,40 @@ import type {
 } from '../types'
 
 export const CHANNEL_TYPE_ADVANCED_CUSTOM = 58
+export const CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS = 59
+
+export const ATIUS_LOCAL_EMBEDDINGS_DEFAULTS = {
+  name: 'Atius Local Embeddings',
+  baseUrl: 'http://10.21.1.21:3115',
+  models: 'embedding-gte-v1,reranker-gte-multilingual-v1',
+  testModel: 'embedding-gte-v1',
+} as const
+
+export function isAdvancedCustomChannelType(type: number): boolean {
+  return (
+    type === CHANNEL_TYPE_ADVANCED_CUSTOM ||
+    type === CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS
+  )
+}
+
+export function createAtiusLocalEmbeddingsConfig(): AdvancedCustomConfig {
+  return {
+    advanced_routes: [
+      {
+        incoming_path: '/v1/embeddings',
+        upstream_path: 'http://10.21.1.21:3115/v1/embeddings',
+        converter: 'none',
+        auth: { type: 'none' },
+      },
+      {
+        incoming_path: '/v1/rerank',
+        upstream_path: 'http://10.21.1.21:31216/rerank',
+        converter: 'jina_rerank_to_tei_native',
+        auth: { type: 'none' },
+      },
+    ],
+  }
+}
 
 export const ADVANCED_CUSTOM_CONVERTER_OPTIONS: Array<{
   value: AdvancedCustomConverter
@@ -54,6 +88,10 @@ export const ADVANCED_CUSTOM_CONVERTER_OPTIONS: Array<{
   {
     value: 'openai_chat_completions_to_gemini_generate_content',
     label: 'OpenAI Chat to Gemini Generate Content',
+  },
+  {
+    value: 'jina_rerank_to_tei_native',
+    label: 'Jina Rerank to TEI Native',
   },
 ]
 
@@ -220,6 +258,11 @@ export const ADVANCED_CUSTOM_TEMPLATE_OPTIONS: AdvancedCustomTemplateOption[] =
       },
     },
     {
+      value: 'atius_local_embeddings',
+      label: 'Atius Local Embeddings',
+      config: createAtiusLocalEmbeddingsConfig(),
+    },
+    {
       value: 'official_openai_images',
       label: 'Official OpenAI Images',
       config: {
@@ -336,6 +379,9 @@ export function getAdvancedCustomUpstreamPathPlaceholder(
   }
   if (converter === 'openai_responses_to_openai_chat_completions') {
     return '/v1/chat/completions'
+  }
+  if (converter === 'jina_rerank_to_tei_native') {
+    return '/rerank'
   }
   return '/v1/chat/completions'
 }
@@ -621,6 +667,9 @@ function isConverterPathAllowed(
   }
   if (converter === 'openai_responses_to_openai_chat_completions') {
     return incomingPath === '/v1/responses'
+  }
+  if (converter === 'jina_rerank_to_tei_native') {
+    return incomingPath === '/v1/rerank'
   }
   return (
     incomingPath.includes(':generateContent') ||

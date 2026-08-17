@@ -25,8 +25,8 @@ import {
 } from '../constants'
 import type { Channel } from '../types'
 import {
-  CHANNEL_TYPE_ADVANCED_CUSTOM,
   advancedCustomConfigUsesRelativeUpstreamPath,
+  isAdvancedCustomChannelType,
   parseAdvancedCustomConfig,
   stringifyAdvancedCustomConfig,
   validateAdvancedCustomConfig,
@@ -219,7 +219,7 @@ export const channelFormSchema = z
       )
     }
 
-    if (data.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {
+    if (isAdvancedCustomChannelType(data.type)) {
       const advancedCustomConfig = parseAdvancedCustomConfig(
         data.advanced_custom
       )
@@ -611,7 +611,7 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     }
   }
 
-  if (formData.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {
+  if (isAdvancedCustomChannelType(formData.type)) {
     const advancedCustomConfig = parseAdvancedCustomConfig(
       formData.advanced_custom
     )

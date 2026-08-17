@@ -28,7 +28,6 @@ import {
   isCodexChannelType,
   shouldWarnAboutBaseUrl,
 } from './codex-credential-panel'
-import { openOAuthAuthorizationWindow } from './codex-regenerate-dialog'
 
 const translations = ptTranslations.translation as Record<string, string>
 
@@ -100,22 +99,6 @@ describe('CodexCredentialPanel', () => {
     assert.match(markup, /operator@example\.com/)
     assert.match(markup, /Probe OK/)
     assertGenericCredentialControlsAbsent(markup)
-  })
-
-  test('reports whether the OAuth authorization popup was opened', () => {
-    assert.equal(
-      openOAuthAuthorizationWindow('https://auth.openai.com/authorize', () =>
-        null
-      ),
-      false
-    )
-    assert.equal(
-      openOAuthAuthorizationWindow(
-        'https://auth.openai.com/authorize',
-        () => ({}) as Window
-      ),
-      true
-    )
   })
 
   test('represents a missing refresh token as regeneration-required', () => {

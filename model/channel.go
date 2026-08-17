@@ -163,7 +163,11 @@ func ApplyChannelGroupFilter(query *gorm.DB, group string) *gorm.DB {
 
 // Value implements driver.Valuer interface
 func (c ChannelInfo) Value() (driver.Value, error) {
-	return common.Marshal(&c)
+	data, err := common.Marshal(&c)
+	if err != nil {
+		return nil, err
+	}
+	return string(data), nil
 }
 
 // Scan implements sql.Scanner interface
@@ -952,7 +956,7 @@ func (channel *Channel) ValidateSettings() error {
 			return err
 		}
 	}
-	if channel.Type == constant.ChannelTypeAdvancedCustom {
+	if constant.IsAdvancedCustomChannelType(channel.Type) {
 		if channelOtherSettings.AdvancedCustom == nil {
 			return fmt.Errorf("advanced_custom is required")
 		}
@@ -961,6 +965,56 @@ func (channel *Channel) ValidateSettings() error {
 		if err := channelOtherSettings.AdvancedCustom.Validate(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (channel *Channel) ApplyAtiusLocalEmbeddingsDefaults() error {
+	if channel == nil || channel.Type != constant.ChannelTypeAtiusLocalEmbeddings {
+		return nil
+	}
+
+	if strings.TrimSpace(channel.Name) == "" {
+		channel.Name = constant.AtiusLocalEmbeddingsChannelName
+	}
+	if strings.TrimSpace(channel.Models) == "" {
+		channel.Models = constant.AtiusLocalEmbeddingModel + "," + constant.AtiusLocalRerankerModel
+	}
+	if strings.TrimSpace(channel.Group) == "" {
+		channel.Group = "default"
+	}
+	if channel.TestModel == nil || strings.TrimSpace(*channel.TestModel) == "" {
+		channel.TestModel = common.GetPointer(constant.AtiusLocalEmbeddingModel)
+	}
+
+	embeddingsBaseURL := strings.TrimRight(common.GetEnvOrDefaultString("TEI_BASE_URL", "http://10.21.1.21:3115"), "/")
+	rerankerBaseURL := strings.TrimRight(common.GetEnvOrDefaultString("TEI_RERANKER_BASE_URL", "http://10.21.1.21:31216"), "/")
+	if channel.BaseURL == nil || strings.TrimSpace(*channel.BaseURL) == "" {
+		channel.BaseURL = common.GetPointer(embeddingsBaseURL)
+	}
+
+	settings := dto.ChannelOtherSettings{}
+	if strings.TrimSpace(channel.OtherSettings) != "" {
+		if err := common.UnmarshalJsonStr(channel.OtherSettings, &settings); err != nil {
+			return err
+		}
+	}
+	if settings.AdvancedCustom == nil {
+		settings.AdvancedCustom = &dto.AdvancedCustomConfig{Routes: []dto.AdvancedCustomRoute{
+			{
+				IncomingPath: "/v1/embeddings",
+				UpstreamPath: embeddingsBaseURL + "/v1/embeddings",
+				Converter:    dto.AdvancedCustomConverterNone,
+				Auth:         &dto.AdvancedCustomRouteAuth{Type: dto.AdvancedCustomAuthTypeNone},
+			},
+			{
+				IncomingPath: "/v1/rerank",
+				UpstreamPath: rerankerBaseURL + "/rerank",
+				Converter:    dto.AdvancedCustomConverterJinaRerankToTEINative,
+				Auth:         &dto.AdvancedCustomRouteAuth{Type: dto.AdvancedCustomAuthTypeNone},
+			},
+		}}
+		channel.SetOtherSettings(settings)
 	}
 	return nil
 }

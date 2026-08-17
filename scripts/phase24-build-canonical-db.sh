@@ -245,13 +245,13 @@ Verification queries to review after restore:
   select count(*) as channels from channels;
   select count(*) as models from models;
   select count(*) as abilities from abilities;
-  select id, name, status, type, models from channels where id in (1,2,5,9) order by id;
+  select id, name, status, type, models from channels where id in (1,2,5,11) order by id;
 EOF
 
   if [[ "$EXECUTE" -eq 1 ]]; then
     run_sql "select datname from pg_database where datname in ('${SOURCE_DB}', '${TARGET_DB}') order by datname;"
     run_sql "select 'channels' as table_name, count(*) from channels union all select 'models', count(*) from models union all select 'abilities', count(*) from abilities;"
-    run_sql "select id, name, status, type, models from channels where id in (1,2,5,9) order by id;"
+    run_sql "select id, name, status, type, models from channels where id in (1,2,5,11) order by id;"
   else
     echo "DRY-RUN: psql verification queries against ${TARGET_DB}"
   fi

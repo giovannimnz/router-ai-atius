@@ -516,12 +516,12 @@ def build_phase19_provider_actions(openai_api_key: str | None = None) -> list[tu
     rename_codex_sql = textwrap.dedent(
         """
         update channels
-        set name = 'OpenAI - Codex'
+        set name = 'ChatGPT - Codex'
         where id = 5
         returning *
         """
     ).strip()
-    actions.append((channel_resource, rename_codex_sql, "rename Codex channel -> OpenAI - Codex"))
+    actions.append((channel_resource, rename_codex_sql, "rename Codex channel -> ChatGPT - Codex"))
 
     minimax_channel_sql = textwrap.dedent(
         """
@@ -611,7 +611,7 @@ def build_phase19_provider_actions(openai_api_key: str | None = None) -> list[tu
         update channels
         set
           status = 2,
-          remark = '2026-06-18: disabled after Go-native provider consolidation; route through MiniMax, DeepSeek, or OpenAI - Codex.'
+          remark = '2026-06-18: disabled after Go-native provider consolidation; route through MiniMax, DeepSeek, or ChatGPT - Codex.'
         where id in (3, 6, 7, 8)
         returning *
         """
@@ -1195,7 +1195,7 @@ def cmd_channel(args: argparse.Namespace) -> None:
     if action == "clone-keyed":
         if is_legacy_split_channel(args.name, args.base_url) and not args.allow_legacy_split:
             raise CliError(
-                "clone-keyed bloqueou um canal legado separado. Use canais unificados MiniMax/DeepSeek/OpenAI - Codex "
+                "clone-keyed bloqueou um canal legado separado. Use canais unificados MiniMax/DeepSeek/ChatGPT - Codex "
                 "ou informe --allow-legacy-split para uma acao manual excepcional."
             )
         sql = write_channel_from_source_key(

@@ -463,6 +463,12 @@ func validateTwoFactorAuth(twoFA *model.TwoFA, code string) bool {
 
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
+	if channel == nil {
+		return fmt.Errorf("channel cannot be empty")
+	}
+	if err := channel.ApplyAtiusLocalEmbeddingsDefaults(); err != nil {
+		return fmt.Errorf("failed to apply Atius Local Embeddings defaults: %w", err)
+	}
 	// 校验 channel settings
 	if err := channel.ValidateSettings(); err != nil {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())
@@ -470,7 +476,7 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
-		if channel == nil || channel.Key == "" {
+		if channel.Key == "" && channel.Type != constant.ChannelTypeAtiusLocalEmbeddings {
 			return fmt.Errorf("channel cannot be empty")
 		}
 
@@ -673,7 +679,7 @@ func AddChannel(c *gin.Context) {
 
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
-		if key == "" {
+		if key == "" && addChannelRequest.Channel.Type != constant.ChannelTypeAtiusLocalEmbeddings {
 			continue
 		}
 		localChannel := addChannelRequest.Channel
@@ -692,6 +698,7 @@ func AddChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	model.InitChannelCache()
 	service.ResetProxyClientCache()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

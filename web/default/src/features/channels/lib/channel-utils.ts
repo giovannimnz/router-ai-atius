@@ -52,6 +52,7 @@ export function getChannelTypeIcon(type: number): string {
     7: 'OpenAI', // OhMyGPT
     8: 'OpenAI', // Custom
     58: 'NewAPI', // Advanced Custom
+    59: 'NewAPI', // Atius Local Embeddings uses its custom asset at render sites
     3: 'Azure', // Azure
 
     // Anthropic

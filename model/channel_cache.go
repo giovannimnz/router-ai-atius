@@ -18,7 +18,7 @@ import (
 
 var group2model2channels map[string]map[string][]int // enabled channel
 var channelsIDM map[int]*Channel                     // all channels include disabled
-// channel2advancedCustomConfig caches parsed Advanced Custom (type 58) configs so
+// channel2advancedCustomConfig caches parsed Advanced Custom-compatible configs so
 // path-aware selection avoids re-parsing JSON per request. Refreshed on full sync.
 var channel2advancedCustomConfig map[int]*dto.AdvancedCustomConfig
 var channelSyncLock sync.RWMutex
@@ -33,7 +33,7 @@ func InitChannelCache() {
 	DB.Find(&channels)
 	for _, channel := range channels {
 		newChannelId2channel[channel.Id] = channel
-		if channel.Type == constant.ChannelTypeAdvancedCustom {
+		if constant.IsAdvancedCustomChannelType(channel.Type) {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
 				newChannel2advancedCustomConfig[channel.Id] = config
 			}
@@ -202,8 +202,8 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	return nil, errors.New("channel not found")
 }
 
-// filterChannelsByRequestPath restricts candidates by request path. Only Advanced
-// Custom (type 58) channels are path-checked: they are kept only when one of their
+// filterChannelsByRequestPath restricts candidates by request path. Advanced
+// Custom-compatible channels are kept only when one of their
 // configured routes matches requestPath. All other channel types always pass.
 // When requestPath is empty (non-relay callers) filtering is skipped.
 // Caller must hold channelSyncLock (read lock). The cached slice is never mutated.
@@ -219,7 +219,7 @@ func filterChannelsByRequestPath(channels []int, requestPath string) []int {
 			filtered = append(filtered, channelId)
 			continue
 		}
-		if channel.Type != constant.ChannelTypeAdvancedCustom {
+		if !constant.IsAdvancedCustomChannelType(channel.Type) {
 			filtered = append(filtered, channelId)
 			continue
 		}

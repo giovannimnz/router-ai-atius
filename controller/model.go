@@ -106,6 +106,10 @@ func init() {
 		adaptor.Init(meta)
 		channelId2Models[i] = adaptor.GetModelList()
 	}
+	channelId2Models[constant.ChannelTypeAtiusLocalEmbeddings] = []string{
+		constant.AtiusLocalEmbeddingModel,
+		constant.AtiusLocalRerankerModel,
+	}
 	openAIModels = lo.UniqBy(openAIModels, func(m dto.OpenAIModels) string {
 		return m.Id
 	})

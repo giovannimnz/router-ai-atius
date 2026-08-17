@@ -64,11 +64,17 @@ Antes de qualquer cutover:
 ## TEI
 
 - TEI e dependencia externa desta fase.
-- O endpoint efetivo fica no ConfigMap como `http://10.21.1.21:3115`, pela
-  faixa OCI DRG.
+- O contrato live atual fica fora do cluster, no `horistic-srv`, pela faixa OCI DRG:
+  - embeddings: `http://10.21.1.21:3115`
+  - reranker: `http://10.21.1.21:31216`
+- O ConfigMap guarda esses endpoints em `TEI_BASE_URL` e
+  `TEI_RERANKER_BASE_URL`.
 - Health e capacidade sao lidos sem auth em `/health` e `/metrics`.
   `te_queue_size=0` indica fila livre; qualquer valor positivo bloqueia
   scale-up como saturacao observavel, sem inferir CPU/memoria inexistentes.
+- `tei-gte.ai-search.svc.cluster.local` nao e mais a fonte de verdade desta
+  arvore; use-o apenas se a dependencia TEI for internalizada e revalidada no
+  proprio k3s.
 - Nao mudar recursos do TEI a partir desta arvore.
 
 ## Imagem

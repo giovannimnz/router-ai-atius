@@ -134,6 +134,7 @@ export type AdvancedCustomConverter =
   | 'openai_responses_to_openai_chat_completions'
   | 'gemini_generate_content_to_openai_chat_completions'
   | 'openai_chat_completions_to_gemini_generate_content'
+  | 'jina_rerank_to_tei_native'
 
 export type AdvancedCustomAuthType = 'none' | 'header' | 'query'
 
@@ -251,6 +252,26 @@ export interface CodexCredentialRegenerationStartResponse {
   data?: {
     authorize_url: string
   }
+}
+
+export interface CodexDeviceAuthorization {
+  flow: 'device_code'
+  verification_url: string
+  user_code: string
+  interval_seconds: number
+  expires_at: string
+}
+
+export interface CodexDeviceAuthorizationStartResponse {
+  success: boolean
+  message?: string
+  data?: CodexDeviceAuthorization
+}
+
+export interface CodexDeviceAuthorizationPollResponse {
+  success: boolean
+  message?: string
+  data?: CodexCredentialMetadata | { status: 'pending' }
 }
 
 // Multi-Key Management Types

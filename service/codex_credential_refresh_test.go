@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -192,4 +194,68 @@ func TestNormalizeCodexUpstreamAuthErrorUsesDistinctCode(t *testing.T) {
 	assert.Equal(t, types.ErrorCodeCodexUpstreamTokenInvalidated, normalized.GetErrorCode())
 	assert.Equal(t, "codex_upstream_auth_error", normalized.ToOpenAIError().Type)
 	assert.Contains(t, normalized.Error(), "refresh or regenerate")
+}
+
+func TestRefreshCodexChannelCredentialSingleflightsRotatingRefreshToken(t *testing.T) {
+	originalDB := model.DB
+	db, err := gorm.Open(sqlite.Open("file:codex-refresh-singleflight?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}))
+	model.DB = db
+	t.Cleanup(func() { model.DB = originalDB })
+
+	require.NoError(t, db.Create(&model.Channel{
+		Id:      77,
+		Type:    constant.ChannelTypeCodex,
+		Name:    "OpenAI - Codex",
+		Key:     `{"access_token":"old-access","refresh_token":"old-refresh","account_id":"acct-test","type":"codex"}`,
+		Setting: common.GetPointer(`{"codex_credential_health":{"last_upstream_status":401,"requires_regeneration":true}}`),
+	}).Error)
+
+	var calls atomic.Int32
+	refresh := func(_ context.Context, refreshToken string, _ string) (*CodexOAuthTokenResult, error) {
+		calls.Add(1)
+		assert.Equal(t, "old-refresh", refreshToken)
+		time.Sleep(30 * time.Millisecond)
+		return &CodexOAuthTokenResult{
+			AccessToken:  "new-access",
+			RefreshToken: "new-refresh",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil
+	}
+
+	type result struct {
+		key *CodexOAuthKey
+		err error
+	}
+	results := make(chan result, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			key, _, err := refreshCodexChannelCredential(context.Background(), 77, CodexCredentialRefreshOptions{}, refresh)
+			results <- result{key: key, err: err}
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	for result := range results {
+		require.NoError(t, result.err)
+		require.NotNil(t, result.key)
+		assert.Equal(t, "new-access", result.key.AccessToken)
+		assert.Equal(t, "new-refresh", result.key.RefreshToken)
+	}
+	assert.Equal(t, int32(1), calls.Load())
+
+	var persisted model.Channel
+	require.NoError(t, db.First(&persisted, 77).Error)
+	persistedKey, err := parseCodexOAuthKey(persisted.Key)
+	require.NoError(t, err)
+	assert.Equal(t, "new-refresh", persistedKey.RefreshToken)
+	health := persisted.GetSetting().CodexCredentialHealth
+	require.NotNil(t, health)
+	assert.False(t, health.RequiresRegeneration)
+	assert.Zero(t, health.LastUpstreamStatus)
 }

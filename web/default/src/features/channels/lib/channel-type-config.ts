@@ -144,6 +144,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'Models exposed by this channel',
     },
   },
+  59: {
+    id: 59,
+    name: CHANNEL_TYPES[59],
+    icon: 'atius',
+    defaultBaseUrl: 'http://10.21.1.21:3115',
+    hints: {
+      baseUrl: 'TEI embeddings endpoint on horistic-srv',
+      key: 'No upstream authentication required',
+      models: 'embedding-gte-v1,reranker-gte-multilingual-v1',
+    },
+  },
 }
 
 /**

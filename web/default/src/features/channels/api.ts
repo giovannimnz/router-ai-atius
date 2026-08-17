@@ -30,6 +30,8 @@ import type {
   CodexCredentialRegenerationCompleteResponse,
   CodexCredentialRegenerationStartResponse,
   CodexCredentialResponse,
+  CodexDeviceAuthorizationPollResponse,
+  CodexDeviceAuthorizationStartResponse,
   ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
@@ -338,6 +340,28 @@ export async function startCodexCredentialRegeneration(
 ): Promise<CodexCredentialRegenerationStartResponse> {
   const res = await api.post(
     `/api/channel/${channelId}/codex/regenerate/start`,
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function startCodexDeviceAuthorization(
+  channelId: number
+): Promise<CodexDeviceAuthorizationStartResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/regenerate/device/start`,
+    {},
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function pollCodexDeviceAuthorization(
+  channelId: number
+): Promise<CodexDeviceAuthorizationPollResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/regenerate/device/poll`,
     {},
     channelActionConfig()
   )

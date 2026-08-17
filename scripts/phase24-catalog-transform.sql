@@ -55,7 +55,7 @@ SET type = 43,
     remark = '2026-07-04: Phase 24 reconciled consolidated DeepSeek catalog on candidate DB.'
 WHERE id = 2;
 
--- Channel 5: OpenAI - Codex restored without long-context alias rows or Codex embedding rows.
+-- Channel 5: ChatGPT - Codex restored without long-context alias rows or Codex embedding rows.
 INSERT INTO public.channels (
   id, type, key, open_ai_organization, test_model, status, name, weight, created_time,
   test_time, response_time, base_url, other, balance, balance_updated_time, models, "group",
@@ -63,10 +63,10 @@ INSERT INTO public.channels (
   param_override, header_override, remark, channel_info, settings
 )
 VALUES (
-  5, 57, :'codex_channel_key_json', NULL, 'gpt-5.5', 1, 'OpenAI - Codex', 0, EXTRACT(EPOCH FROM NOW())::bigint,
+  5, 57, :'codex_channel_key_json', NULL, 'gpt-5.5', 1, 'ChatGPT - Codex', 0, EXTRACT(EPOCH FROM NOW())::bigint,
   0, 0, '', NULL, NULL, NULL, 'gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.3-codex-spark', 'default',
   0, '', '', 0, 1, NULL, NULL, NULL, NULL, NULL,
-  '2026-07-04: Phase 24 restored OpenAI - Codex on candidate DB using secure credential injection; -1m aliases intentionally excluded.',
+  '2026-07-04: Phase 24 restored ChatGPT - Codex on candidate DB using secure credential injection; -1m aliases intentionally excluded.',
   NULL, NULL
 )
 ON CONFLICT (id) DO UPDATE
@@ -79,16 +79,35 @@ SET type = EXCLUDED.type,
     model_mapping = EXCLUDED.model_mapping,
     remark = EXCLUDED.remark;
 
--- Channel 9: preserve Go-governed TEI embeddings path.
-UPDATE public.channels
-SET type = 1,
-    status = 1,
-    name = 'Local TEI - GTE Embeddings',
-    test_model = 'embedding-gte-v1',
-    models = 'embedding-gte-v1',
-    model_mapping = '{"embedding-gte-v1":"text-embeddings-inference"}',
-    remark = 'Local TEI embeddings channel for embedding-gte-v1; preserved by Phase 24 candidate catalog restore.'
-WHERE id = 9;
+-- Consolidate the legacy TEI channels 9/10 into the dedicated Atius provider.
+DELETE FROM public.abilities WHERE channel_id IN (9, 10, 11);
+DELETE FROM public.channels WHERE id IN (9, 10);
+
+INSERT INTO public.channels (
+  id, type, key, open_ai_organization, test_model, status, name, weight, created_time,
+  test_time, response_time, base_url, other, balance, balance_updated_time, models, "group",
+  used_quota, model_mapping, status_code_mapping, priority, auto_ban, other_info, tag, setting,
+  param_override, header_override, remark, channel_info, settings
+)
+VALUES (
+  11, 59, '', NULL, 'embedding-gte-v1', 1, 'Atius Local Embeddings', 0,
+  EXTRACT(EPOCH FROM NOW())::bigint, 0, 0, 'http://10.21.1.21:3115', NULL, NULL, NULL,
+  'embedding-gte-v1,reranker-gte-multilingual-v1', 'default', 0, '', '', 0, 0, NULL, NULL, NULL, NULL, NULL,
+  '2026-08-16: consolidated horistic-srv TEI embeddings and reranker into dedicated channel type 59.',
+  NULL,
+  '{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/embeddings","upstream_path":"http://10.21.1.21:3115/v1/embeddings","converter":"none","auth":{"type":"none"}},{"incoming_path":"/v1/rerank","upstream_path":"http://10.21.1.21:31216/rerank","converter":"jina_rerank_to_tei_native","auth":{"type":"none"}}]}}'
+)
+ON CONFLICT (id) DO UPDATE
+SET type = EXCLUDED.type,
+    status = EXCLUDED.status,
+    name = EXCLUDED.name,
+    test_model = EXCLUDED.test_model,
+    base_url = EXCLUDED.base_url,
+    models = EXCLUDED.models,
+    model_mapping = EXCLUDED.model_mapping,
+    auto_ban = EXCLUDED.auto_ban,
+    remark = EXCLUDED.remark,
+    settings = EXCLUDED.settings;
 
 INSERT INTO public.models (
   id, model_name, description, icon, tags, vendor_id, endpoints, status,
@@ -123,7 +142,7 @@ DELETE FROM public.abilities
 WHERE (channel_id = 1 AND model IN ('MiniMax-M3', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.7'))
    OR (channel_id = 2 AND model IN ('deepseek-v4-pro', 'deepseek-v4-flash'))
    OR (channel_id = 5 AND model IN ('gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark'))
-   OR (channel_id = 9 AND model = 'embedding-gte-v1');
+   OR (channel_id = 11 AND model IN ('embedding-gte-v1', 'reranker-gte-multilingual-v1'));
 
 INSERT INTO public.abilities ("group", model, channel_id, enabled, priority, weight, tag)
 VALUES
@@ -136,9 +155,10 @@ VALUES
   ('default', 'gpt-5.4', 5, true, 0, 0, NULL),
   ('default', 'gpt-5.4-mini', 5, true, 0, 0, NULL),
   ('default', 'gpt-5.3-codex-spark', 5, true, 0, 0, NULL),
-  ('default', 'embedding-gte-v1', 9, true, 0, 0, 'local-tei');
+  ('default', 'embedding-gte-v1', 11, true, 0, 0, 'local-tei'),
+  ('default', 'reranker-gte-multilingual-v1', 11, true, 0, 0, 'local-tei');
 
-SELECT pg_catalog.setval('public.channels_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM public.channels), 9), true);
+SELECT pg_catalog.setval('public.channels_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM public.channels), 11), true);
 SELECT pg_catalog.setval('public.models_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM public.models), 21), true);
 
 COMMIT;

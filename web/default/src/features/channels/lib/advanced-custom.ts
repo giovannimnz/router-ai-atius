@@ -30,7 +30,7 @@ export const CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS = 59
 export const ATIUS_LOCAL_EMBEDDINGS_DEFAULTS = {
   name: 'Atius Local Embeddings',
   baseUrl: 'http://10.21.1.21:3115',
-  models: 'embedding-gte-v1,reranker-gte-multilingual-v1',
+  models: 'embedding-gte-v1,reranker-gte-v1',
   testModel: 'embedding-gte-v1',
 } as const
 

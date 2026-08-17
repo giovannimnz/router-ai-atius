@@ -104,10 +104,12 @@ Estado validado em 2026-06-18:
 
 - O backend Go e o dono do catalogo enriquecido em `/v1/models`; o middleware Python nao e fonte do contrato de model-list.
 - O root publico de `/v1/models` em modos model-list contem somente `data`: nao expor top-level `object`, `success`, `first_id`, `last_id` ou `has_more`.
-- Os campos enriquecidos publicos esperados por item sao `pricing`, `supported_endpoint_types`, `endpoint_routes` e `billing_mode` quando disponivel.
+- Os campos enriquecidos publicos incluem o nucleo OpenRouter (`canonical_slug`, `description`, `context_length`, `architecture`, `top_provider`, `supported_parameters`, `default_parameters`, `links` e `pricing`) e as extensoes historicas do Router.
 - O objeto publico `pricing` de modelos com preco USD expoe `input`, `output` e `unit=usd_per_1m_tokens`.
 - Modelos do channel Codex OAuth type `57` com preco oficial publicam `billing_mode=dollar_cost`. O Router usa os mesmos `InputPrice`/`OutputPrice` em USD/1M e os ratios oficiais de cached input/cache write no settlement e no catalogo, com `scope=openai_api_standard_reference`.
-- O pricing Codex tambem expoe `prompt` e `completion` em `usd_per_token` para compatibilidade com Hermes antigos; `cached_input` e `cache_write` seguem a unidade principal por 1M tokens.
+- `pricing.prompt`, `pricing.completion`, `pricing.input_cache_read` e `pricing.input_cache_write` seguem o padrao OpenRouter: strings em USD por token. Os campos legados `input`, `output`, `cached_input` e `cache_write` seguem em USD por 1M tokens para compatibilidade retroativa.
+- Filtros locais compativeis: `q`, modalidades, parametros, contexto, precos, arquitetura, autores, providers, paginacao e ordenacao por data/contexto/preco. A referencia completa esta em `docs/OPENROUTER-MODEL-CATALOG.md`.
+- O default continua incluindo texto, embeddings e reranker; o root permanece somente `data`, sem `total_count` ou `links` top-level, por contrato protegido do fork.
 - Modelos sem preco explicito e modelos com `tiered_expr` nao publicam um preco plano derivado do fallback generico.
 - O payload publico nao expoe os aliases redundantes `input_price`/`output_price`, `quota_type`, `enable_groups` ou `supported_endpoint_type_labels`.
 - `pricing_version` e campo interno e nao deve aparecer no payload publico de `/v1/models`.
@@ -172,7 +174,7 @@ Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
 - Para clientes Anthropic-Compatible, usar `/v1/messages` com `base_url=https://router.atius.com.br` ou `https://router.atius.com.br/v1` conforme SDK/cliente.
-- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. O provider dedicado `Atius Local Embeddings`, tipo `59`, consolida o alias publico `embedding-gte-v1` (dimensao `768`) e `reranker-gte-multilingual-v1`, apontando para os servicos TEI do `horistic-srv`. `http://10.100.100.4:3115` fica apenas como fallback/reserva explicitamente validado, nao como upstream primario do router.
+- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. O provider dedicado `Atius Local Embeddings`, tipo `59`, consolida o alias publico `embedding-gte-v1` (dimensao `768`) e `reranker-gte-v1`, apontando para os servicos TEI do `horistic-srv`. `http://10.100.100.4:3115` fica apenas como fallback/reserva explicitamente validado, nao como upstream primario do router.
 - Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
 - Provider de embeddings Codex: `ChatGPT - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
@@ -188,9 +190,9 @@ Estado atualizado em 2026-07-05:
 
 - O governor de embeddings e reranking roda dentro do proprio processo Go do router; nao ha sidecar, middleware Python, container adicional ou rota `model-detailed` no caminho canonico.
 - Implementacao principal: `service/embeddinggovernor/`, com integracao em `relay/embedding_handler.go` e `relay/rerank_handler.go`.
-- Escopo default: `embedding-gte-v1` e `reranker-gte-multilingual-v1`. Outros modelos passam pelo relay normal sem fila do governor.
-- Os dois aliases publicos locais devem permanecer em `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-multilingual-v1` durante recovery, catalog restore, upstream sync e deploy.
-- Canal TEI live consolidado no router: `Atius Local Embeddings`, tipo `59`, com os modelos `embedding-gte-v1` e `reranker-gte-multilingual-v1`. A rota `/v1/embeddings` segue para `TEI_BASE_URL` (fallback `http://10.21.1.21:3115`) e `/v1/rerank` segue para `TEI_RERANKER_BASE_URL` (fallback `http://10.21.1.21:31216`) com conversor `jina_rerank_to_tei_native` e sem autenticacao upstream. Os canais legados `9` e `10` foram removidos apos validacao E2E.
+- Escopo default: `embedding-gte-v1` e `reranker-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
+- Os dois aliases publicos locais devem permanecer em `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-v1` durante recovery, catalog restore, upstream sync e deploy.
+- Canal TEI live consolidado no router: `Atius Local Embeddings`, tipo `59`, com os modelos `embedding-gte-v1` e `reranker-gte-v1`. A rota `/v1/embeddings` segue para `TEI_BASE_URL` (fallback `http://10.21.1.21:3115`) e `/v1/rerank` segue para `TEI_RERANKER_BASE_URL` (fallback `http://10.21.1.21:31216`) com conversor `jina_rerank_to_tei_native` e sem autenticacao upstream. Os canais legados `9` e `10` foram removidos apos validacao E2E.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/capacidade/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
 - Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
@@ -198,7 +200,7 @@ Estado atualizado em 2026-07-05:
 - Nao exponha um alias publico `*-batch`: sem alias publico batch; batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
 - arrays governados de `embedding-gte-v1` acima de `4` itens fazem fail-closed no relay antes do acquire do governor ou dispatch upstream. O header `interactive` nao bypassa esse cap, porque o TEI local nao tem caminho seguro de recomposicao transparente de resposta para batches maiores.
 - O reranker usa `X-Rerank-Workload` e compartilha o mesmo governor. O canal Advanced Custom converte `POST /v1/rerank` de `query`/`documents` para o contrato TEI `query`/`texts`, depois converte `score` para `results[].relevance_score`.
-- Requests de `reranker-gte-multilingual-v1` acima de `20` documentos fazem fail-closed antes do acquire ou dispatch. O relay reaplica `top_n` e `return_documents`, sem expor o contrato nativo do TEI.
+- Requests de `reranker-gte-v1` acima de `20` documentos fazem fail-closed antes do acquire ou dispatch. O relay reaplica `top_n` e `return_documents`, sem expor o contrato nativo do TEI.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
 - Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
@@ -215,7 +217,7 @@ Variaveis de ambiente suportadas:
 
 ```bash
 EMBEDDING_GOVERNOR_ENABLED=true
-EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-multilingual-v1
+EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-v1
 EMBEDDING_GOVERNOR_BATCH_MODELS=
 EMBEDDING_GOVERNOR_AUTO_WORKLOAD=true
 EMBEDDING_GOVERNOR_BATCH_INPUT_COUNT_THRESHOLD=2
@@ -541,7 +543,7 @@ Estado atualizado em 2026-06-26 apos a instalacao do TEI local:
 - O wrapper define `GBRAIN_STATEMENT_TIMEOUT=0`, `GBRAIN_IDLE_TX_TIMEOUT=0`, `OPENAI_BASE_URL=http://127.0.0.1:3000/v1` e `OPENAI_API_KEY` a partir de `~/.gbrain/config.json`.
 - `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-gte-v1` e `embedding_dimensions: 768`.
 - O GBrain deve chegar direto ao Go router; o provider ativo e `Atius Local Embeddings`, tipo `59`, com alias `embedding-gte-v1` e upstream primario `http://10.21.1.21:3115` no `horistic-srv`.
-- O mesmo provider encaminha `reranker-gte-multilingual-v1` ao upstream `http://10.21.1.21:31216`, compartilhando o envelope do governor e aplicando a conversao Jina -> TEI nativa.
+- O mesmo provider encaminha `reranker-gte-v1` ao upstream `http://10.21.1.21:31216`, compartilhando o envelope do governor e aplicando a conversao Jina -> TEI nativa.
 - O governor Go-native protege esse caminho antes de despachar a chamada ao TEI.
 - `embo-01` e `text-embedding-3-*` ficam como historico/desativados ate MiniMax/Codex aceitarem chamadas reais sem `429`.
 - Backup antes da mudanca: `/home/ubuntu/.gbrain/config.json.bak-router-embeddings-20260615_030827`.

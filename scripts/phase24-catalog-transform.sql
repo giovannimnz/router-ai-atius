@@ -92,7 +92,7 @@ INSERT INTO public.channels (
 VALUES (
   11, 59, '', NULL, 'embedding-gte-v1', 1, 'Atius Local Embeddings', 0,
   EXTRACT(EPOCH FROM NOW())::bigint, 0, 0, 'http://10.21.1.21:3115', NULL, NULL, NULL,
-  'embedding-gte-v1,reranker-gte-multilingual-v1', 'default', 0, '', '', 0, 0, NULL, NULL, NULL, NULL, NULL,
+  'embedding-gte-v1,reranker-gte-v1', 'default', 0, '', '', 0, 0, NULL, NULL, NULL, NULL, NULL,
   '2026-08-16: consolidated horistic-srv TEI embeddings and reranker into dedicated channel type 59.',
   NULL,
   '{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/embeddings","upstream_path":"http://10.21.1.21:3115/v1/embeddings","converter":"none","auth":{"type":"none"}},{"incoming_path":"/v1/rerank","upstream_path":"http://10.21.1.21:31216/rerank","converter":"jina_rerank_to_tei_native","auth":{"type":"none"}}]}}'
@@ -142,7 +142,7 @@ DELETE FROM public.abilities
 WHERE (channel_id = 1 AND model IN ('MiniMax-M3', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.7'))
    OR (channel_id = 2 AND model IN ('deepseek-v4-pro', 'deepseek-v4-flash'))
    OR (channel_id = 5 AND model IN ('gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark'))
-   OR (channel_id = 11 AND model IN ('embedding-gte-v1', 'reranker-gte-multilingual-v1'));
+   OR (channel_id = 11 AND model IN ('embedding-gte-v1', 'reranker-gte-v1'));
 
 INSERT INTO public.abilities ("group", model, channel_id, enabled, priority, weight, tag)
 VALUES
@@ -156,7 +156,7 @@ VALUES
   ('default', 'gpt-5.4-mini', 5, true, 0, 0, NULL),
   ('default', 'gpt-5.3-codex-spark', 5, true, 0, 0, NULL),
   ('default', 'embedding-gte-v1', 11, true, 0, 0, 'local-tei'),
-  ('default', 'reranker-gte-multilingual-v1', 11, true, 0, 0, 'local-tei');
+  ('default', 'reranker-gte-v1', 11, true, 0, 0, 'local-tei');
 
 SELECT pg_catalog.setval('public.channels_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM public.channels), 11), true);
 SELECT pg_catalog.setval('public.models_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM public.models), 21), true);

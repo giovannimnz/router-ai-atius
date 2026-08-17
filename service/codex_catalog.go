@@ -49,6 +49,7 @@ var (
 )
 
 type CodexCatalogMetadata struct {
+	CreatedTime               int                     `json:"created_time,omitempty"`
 	DisplayName               string                  `json:"display_name,omitempty"`
 	Provider                  string                  `json:"provider,omitempty"`
 	OwnedBy                   string                  `json:"owned_by,omitempty"`
@@ -575,6 +576,7 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 		}
 		endpoints := parseCodexCatalogEndpoints(candidate.SupportedEndpoints)
 		metadata := CodexCatalogMetadata{
+			CreatedTime:         int(candidate.CreatedTime),
 			DisplayName:         strings.TrimSpace(candidate.DisplayName),
 			Provider:            strings.TrimSpace(candidate.Provider),
 			OwnedBy:             strings.TrimSpace(candidate.OwnedBy),
@@ -764,6 +766,9 @@ func applyCodexDiscoveryLimits(meta *CodexCatalogMetadata, item codexDiscoveryIt
 func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, override CodexCatalogMetadata) CodexCatalogMetadata {
 	meta := codexFallbackMetadataForModel(modelName)
 
+	if source.CreatedTime > 0 {
+		meta.CreatedTime = source.CreatedTime
+	}
 	if source.DisplayName != "" {
 		meta.DisplayName = source.DisplayName
 	}
@@ -797,6 +802,9 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 
 	if override.DisplayName != "" {
 		meta.DisplayName = override.DisplayName
+	}
+	if override.CreatedTime > 0 {
+		meta.CreatedTime = override.CreatedTime
 	}
 	if override.Provider != "" {
 		meta.Provider = override.Provider

@@ -2,7 +2,10 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -169,9 +172,33 @@ func catalogEntriesForModels(modelNames []string, ownerByModel map[string]string
 
 func buildOpenAIModelFromCatalog(entry dto.ModelCatalogEntry) dto.OpenAIModels {
 	modelItem := buildOpenAIModel(entry.ModelName, map[string]string{entry.ModelName: entry.OwnedBy})
+	modelItem.Created = entry.Created
+	modelItem.CanonicalSlug = entry.CanonicalSlug
+	modelItem.HuggingFaceID = entry.HuggingFaceID
 	modelItem.Name = entry.Name
+	modelItem.Description = entry.Description
 	modelItem.Provider = entry.Provider
+	modelItem.Links = nil
 	modelItem.ContextWindow = entry.ContextWindow
+	modelItem.Architecture = entry.Architecture
+	modelItem.SupportedParameters = entry.SupportedParameters
+	modelItem.DefaultParameters = entry.DefaultParameters
+	if entry.ContextWindow != nil && entry.ContextWindow.ContextLength > 0 {
+		contextLength := entry.ContextWindow.ContextLength
+		modelItem.ContextLength = &contextLength
+		var maxCompletionTokens *int
+		if entry.ContextWindow.MaxCompletionTokens > 0 {
+			value := entry.ContextWindow.MaxCompletionTokens
+			maxCompletionTokens = &value
+		}
+		if entry.OwnedBy == "atius" {
+			modelItem.TopProvider = &dto.ModelTopProvider{
+				ContextLength:       contextLength,
+				MaxCompletionTokens: maxCompletionTokens,
+				IsModerated:         false,
+			}
+		}
+	}
 	modelItem.SupportedEndpointTypes = entry.SupportedEndpointTypes
 	modelItem.SupportedEndpointTypeLabels = entry.SupportedEndpointTypeLabels
 	modelItem.EndpointRoutes = entry.EndpointRoutes
@@ -183,6 +210,205 @@ func buildOpenAIModelFromCatalog(entry dto.ModelCatalogEntry) dto.OpenAIModels {
 	modelItem.BillingExpr = entry.BillingExpr
 	modelItem.EnableGroups = entry.EnableGroups
 	return modelItem
+}
+
+func splitModelFilter(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.ToLower(strings.TrimSpace(part))
+		if part != "" {
+			values = append(values, part)
+		}
+	}
+	return values
+}
+
+func containsAnyFold(values []string, wanted []string) bool {
+	for _, value := range values {
+		for _, candidate := range wanted {
+			if strings.EqualFold(value, candidate) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsAllFold(values []string, wanted []string) bool {
+	for _, candidate := range wanted {
+		found := false
+		for _, value := range values {
+			if strings.EqualFold(value, candidate) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func parseNonNegativeModelFilter(c *gin.Context, name string) (*float64, error) {
+	raw, present := c.GetQuery(name)
+	if !present {
+		return nil, nil
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return nil, fmt.Errorf("%s must be a non-negative number", name)
+	}
+	return &value, nil
+}
+
+func applyOpenRouterModelFilters(c *gin.Context, entries []dto.ModelCatalogEntry) ([]dto.ModelCatalogEntry, error) {
+	for _, unsupported := range []string{"zdr", "region", "distillable", "category"} {
+		if _, present := c.GetQuery(unsupported); present {
+			return nil, fmt.Errorf("unsupported filter %q: authoritative metadata is unavailable", unsupported)
+		}
+	}
+	outputModalities := splitModelFilter(c.Query("output_modalities"))
+	if len(outputModalities) == 1 && outputModalities[0] == "all" {
+		outputModalities = nil
+	}
+	inputModalities := splitModelFilter(c.Query("input_modalities"))
+	supportedParameters := splitModelFilter(c.Query("supported_parameters"))
+	providers := splitModelFilter(c.Query("providers"))
+	authors := splitModelFilter(c.Query("model_authors"))
+	query := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	architecture := strings.ToLower(strings.TrimSpace(c.Query("arch")))
+
+	var minimumContext int
+	if raw, present := c.GetQuery("context"); present {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 {
+			return nil, fmt.Errorf("context must be a positive integer")
+		}
+		minimumContext = value
+	}
+	minimumPrice, err := parseNonNegativeModelFilter(c, "min_price")
+	if err != nil {
+		return nil, err
+	}
+	maximumPrice, err := parseNonNegativeModelFilter(c, "max_price")
+	if err != nil {
+		return nil, err
+	}
+	minimumOutputPrice, err := parseNonNegativeModelFilter(c, "min_output_price")
+	if err != nil {
+		return nil, err
+	}
+	maximumOutputPrice, err := parseNonNegativeModelFilter(c, "max_output_price")
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]dto.ModelCatalogEntry, 0, len(entries))
+	for _, entry := range entries {
+		if query != "" && !strings.Contains(strings.ToLower(strings.Join([]string{entry.ModelName, entry.CanonicalSlug, entry.Name}, " ")), query) {
+			continue
+		}
+		if minimumContext > 0 && (entry.ContextWindow == nil || entry.ContextWindow.ContextLength < minimumContext) {
+			continue
+		}
+		if len(outputModalities) > 0 && (entry.Architecture == nil || !containsAnyFold(entry.Architecture.OutputModalities, outputModalities)) {
+			continue
+		}
+		if len(inputModalities) > 0 && (entry.Architecture == nil || !containsAllFold(entry.Architecture.InputModalities, inputModalities)) {
+			continue
+		}
+		if len(supportedParameters) > 0 && !containsAllFold(entry.SupportedParameters, supportedParameters) {
+			continue
+		}
+		if architecture != "" && (entry.Architecture == nil || !strings.Contains(strings.ToLower(entry.Architecture.Tokenizer+" "+entry.Architecture.Modality), architecture)) {
+			continue
+		}
+		if len(providers) > 0 && !containsAnyFold([]string{entry.Provider}, providers) {
+			continue
+		}
+		canonicalAuthor := strings.SplitN(entry.CanonicalSlug, "/", 2)[0]
+		if len(authors) > 0 && !containsAnyFold([]string{canonicalAuthor}, authors) {
+			continue
+		}
+		if minimumPrice != nil && (entry.Pricing == nil || entry.Pricing.Input < *minimumPrice) {
+			continue
+		}
+		if maximumPrice != nil && (entry.Pricing == nil || entry.Pricing.Input > *maximumPrice) {
+			continue
+		}
+		if minimumOutputPrice != nil && (entry.Pricing == nil || entry.Pricing.Output < *minimumOutputPrice) {
+			continue
+		}
+		if maximumOutputPrice != nil && (entry.Pricing == nil || entry.Pricing.Output > *maximumOutputPrice) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	sortMode := strings.TrimSpace(c.Query("sort"))
+	switch sortMode {
+	case "", "default":
+	case "newest":
+		sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Created > filtered[j].Created })
+	case "context-high-to-low":
+		sort.SliceStable(filtered, func(i, j int) bool {
+			left, right := 0, 0
+			if filtered[i].ContextWindow != nil {
+				left = filtered[i].ContextWindow.ContextLength
+			}
+			if filtered[j].ContextWindow != nil {
+				right = filtered[j].ContextWindow.ContextLength
+			}
+			return left > right
+		})
+	case "pricing-low-to-high", "pricing-high-to-low":
+		highToLow := sortMode == "pricing-high-to-low"
+		sort.SliceStable(filtered, func(i, j int) bool {
+			if filtered[i].Pricing == nil {
+				return false
+			}
+			if filtered[j].Pricing == nil {
+				return true
+			}
+			left := (filtered[i].Pricing.Input + filtered[i].Pricing.Output) / 2
+			right := (filtered[j].Pricing.Input + filtered[j].Pricing.Output) / 2
+			if highToLow {
+				return left > right
+			}
+			return left < right
+		})
+	default:
+		return nil, fmt.Errorf("unsupported sort mode %q", sortMode)
+	}
+
+	offset := 0
+	if raw, present := c.GetQuery("offset"); present {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 {
+			return nil, fmt.Errorf("offset must be a non-negative integer")
+		}
+		offset = value
+	}
+	limit := len(filtered)
+	_, hasOffset := c.GetQuery("offset")
+	_, hasLimit := c.GetQuery("limit")
+	if hasOffset && !hasLimit {
+		limit = 500
+	}
+	if raw, present := c.GetQuery("limit"); present {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 1000 {
+			return nil, fmt.Errorf("limit must be between 1 and 1000")
+		}
+		limit = value
+	}
+	if offset >= len(filtered) {
+		return []dto.ModelCatalogEntry{}, nil
+	}
+	end := min(offset+limit, len(filtered))
+	return filtered[offset:end], nil
 }
 
 func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadataByModel map[string]service.CodexCatalogMetadata) {
@@ -205,6 +431,28 @@ func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadat
 			entries[i].SupportedEndpointTypeLabels = modelcatalog.EndpointTypeLabels(meta.SupportedEndpoints)
 			entries[i].EndpointRoutes = modelcatalog.EndpointRoutes(meta.SupportedEndpoints)
 		}
+		entries[i].Description = fmt.Sprintf("%s available through the Atius Router Codex relay.", entries[i].Name)
+		if modelcatalog.HasEndpointType(entries[i].SupportedEndpointTypes, constant.EndpointTypeEmbeddings) {
+			entries[i].Architecture = &dto.ModelArchitecture{
+				Modality:         "text->embeddings",
+				InputModalities:  []string{"text"},
+				OutputModalities: []string{"embeddings"},
+				Tokenizer:        "GPT",
+			}
+			entries[i].SupportedParameters = []string{}
+		} else {
+			inputModalities := []string{"text"}
+			if lo.Contains(meta.Capabilities, "image_input") {
+				inputModalities = append(inputModalities, "image")
+			}
+			entries[i].Architecture = &dto.ModelArchitecture{
+				Modality:         strings.Join(inputModalities, "+") + "->text",
+				InputModalities:  inputModalities,
+				OutputModalities: []string{"text"},
+				Tokenizer:        "GPT",
+			}
+			entries[i].SupportedParameters = []string{"include_reasoning", "max_completion_tokens", "max_tokens", "reasoning", "reasoning_effort", "response_format", "structured_outputs", "tool_choice", "tools"}
+		}
 		contextLength := meta.ContextWindowTokens
 		if contextLength <= 0 {
 			contextLength = meta.MaxTokens
@@ -223,13 +471,20 @@ func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadat
 		}
 		if meta.BillingMode == service.CodexCatalogBillingMode {
 			entries[i].BillingMode = meta.BillingMode
-			if entries[i].Pricing != nil {
-				entries[i].Pricing.Prompt = entries[i].Pricing.Input / 1_000_000
-				entries[i].Pricing.Completion = entries[i].Pricing.Output / 1_000_000
-				entries[i].Pricing.CompatibilityUnit = "usd_per_token"
-				entries[i].Pricing.Scope = service.CodexOpenAIReferencePricingScope
+			if reference, found := service.CodexOpenAIReferencePriceForModel(entries[i].ModelName); found {
+				entries[i].InputPrice = reference.InputPerMillion
+				entries[i].OutputPrice = reference.OutputPerMillion
+				entries[i].Pricing = &dto.ModelCatalogPricing{
+					Input:       reference.InputPerMillion,
+					Output:      reference.OutputPerMillion,
+					CachedInput: &reference.CachedInputPerMillion,
+					CacheWrite:  reference.CacheWritePerMillion,
+					Unit:        "usd_per_1m_tokens",
+					Scope:       service.CodexOpenAIReferencePricingScope,
+				}
 			}
 		}
+		modelcatalog.EnrichOpenRouterEntry(&entries[i])
 	}
 }
 
@@ -387,6 +642,11 @@ func ListModels(c *gin.Context, modelType int) {
 			"nextPageToken": nil,
 		})
 	default:
+		catalogEntries, err = applyOpenRouterModelFilters(c, catalogEntries)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": 400, "message": err.Error()}})
+			return
+		}
 		userOpenAiModels := make([]dto.OpenAIModels, 0, len(catalogEntries))
 		for _, entry := range catalogEntries {
 			userOpenAiModels = append(userOpenAiModels, buildOpenAIModelFromCatalog(entry))

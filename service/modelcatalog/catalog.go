@@ -17,6 +17,14 @@ import (
 
 var versionTokenPattern = regexp.MustCompile(`\d+(?:\.\d+)*`)
 
+const (
+	gteEmbeddingCreated = 0
+	gteRerankerCreated  = 0
+	gteContextLength    = 8192
+	gteEmbeddingHFModel = "Alibaba-NLP/gte-multilingual-base"
+	gteRerankerHFModel  = "Alibaba-NLP/gte-multilingual-reranker-base"
+)
+
 func EndpointTypeLabel(endpointType constant.EndpointType) string {
 	switch endpointType {
 	case constant.EndpointTypeOpenAI:
@@ -25,6 +33,8 @@ func EndpointTypeLabel(endpointType constant.EndpointType) string {
 		return "Anthropic-Compatible"
 	case constant.EndpointTypeEmbeddings:
 		return "Embeddings"
+	case constant.EndpointTypeJinaRerank:
+		return "Rerank"
 	case constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAIResponseCompact:
 		return "OpenAI-Responses"
 	default:
@@ -73,6 +83,9 @@ func IsAnthropicCapable(entry dto.ModelCatalogEntry) bool {
 }
 
 func ChannelOwnerName(channelType int) string {
+	if channelType == constant.ChannelTypeAtiusLocalEmbeddings {
+		return "atius"
+	}
 	apiType, success := common.ChannelType2APIType(channelType)
 	if !success {
 		return strings.ToLower(constant.GetChannelTypeName(channelType))
@@ -115,6 +128,9 @@ func pricingProvenance(pricing model.Pricing) (string, bool) {
 		return "input_output_price", false
 	}
 	if pricing.QuotaType == 1 {
+		if pricing.ModelPrice > 0 {
+			return "model_price", false
+		}
 		if _, ok := ratio_setting.GetModelPrice(pricing.ModelName, false); ok {
 			return "model_price", false
 		}
@@ -143,9 +159,171 @@ func PublicTokenPrices(pricing model.Pricing) (float64, float64) {
 	return inputPrice, outputPrice
 }
 
+func usdPerTokenString(perMillion float64) string {
+	if perMillion <= 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(perMillion/1_000_000, 'f', -1, 64)
+}
+
+func syncOpenRouterPricing(pricing *dto.ModelCatalogPricing, endpointTypes []constant.EndpointType) {
+	if pricing == nil {
+		return
+	}
+	outputPrice := pricing.Output
+	if HasEndpointType(endpointTypes, constant.EndpointTypeEmbeddings) || HasEndpointType(endpointTypes, constant.EndpointTypeJinaRerank) {
+		outputPrice = 0
+		pricing.Output = 0
+	}
+	pricing.Prompt = usdPerTokenString(pricing.Input)
+	pricing.Completion = usdPerTokenString(outputPrice)
+	if pricing.Request == "" {
+		pricing.Request = "0"
+	}
+	pricing.Image = "0"
+	pricing.CompatibilityUnit = "usd_per_token"
+	if pricing.CachedInput != nil {
+		pricing.InputCacheRead = usdPerTokenString(*pricing.CachedInput)
+	}
+	if pricing.CacheWrite != nil {
+		pricing.InputCacheWrite = usdPerTokenString(*pricing.CacheWrite)
+	}
+}
+
+func stringPointer(value string) *string {
+	return &value
+}
+
+func localGTEProfile(entry *dto.ModelCatalogEntry) bool {
+	if entry == nil {
+		return false
+	}
+
+	var created int
+	var canonicalSlug string
+	var huggingFaceID string
+	var name string
+	var description string
+	var architecture dto.ModelArchitecture
+	switch entry.ModelName {
+	case constant.AtiusLocalEmbeddingModel:
+		created = gteEmbeddingCreated
+		canonicalSlug = "alibaba-nlp/gte-multilingual-base"
+		huggingFaceID = gteEmbeddingHFModel
+		name = "Atius: GTE Multilingual Embeddings"
+		description = "Self-hosted multilingual GTE embedding model with 768-dimensional vectors and an 8,192-token context window."
+		architecture = dto.ModelArchitecture{
+			Modality:         "text->embeddings",
+			InputModalities:  []string{"text"},
+			OutputModalities: []string{"embeddings"},
+			Tokenizer:        "XLM-R",
+		}
+		entry.SupportedEndpointTypes = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+	case constant.AtiusLocalRerankerModel:
+		created = gteRerankerCreated
+		canonicalSlug = "alibaba-nlp/gte-multilingual-reranker-base"
+		huggingFaceID = gteRerankerHFModel
+		name = "Atius: GTE Multilingual Reranker"
+		description = "Self-hosted multilingual GTE cross-encoder reranker with an 8,192-token context window."
+		architecture = dto.ModelArchitecture{
+			Modality:         "text->rerank",
+			InputModalities:  []string{"text"},
+			OutputModalities: []string{"rerank"},
+			Tokenizer:        "XLM-R",
+		}
+		entry.SupportedEndpointTypes = []constant.EndpointType{constant.EndpointTypeJinaRerank}
+	default:
+		return false
+	}
+
+	entry.Created = created
+	entry.CanonicalSlug = canonicalSlug
+	entry.HuggingFaceID = stringPointer(huggingFaceID)
+	entry.Name = name
+	entry.Description = description
+	entry.Provider = "Atius"
+	entry.OwnedBy = "atius"
+	entry.ContextWindow = &dto.ModelContextWindow{ContextLength: gteContextLength}
+	entry.Architecture = &architecture
+	entry.SupportedEndpointTypeLabels = EndpointTypeLabels(entry.SupportedEndpointTypes)
+	entry.EndpointRoutes = EndpointRoutes(entry.SupportedEndpointTypes)
+	entry.SupportedParameters = []string{}
+	return true
+}
+
+func providerSlug(provider string, ownedBy string) string {
+	lookup := strings.ToLower(strings.TrimSpace(provider + " " + ownedBy))
+	switch {
+	case strings.Contains(lookup, "openai") || strings.Contains(lookup, "codex"):
+		return "openai"
+	case strings.Contains(lookup, "minimax"):
+		return "minimax"
+	case strings.Contains(lookup, "deepseek"):
+		return "deepseek"
+	}
+	slug := strings.ToLower(strings.TrimSpace(ownedBy))
+	slug = strings.NewReplacer(" ", "-", "_", "-").Replace(slug)
+	return strings.Trim(slug, "-/")
+}
+
+func genericArchitecture(entry dto.ModelCatalogEntry) *dto.ModelArchitecture {
+	if HasEndpointType(entry.SupportedEndpointTypes, constant.EndpointTypeEmbeddings) {
+		return &dto.ModelArchitecture{Modality: "text->embeddings", InputModalities: []string{"text"}, OutputModalities: []string{"embeddings"}, Tokenizer: "Other"}
+	}
+	if HasEndpointType(entry.SupportedEndpointTypes, constant.EndpointTypeJinaRerank) {
+		return &dto.ModelArchitecture{Modality: "text->rerank", InputModalities: []string{"text"}, OutputModalities: []string{"rerank"}, Tokenizer: "Other"}
+	}
+	return nil
+}
+
+func defaultSupportedParameters(entry dto.ModelCatalogEntry) []string {
+	if HasEndpointType(entry.SupportedEndpointTypes, constant.EndpointTypeEmbeddings) || HasEndpointType(entry.SupportedEndpointTypes, constant.EndpointTypeJinaRerank) {
+		return []string{}
+	}
+	if strings.EqualFold(entry.Provider, "OpenAI Codex") {
+		return []string{"include_reasoning", "max_completion_tokens", "max_tokens", "reasoning", "reasoning_effort", "response_format", "structured_outputs", "tool_choice", "tools"}
+	}
+	return []string{}
+}
+
+func EnrichOpenRouterEntry(entry *dto.ModelCatalogEntry) {
+	if entry == nil {
+		return
+	}
+	if localGTEProfile(entry) {
+		if entry.Pricing == nil && entry.ModelRatio > 0 {
+			entry.InputPrice = entry.ModelRatio * 2
+			entry.OutputPrice = 0
+			entry.Pricing = &dto.ModelCatalogPricing{Input: entry.InputPrice, Output: 0, Unit: "usd_per_1m_tokens"}
+		}
+		syncOpenRouterPricing(entry.Pricing, entry.SupportedEndpointTypes)
+		return
+	}
+	if entry.CanonicalSlug == "" {
+		slug := providerSlug(entry.Provider, entry.OwnedBy)
+		if slug == "" {
+			entry.CanonicalSlug = entry.ModelName
+		} else {
+			entry.CanonicalSlug = slug + "/" + entry.ModelName
+		}
+	}
+	if entry.Description == "" {
+		entry.Description = entry.Name
+	}
+	if entry.Architecture == nil {
+		entry.Architecture = genericArchitecture(*entry)
+	}
+	if entry.SupportedParameters == nil {
+		entry.SupportedParameters = defaultSupportedParameters(*entry)
+	}
+	syncOpenRouterPricing(entry.Pricing, entry.SupportedEndpointTypes)
+}
+
 func providerName(modelName string, ownedBy string) string {
 	lookup := strings.ToLower(modelName + " " + ownedBy)
 	switch {
+	case modelName == constant.AtiusLocalEmbeddingModel || modelName == constant.AtiusLocalRerankerModel:
+		return "Atius"
 	case strings.Contains(lookup, "minimax"):
 		return "MiniMax"
 	case strings.Contains(lookup, "deepseek"):
@@ -182,6 +360,13 @@ func BuildCatalogEntry(pricing model.Pricing, ownerByModel map[string]string) dt
 			Output: outputPrice,
 			Unit:   "usd_per_1m_tokens",
 		}
+		if pricing.QuotaType == 1 {
+			inputPrice = 0
+			outputPrice = 0
+			publicPricing.Input = 0
+			publicPricing.Output = 0
+			publicPricing.Request = strconv.FormatFloat(pricing.ModelPrice, 'f', -1, 64)
+		}
 		if pricing.UseDollarCost && pricing.CacheRatio != nil {
 			cachedInput := inputPrice * *pricing.CacheRatio
 			publicPricing.CachedInput = &cachedInput
@@ -196,9 +381,11 @@ func BuildCatalogEntry(pricing model.Pricing, ownerByModel map[string]string) dt
 		billingMode = "dollar_cost"
 	}
 	provider := providerName(pricing.ModelName, ownedBy)
-	return dto.ModelCatalogEntry{
+	entry := dto.ModelCatalogEntry{
 		ModelName:                   pricing.ModelName,
+		Created:                     0,
 		Name:                        modelNameFromPricing(pricing),
+		Description:                 strings.TrimSpace(pricing.Description),
 		Provider:                    provider,
 		OwnedBy:                     ownedBy,
 		EnableGroups:                pricing.EnableGroup,
@@ -218,11 +405,13 @@ func BuildCatalogEntry(pricing model.Pricing, ownerByModel map[string]string) dt
 		PricingEstimated:            estimated,
 		PricingVersion:              pricing.PricingVersion,
 	}
+	EnrichOpenRouterEntry(&entry)
+	return entry
 }
 
 func BuildCatalogEntryForModel(modelName string, owner string, endpoints []constant.EndpointType) dto.ModelCatalogEntry {
 	provider := providerName(modelName, owner)
-	return dto.ModelCatalogEntry{
+	entry := dto.ModelCatalogEntry{
 		ModelName:                   modelName,
 		Name:                        modelName,
 		Provider:                    provider,
@@ -236,6 +425,8 @@ func BuildCatalogEntryForModel(modelName string, owner string, endpoints []const
 		OutputPrice:                 0,
 		Pricing:                     nil,
 	}
+	EnrichOpenRouterEntry(&entry)
+	return entry
 }
 
 func BuildCatalogEntries(pricings []model.Pricing, ownerByModel map[string]string) []dto.ModelCatalogEntry {

@@ -44,7 +44,7 @@ spec:
         kubernetes.io/hostname: atius-srv-1
       containers:
         - name: router-ai-atius
-          image: ghcr.io/giovannimnz/router-ai-atius:v2.17.3-atius-local-embeddings.6
+          image: ghcr.io/giovannimnz/router-ai-atius:v2.17.3-openrouter-models.1
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

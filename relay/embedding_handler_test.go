@@ -228,7 +228,7 @@ func TestRerankHelperPassesGovernorRequestMetadata(t *testing.T) {
 	common.SetContextKey(c, constant.ContextKeyChannelId, 78)
 	common.SetContextKey(c, constant.ContextKeyChannelName, "Local TEI - GTE Reranker")
 	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, "http://127.0.0.1:31216")
-	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-multilingual-v1")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-v1")
 	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, dto.ChannelOtherSettings{
 		AdvancedCustom: &dto.AdvancedCustomConfig{Routes: []dto.AdvancedCustomRoute{{
 			IncomingPath: "/v1/rerank",
@@ -239,7 +239,7 @@ func TestRerankHelperPassesGovernorRequestMetadata(t *testing.T) {
 	})
 
 	request := &dto.RerankRequest{
-		Model:     "reranker-gte-multilingual-v1",
+		Model:     "reranker-gte-v1",
 		Query:     query,
 		Documents: []any{first, second},
 	}
@@ -267,7 +267,7 @@ func TestRerankHelperPassesGovernorRequestMetadata(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, err.StatusCode)
 	assert.Equal(t, "3", recorder.Header().Get("Retry-After"))
 	assert.Equal(t, "embedding_governor_queue_full", string(err.GetErrorCode()))
-	assert.Equal(t, "reranker-gte-multilingual-v1", captured.Model)
+	assert.Equal(t, "reranker-gte-v1", captured.Model)
 	assert.Equal(t, 78, captured.ChannelID)
 	assert.Equal(t, "Local TEI - GTE Reranker", captured.ChannelName)
 	assert.Equal(t, "batch", captured.Workload)
@@ -289,10 +289,10 @@ func TestRerankHelperRejectsGovernedDocumentCountAboveTEICap(t *testing.T) {
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/rerank", nil)
 	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeAdvancedCustom)
-	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-multilingual-v1")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-v1")
 
 	request := &dto.RerankRequest{
-		Model:     "reranker-gte-multilingual-v1",
+		Model:     "reranker-gte-v1",
 		Query:     "consulta",
 		Documents: documents,
 	}

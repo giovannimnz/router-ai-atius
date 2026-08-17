@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultModels                     = "embedding-gte-v1,reranker-gte-multilingual-v1"
+	defaultModels                     = "embedding-gte-v1,reranker-gte-v1"
 	defaultBatchModels                = ""
 	defaultInitialConcurrency         = 2
 	defaultMinConcurrency             = 1

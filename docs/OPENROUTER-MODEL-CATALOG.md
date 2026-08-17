@@ -60,7 +60,7 @@ O contrato local nao e um clone byte a byte do OpenRouter:
 | `embedding-gte-v1` | `alibaba-nlp/gte-multilingual-base` | 8192 | `text->embeddings` | `/v1/embeddings` |
 | `reranker-gte-v1` | `alibaba-nlp/gte-multilingual-reranker-base` | 8192 | `text->rerank` | `/v1/rerank` |
 
-O alias legado `reranker-gte-multilingual-v1` e migrado de forma transacional no startup e nao e mais publicado nem aceito como habilidade ativa.
+O alias legado `reranker-gte-multilingual-v1` e migrado de forma transacional no startup e nao e mais publicado nem aceito como habilidade ativa. Logs e agregados historicos tambem sao normalizados para `reranker-gte-v1`, evitando duas series para o mesmo modelo no dashboard.
 
 Os dois modelos pertencem ao channel `Atius Local Embeddings`, type `59`, e executam no `horistic-srv`. O reranker deve anunciar endpoint type `jina-rerank`; anunciar `openai` ou `/v1/chat/completions` e incorreto.
 

@@ -75,8 +75,17 @@ func migrateModelAliasOptions(tx *gorm.DB) error {
 	return nil
 }
 
+func MigrateAtiusLocalRerankerLogAlias(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	return db.Model(&Log{}).
+		Where("model_name = ?", constant.LegacyAtiusLocalRerankerModel).
+		Update("model_name", constant.AtiusLocalRerankerModel).Error
+}
+
 // MigrateAtiusLocalRerankerAlias keeps existing installations routable after
-// the public reranker alias changed. Historical request logs remain untouched.
+// the public reranker alias changed and unifies dashboard aggregates.
 func MigrateAtiusLocalRerankerAlias() error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var channels []Channel
@@ -145,7 +154,11 @@ func MigrateAtiusLocalRerankerAlias() error {
 				return err
 			}
 		}
-
+		if err := tx.Model(&QuotaData{}).
+			Where("model_name = ?", constant.LegacyAtiusLocalRerankerModel).
+			Update("model_name", constant.AtiusLocalRerankerModel).Error; err != nil {
+			return err
+		}
 		return migrateModelAliasOptions(tx)
 	})
 }

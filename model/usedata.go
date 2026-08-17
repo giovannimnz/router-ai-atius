@@ -138,35 +138,160 @@ func increaseQuotaData(quotaData *QuotaData) {
 	}
 }
 
+func dashboardHistoricalLogCutoff() (int64, error) {
+	result, found, err := loadAtiusDollarCostReconciliationMarker(DB)
+	if err != nil {
+		return 0, err
+	}
+	if !found || result.HistoricalLogCutoff <= 0 {
+		return 0, nil
+	}
+	if DB != LOG_DB {
+		return 0, fmt.Errorf("historical billing dashboard requires the reconciled primary log database")
+	}
+	return result.HistoricalLogCutoff, nil
+}
+
+func dashboardQuotaRanges(startTime int64, endTime int64) (historicalEnd int64, aggregateStart int64, err error) {
+	cutoff, err := dashboardHistoricalLogCutoff()
+	if err != nil {
+		return 0, 0, err
+	}
+	if cutoff == 0 {
+		return startTime - 1, startTime, nil
+	}
+	historicalEnd = endTime
+	if historicalEnd >= cutoff {
+		historicalEnd = cutoff - 1
+	}
+	aggregateStart = startTime
+	if aggregateStart < cutoff {
+		aggregateStart = cutoff
+	}
+	return historicalEnd, aggregateStart, nil
+}
+
+func logHourlyCreatedAtExpr() string {
+	switch {
+	case common.UsingLogDatabase(common.DatabaseTypeMySQL):
+		return "FLOOR(created_at / 3600) * 3600"
+	case common.UsingLogDatabase(common.DatabaseTypeClickHouse):
+		return "intDiv(created_at, 3600) * 3600"
+	default:
+		return "(created_at / 3600) * 3600"
+	}
+}
+
+func historicalQuotaLogQuery(startTime int64, endTime int64) *gorm.DB {
+	return LOG_DB.Table("logs").
+		Where("type = ?", LogTypeConsume).
+		Where("created_at >= ? and created_at <= ?", startTime, endTime)
+}
+
+func historicalQuotaLogSelect(dimensions string) string {
+	return fmt.Sprintf(
+		"%s, %s as created_at, count(*) as count, sum(quota) as quota, sum(prompt_tokens + completion_tokens) as token_used",
+		dimensions,
+		logHourlyCreatedAtExpr(),
+	)
+}
+
+func historicalQuotaLogGroup(dimensions string) string {
+	return fmt.Sprintf("%s, %s", dimensions, logHourlyCreatedAtExpr())
+}
+
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	err = DB.Table("quota_data").
-		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).
-		Group("user_id, username, model_name, created_at").
-		Find(&quotaDatas).Error
+	historicalEnd, aggregateStart, err := dashboardQuotaRanges(startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	if startTime <= historicalEnd {
+		dimensions := "user_id, username, model_name"
+		var historical []*QuotaData
+		if err := historicalQuotaLogQuery(startTime, historicalEnd).
+			Select(historicalQuotaLogSelect(dimensions)).
+			Where("username = ?", username).
+			Group(historicalQuotaLogGroup(dimensions)).
+			Find(&historical).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, historical...)
+	}
+	if aggregateStart <= endTime {
+		var aggregates []*QuotaData
+		if err := DB.Table("quota_data").
+			Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+			Where("username = ? and created_at >= ? and created_at <= ?", username, aggregateStart, endTime).
+			Group("user_id, username, model_name, created_at").
+			Find(&aggregates).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, aggregates...)
+	}
 	return quotaDatas, err
 }
 
 func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	err = DB.Table("quota_data").
-		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).
-		Group("user_id, username, model_name, created_at").
-		Find(&quotaDatas).Error
+	historicalEnd, aggregateStart, err := dashboardQuotaRanges(startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	if startTime <= historicalEnd {
+		dimensions := "user_id, username, model_name"
+		var historical []*QuotaData
+		if err := historicalQuotaLogQuery(startTime, historicalEnd).
+			Select(historicalQuotaLogSelect(dimensions)).
+			Where("user_id = ?", userId).
+			Group(historicalQuotaLogGroup(dimensions)).
+			Find(&historical).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, historical...)
+	}
+	if aggregateStart <= endTime {
+		var aggregates []*QuotaData
+		if err := DB.Table("quota_data").
+			Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+			Where("user_id = ? and created_at >= ? and created_at <= ?", userId, aggregateStart, endTime).
+			Group("user_id, username, model_name, created_at").
+			Find(&aggregates).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, aggregates...)
+	}
 	return quotaDatas, err
 }
 
 func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	err = DB.Table("quota_data").
-		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("created_at >= ? and created_at <= ?", startTime, endTime).
-		Group("username, created_at").
-		Find(&quotaDatas).Error
+	historicalEnd, aggregateStart, err := dashboardQuotaRanges(startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	if startTime <= historicalEnd {
+		dimensions := "username"
+		var historical []*QuotaData
+		if err := historicalQuotaLogQuery(startTime, historicalEnd).
+			Select(historicalQuotaLogSelect(dimensions)).
+			Group(historicalQuotaLogGroup(dimensions)).
+			Find(&historical).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, historical...)
+	}
+	if aggregateStart <= endTime {
+		var aggregates []*QuotaData
+		if err := DB.Table("quota_data").
+			Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+			Where("created_at >= ? and created_at <= ?", aggregateStart, endTime).
+			Group("username, created_at").
+			Find(&aggregates).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, aggregates...)
+	}
 	return quotaDatas, err
 }
 
@@ -175,9 +300,31 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 		return GetQuotaDataByUsername(username, startTime, endTime)
 	}
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	// only select model_name, sum(count) as count, sum(quota) as quota, model_name, created_at from quota_data group by model_name, created_at;
-	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
-	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
+	historicalEnd, aggregateStart, err := dashboardQuotaRanges(startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	if startTime <= historicalEnd {
+		dimensions := "model_name"
+		var historical []*QuotaData
+		if err := historicalQuotaLogQuery(startTime, historicalEnd).
+			Select(historicalQuotaLogSelect(dimensions)).
+			Group(historicalQuotaLogGroup(dimensions)).
+			Find(&historical).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, historical...)
+	}
+	if aggregateStart <= endTime {
+		var aggregates []*QuotaData
+		if err := DB.Table("quota_data").
+			Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").
+			Where("created_at >= ? and created_at <= ?", aggregateStart, endTime).
+			Group("model_name, created_at").
+			Find(&aggregates).Error; err != nil {
+			return nil, err
+		}
+		quotaDatas = append(quotaDatas, aggregates...)
+	}
 	return quotaDatas, err
 }

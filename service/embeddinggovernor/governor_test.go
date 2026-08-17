@@ -44,7 +44,7 @@ func TestLoadConfigUsesAdaptiveAutoscalingDefaults(t *testing.T) {
 	assert.True(t, cfg.AutoWorkload)
 	assert.Equal(t, 2, cfg.BatchInputCountThreshold)
 	assert.True(t, cfg.Models["embedding-gte-v1"])
-	assert.True(t, cfg.Models["reranker-gte-multilingual-v1"])
+	assert.True(t, cfg.Models["reranker-gte-v1"])
 	assert.False(t, cfg.Models["embedding-gte-v1-batch"])
 	assert.Empty(t, cfg.BatchModels)
 }
@@ -262,7 +262,7 @@ func TestIsGovernedModelMatchesDefaultScope(t *testing.T) {
 	defer restore()
 
 	assert.True(t, IsGovernedModel("embedding-gte-v1"))
-	assert.True(t, IsGovernedModel("reranker-gte-multilingual-v1"))
+	assert.True(t, IsGovernedModel("reranker-gte-v1"))
 	assert.False(t, IsGovernedModel("embedding-gte-v1-batch"))
 	assert.False(t, IsGovernedModel("gpt-5.4"))
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -181,10 +182,97 @@ func TestModelCatalogPricingPublishesExplicitUnit(t *testing.T) {
 	}, map[string]string{"gpt-5": "openai"})
 	require.NotNil(t, entry.Pricing)
 	require.Equal(t, "usd_per_1m_tokens", entry.Pricing.Unit)
+	require.Equal(t, "0.0000025", entry.Pricing.Prompt)
+	require.Equal(t, "0.00001", entry.Pricing.Completion)
+	require.Equal(t, "usd_per_token", entry.Pricing.CompatibilityUnit)
 
 	payload, err := common.Marshal(entry.Pricing)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"input":2.5,"output":10,"unit":"usd_per_1m_tokens"}`, string(payload))
+	require.JSONEq(t, `{
+		"prompt":"0.0000025",
+		"completion":"0.00001",
+		"request":"0",
+		"image":"0",
+		"input":2.5,
+		"output":10,
+		"unit":"usd_per_1m_tokens",
+		"compatibility_unit":"usd_per_token"
+	}`, string(payload))
+}
+
+func TestModelCatalogFixedPricePublishesPerRequestCost(t *testing.T) {
+	entry := BuildCatalogEntry(model.Pricing{
+		ModelName:  "dall-e-test",
+		QuotaType:  1,
+		ModelPrice: 0.04,
+	}, map[string]string{"dall-e-test": "openai"})
+
+	require.NotNil(t, entry.Pricing)
+	assert.Equal(t, 0.0, entry.InputPrice)
+	assert.Equal(t, 0.0, entry.OutputPrice)
+	assert.Equal(t, "0", entry.Pricing.Prompt)
+	assert.Equal(t, "0", entry.Pricing.Completion)
+	assert.Equal(t, "0.04", entry.Pricing.Request)
+}
+
+func TestLocalGTEProfilesExposeOpenRouterMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		modelName        string
+		endpointType     constant.EndpointType
+		canonicalSlug    string
+		huggingFaceID    string
+		outputModality   string
+		expectedRoute    string
+		expectedPrompt   string
+		expectedComplete string
+	}{
+		{
+			name:             "embeddings",
+			modelName:        constant.AtiusLocalEmbeddingModel,
+			endpointType:     constant.EndpointTypeEmbeddings,
+			canonicalSlug:    "alibaba-nlp/gte-multilingual-base",
+			huggingFaceID:    "Alibaba-NLP/gte-multilingual-base",
+			outputModality:   "embeddings",
+			expectedRoute:    "/v1/embeddings",
+			expectedPrompt:   "0.00000007",
+			expectedComplete: "0",
+		},
+		{
+			name:             "reranker",
+			modelName:        constant.AtiusLocalRerankerModel,
+			endpointType:     constant.EndpointTypeJinaRerank,
+			canonicalSlug:    "alibaba-nlp/gte-multilingual-reranker-base",
+			huggingFaceID:    "Alibaba-NLP/gte-multilingual-reranker-base",
+			outputModality:   "rerank",
+			expectedRoute:    "/v1/rerank",
+			expectedPrompt:   "0.000075",
+			expectedComplete: "0",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			entry := BuildCatalogEntry(model.Pricing{
+				ModelName:              test.modelName,
+				ModelRatio:             map[constant.EndpointType]float64{constant.EndpointTypeEmbeddings: 0.035, constant.EndpointTypeJinaRerank: 37.5}[test.endpointType],
+				SupportedEndpointTypes: []constant.EndpointType{test.endpointType},
+			}, map[string]string{test.modelName: "atius"})
+
+			require.Equal(t, test.canonicalSlug, entry.CanonicalSlug)
+			require.NotNil(t, entry.HuggingFaceID)
+			require.Equal(t, test.huggingFaceID, *entry.HuggingFaceID)
+			require.Equal(t, 8192, entry.ContextWindow.ContextLength)
+			require.Equal(t, []string{test.outputModality}, entry.Architecture.OutputModalities)
+			require.Equal(t, []constant.EndpointType{test.endpointType}, entry.SupportedEndpointTypes)
+			require.Equal(t, test.expectedRoute, entry.EndpointRoutes[string(test.endpointType)])
+			require.NotNil(t, entry.Pricing)
+			require.Equal(t, test.expectedPrompt, entry.Pricing.Prompt)
+			require.Equal(t, test.expectedComplete, entry.Pricing.Completion)
+			require.Equal(t, 0.0, entry.Pricing.Output)
+			require.Equal(t, 0.0, entry.OutputPrice)
+		})
+	}
 }
 
 func TestModelCatalogPricingPrefersCanonicalDollarCost(t *testing.T) {

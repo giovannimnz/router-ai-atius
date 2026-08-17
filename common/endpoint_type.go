@@ -13,6 +13,9 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 	if strings.Contains(lowerModelName, "embedding") || strings.HasPrefix(lowerModelName, "embo-") {
 		return []constant.EndpointType{constant.EndpointTypeEmbeddings}
 	}
+	if channelType == constant.ChannelTypeAtiusLocalEmbeddings && modelName == constant.AtiusLocalRerankerModel {
+		return []constant.EndpointType{constant.EndpointTypeJinaRerank}
+	}
 	switch channelType {
 	case constant.ChannelTypeJina:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeJinaRerank}

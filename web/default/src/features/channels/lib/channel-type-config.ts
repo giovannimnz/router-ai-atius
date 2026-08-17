@@ -152,7 +152,7 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     hints: {
       baseUrl: 'TEI embeddings endpoint on horistic-srv',
       key: 'No upstream authentication required',
-      models: 'embedding-gte-v1,reranker-gte-multilingual-v1',
+      models: 'embedding-gte-v1,reranker-gte-v1',
     },
   },
 }

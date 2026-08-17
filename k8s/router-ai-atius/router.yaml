@@ -40,6 +40,8 @@ spec:
         app.kubernetes.io/name: router-ai-atius
         app.kubernetes.io/part-of: atius-router
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull
       nodeSelector:
         kubernetes.io/hostname: atius-srv-1
       containers:

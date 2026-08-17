@@ -46,7 +46,7 @@ spec:
         kubernetes.io/hostname: atius-srv-1
       containers:
         - name: router-ai-atius
-          image: ghcr.io/giovannimnz/router-ai-atius:v2.17.3-openrouter-models.1
+          image: ghcr.io/giovannimnz/router-ai-atius:usd-reconciliation-20260817-dd0bc13
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

@@ -213,10 +213,10 @@ def _cases() -> list[Case]:
         Case("anthropic-minimax-m3", "anthropic", "MiniMax-M3", 1, "MiniMax", strict_success),
         Case("anthropic-minimax-m27-highspeed", "anthropic", "MiniMax-M2.7-highspeed", 1, "MiniMax", strict_success),
         Case("anthropic-minimax-m27", "anthropic", "MiniMax-M2.7", 1, "MiniMax", strict_success),
-        Case("openai-codex-gpt55", "openai", "gpt-5.5", 5, "OpenAI - Codex", strict_success, stream=True),
-        Case("openai-codex-gpt54", "openai", "gpt-5.4", 5, "OpenAI - Codex", strict_success, stream=True),
-        Case("openai-codex-gpt54-mini", "openai", "gpt-5.4-mini", 5, "OpenAI - Codex", strict_success, stream=True),
-        Case("openai-codex-spark", "openai", "gpt-5.3-codex-spark", 5, "OpenAI - Codex", strict_success, stream=True),
+        Case("openai-codex-gpt55", "openai", "gpt-5.5", 5, "ChatGPT - Codex", strict_success, stream=True),
+        Case("openai-codex-gpt54", "openai", "gpt-5.4", 5, "ChatGPT - Codex", strict_success, stream=True),
+        Case("openai-codex-gpt54-mini", "openai", "gpt-5.4-mini", 5, "ChatGPT - Codex", strict_success, stream=True),
+        Case("openai-codex-spark", "openai", "gpt-5.3-codex-spark", 5, "ChatGPT - Codex", strict_success, stream=True),
     ]
     if ACTIVE_ONLY:
         return active_cases
@@ -226,8 +226,8 @@ def _cases() -> list[Case]:
         Case("openai-deepseek-flash", "openai", "deepseek-v4-flash", 2, "DeepSeek", strict_success),
         Case("anthropic-deepseek-pro", "anthropic", "deepseek-v4-pro", 2, "DeepSeek", strict_success),
         Case("anthropic-deepseek-flash", "anthropic", "deepseek-v4-flash", 2, "DeepSeek", strict_success),
-        Case("embeddings-codex-small", "embeddings", "text-embedding-3-small", 5, "OpenAI - Codex", strict_success),
-        Case("embeddings-codex-large", "embeddings", "text-embedding-3-large", 5, "OpenAI - Codex", strict_success),
+        Case("embeddings-codex-small", "embeddings", "text-embedding-3-small", 5, "ChatGPT - Codex", strict_success),
+        Case("embeddings-codex-large", "embeddings", "text-embedding-3-large", 5, "ChatGPT - Codex", strict_success),
     ]
 
 
@@ -239,7 +239,7 @@ def _negative_cases() -> list[Case]:
         Case("disabled-embeddings-minimax-embo", "embeddings", "embo-01", 1, "MiniMax", non_success, negative=True),
         Case("disabled-openai-deepseek-pro", "openai", "deepseek-v4-pro", 2, "DeepSeek", non_success, negative=True),
         Case("disabled-anthropic-deepseek-pro", "anthropic", "deepseek-v4-pro", 2, "DeepSeek", non_success, negative=True),
-        Case("disabled-embeddings-codex-small", "embeddings", "text-embedding-3-small", 5, "OpenAI - Codex", non_success, negative=True),
+        Case("disabled-embeddings-codex-small", "embeddings", "text-embedding-3-small", 5, "ChatGPT - Codex", non_success, negative=True),
     ]
 
 

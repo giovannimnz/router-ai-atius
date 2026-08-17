@@ -54,6 +54,7 @@ import {
 } from '../constants'
 import {
   channelsQueryKeys,
+  CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS,
   aggregateChannelsByTag,
   isTagAggregateRow,
   getChannelTypeIcon,
@@ -61,6 +62,7 @@ import {
 } from '../lib'
 import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
+import { ChannelTypeLogo } from './channel-type-logo'
 import { useChannelsColumns } from './channels-columns'
 import { useChannels } from './channels-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
@@ -386,7 +388,12 @@ export function ChannelsTable() {
           label: getChannelTypeLabel(item.type),
           value: String(item.type),
           count: item.count,
-          iconNode: getLobeIcon(`${iconName}.Color`, 16),
+          iconNode:
+            item.type === CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS ? (
+              <ChannelTypeLogo type={item.type} size={16} />
+            ) : (
+              getLobeIcon(`${iconName}.Color`, 16)
+            ),
         }
       }),
     ]

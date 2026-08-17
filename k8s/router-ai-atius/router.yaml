@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: router-ai-atius
-          image: ghcr.io/giovannimnz/router-ai-atius:latest
+          image: ghcr.io/giovannimnz/router-ai-atius:v2.17.3-atius-local-embeddings.6
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

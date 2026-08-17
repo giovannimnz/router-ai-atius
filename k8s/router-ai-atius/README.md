@@ -58,6 +58,12 @@ Antes de qualquer cutover:
 ## TEI
 
 - TEI e dependencia externa desta fase.
-- O endpoint base sugerido fica no ConfigMap como
-  `http://tei-gte.ai-search.svc.cluster.local`.
+- O contrato live atual fica fora do cluster, no `horistic-srv`:
+  - embeddings: `http://10.21.1.21:3115`
+  - reranker: `http://10.21.1.21:31216`
+- O ConfigMap shadow guarda esses hints explicitamente em
+  `TEI_BASE_URL` e `TEI_RERANKER_BASE_URL`.
+- `tei-gte.ai-search.svc.cluster.local` nao e mais a fonte de verdade desta
+  arvore; use-o apenas se a dependencia TEI for internalizada e revalidada no
+  proprio k3s.
 - Nao mudar recursos do TEI a partir desta arvore.

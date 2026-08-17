@@ -506,7 +506,7 @@ class Phase19ProviderRoutingTests(unittest.TestCase):
         labels = [label for _resource, _sql, label in actions]
         combined_sql = "\n".join(sql for _resource, sql, _label in actions)
 
-        self.assertTrue(any("OpenAI - Codex" in label for label in labels))
+        self.assertTrue(any("ChatGPT - Codex" in label for label in labels))
         self.assertTrue(any("consolidate MiniMax" in label for label in labels))
         self.assertTrue(any("consolidate DeepSeek" in label for label in labels))
         self.assertTrue(any("disable merged provider channels" in label for label in labels))

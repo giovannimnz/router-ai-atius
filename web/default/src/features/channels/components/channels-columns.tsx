@@ -59,6 +59,7 @@ import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
 import {
   formatRelativeTime,
   formatResponseTime,
+  CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS,
   getBalanceVariant,
   getChannelTypeIcon,
   getChannelTypeLabel,
@@ -76,6 +77,7 @@ import {
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
+import { ChannelTypeLogo } from './channel-type-logo'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
@@ -752,7 +754,16 @@ export function useChannelsColumns(
                     }
                   >
                     <ProviderBadge
-                      iconKey={`${iconName}.Color`}
+                      iconKey={
+                        type === CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS
+                          ? null
+                          : `${iconName}.Color`
+                      }
+                      iconNode={
+                        type === CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS ? (
+                          <ChannelTypeLogo type={type} size={18} />
+                        ) : undefined
+                      }
                       iconSize={18}
                       label={typeName}
                       colorText={false}

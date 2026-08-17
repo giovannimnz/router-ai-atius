@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,9 +22,14 @@ const (
 	codexOAuthAuthorizeURL = "https://auth.openai.com/oauth/authorize"
 	codexOAuthTokenURL     = "https://auth.openai.com/oauth/token"
 	codexOAuthRedirectURI  = "http://localhost:1455/auth/callback"
+	codexDeviceUserCodeURL = "https://auth.openai.com/api/accounts/deviceauth/usercode"
+	codexDeviceTokenURL    = "https://auth.openai.com/api/accounts/deviceauth/token"
+	codexDeviceVerifyURL   = "https://auth.openai.com/codex/device"
+	codexDeviceRedirectURI = "https://auth.openai.com/deviceauth/callback"
 	codexOAuthScope        = "openid profile email offline_access"
 	codexJWTClaimPath      = "https://api.openai.com/auth"
 	defaultHTTPTimeout     = 20 * time.Second
+	codexDeviceFlowTTL     = 15 * time.Minute
 )
 
 type CodexOAuthTokenResult struct {
@@ -37,6 +43,20 @@ type CodexOAuthAuthorizationFlow struct {
 	Verifier     string
 	Challenge    string
 	AuthorizeURL string
+}
+
+type CodexDeviceAuthorizationStart struct {
+	DeviceAuthID    string
+	UserCode        string
+	VerificationURL string
+	Interval        time.Duration
+	ExpiresAt       time.Time
+}
+
+type CodexDeviceAuthorizationPoll struct {
+	Pending           bool
+	AuthorizationCode string
+	CodeVerifier      string
 }
 
 type CodexUpstreamAuthError struct {
@@ -85,6 +105,30 @@ func ExchangeCodexAuthorizationCodeWithProxy(ctx context.Context, code string, v
 	return exchangeCodexAuthorizationCode(ctx, client, codexOAuthTokenURL, codexOAuthClientID, code, verifier, codexOAuthRedirectURI)
 }
 
+func StartCodexDeviceAuthorization(ctx context.Context, proxyURL string) (*CodexDeviceAuthorizationStart, error) {
+	client, err := getCodexOAuthHTTPClient(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	return startCodexDeviceAuthorization(ctx, client, codexDeviceUserCodeURL, codexOAuthClientID)
+}
+
+func PollCodexDeviceAuthorization(ctx context.Context, deviceAuthID string, userCode string, proxyURL string) (*CodexDeviceAuthorizationPoll, error) {
+	client, err := getCodexOAuthHTTPClient(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	return pollCodexDeviceAuthorization(ctx, client, codexDeviceTokenURL, deviceAuthID, userCode)
+}
+
+func ExchangeCodexDeviceAuthorizationCode(ctx context.Context, code string, verifier string, proxyURL string) (*CodexOAuthTokenResult, error) {
+	client, err := getCodexOAuthHTTPClient(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	return exchangeCodexAuthorizationCode(ctx, client, codexOAuthTokenURL, codexOAuthClientID, code, verifier, codexDeviceRedirectURI)
+}
+
 func CreateCodexOAuthAuthorizationFlow() (*CodexOAuthAuthorizationFlow, error) {
 	state, err := createStateHex(16)
 	if err != nil {
@@ -103,6 +147,116 @@ func CreateCodexOAuthAuthorizationFlow() (*CodexOAuthAuthorizationFlow, error) {
 		Verifier:     verifier,
 		Challenge:    challenge,
 		AuthorizeURL: u,
+	}, nil
+}
+
+func startCodexDeviceAuthorization(
+	ctx context.Context,
+	client *http.Client,
+	endpoint string,
+	clientID string,
+) (*CodexDeviceAuthorizationStart, error) {
+	body, err := common.Marshal(map[string]string{"client_id": clientID})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, newCodexUpstreamAuthError("codex device authorization start", resp.StatusCode, responseBody)
+	}
+	var payload struct {
+		DeviceAuthID string `json:"device_auth_id"`
+		UserCode     string `json:"user_code"`
+		UserCodeAlt  string `json:"usercode"`
+		Interval     string `json:"interval"`
+	}
+	if err := common.Unmarshal(responseBody, &payload); err != nil {
+		return nil, err
+	}
+	userCode := strings.TrimSpace(payload.UserCode)
+	if userCode == "" {
+		userCode = strings.TrimSpace(payload.UserCodeAlt)
+	}
+	intervalSeconds, err := strconv.Atoi(strings.TrimSpace(payload.Interval))
+	if err != nil || intervalSeconds <= 0 {
+		intervalSeconds = 5
+	}
+	if strings.TrimSpace(payload.DeviceAuthID) == "" || userCode == "" {
+		return nil, errors.New("codex device authorization response missing fields")
+	}
+	return &CodexDeviceAuthorizationStart{
+		DeviceAuthID:    strings.TrimSpace(payload.DeviceAuthID),
+		UserCode:        userCode,
+		VerificationURL: codexDeviceVerifyURL,
+		Interval:        time.Duration(intervalSeconds) * time.Second,
+		ExpiresAt:       time.Now().Add(codexDeviceFlowTTL),
+	}, nil
+}
+
+func pollCodexDeviceAuthorization(
+	ctx context.Context,
+	client *http.Client,
+	endpoint string,
+	deviceAuthID string,
+	userCode string,
+) (*CodexDeviceAuthorizationPoll, error) {
+	payloadBody, err := common.Marshal(map[string]string{
+		"device_auth_id": strings.TrimSpace(deviceAuthID),
+		"user_code":      strings.TrimSpace(userCode),
+	})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(payloadBody)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
+		return &CodexDeviceAuthorizationPoll{Pending: true}, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, newCodexUpstreamAuthError("codex device authorization poll", resp.StatusCode, responseBody)
+	}
+	var payload struct {
+		AuthorizationCode string `json:"authorization_code"`
+		CodeVerifier      string `json:"code_verifier"`
+	}
+	if err := common.Unmarshal(responseBody, &payload); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(payload.AuthorizationCode) == "" || strings.TrimSpace(payload.CodeVerifier) == "" {
+		return nil, errors.New("codex device authorization token response missing fields")
+	}
+	return &CodexDeviceAuthorizationPoll{
+		AuthorizationCode: strings.TrimSpace(payload.AuthorizationCode),
+		CodeVerifier:      strings.TrimSpace(payload.CodeVerifier),
 	}, nil
 }
 

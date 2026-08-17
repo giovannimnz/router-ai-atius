@@ -85,6 +85,32 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 	require.Equal(t, 2, userID)
 }
 
+func TestBuildTestRequestAutoDetectsReranker(t *testing.T) {
+	request := buildTestRequest("reranker-gte-multilingual-v1", "", &model.Channel{
+		Type: constant.ChannelTypeAdvancedCustom,
+	}, false)
+
+	rerankRequest, ok := request.(*dto.RerankRequest)
+	require.True(t, ok)
+	assert.Equal(t, "reranker-gte-multilingual-v1", rerankRequest.Model)
+	assert.Equal(t, "What is Deep Learning?", rerankRequest.Query)
+	assert.Len(t, rerankRequest.Documents, 2)
+	require.NotNil(t, rerankRequest.TopN)
+	assert.Equal(t, 2, *rerankRequest.TopN)
+}
+
+func TestValidateChannelAppliesAtiusLocalEmbeddingsDefaultsWithoutKey(t *testing.T) {
+	t.Setenv("TEI_BASE_URL", "http://embeddings.internal:3115")
+	t.Setenv("TEI_RERANKER_BASE_URL", "http://reranker.internal:31216")
+	channel := &model.Channel{Type: constant.ChannelTypeAtiusLocalEmbeddings}
+
+	require.NoError(t, validateChannel(channel, true))
+	assert.Empty(t, channel.Key)
+	assert.Equal(t, constant.AtiusLocalEmbeddingsChannelName, channel.Name)
+	assert.Equal(t, "embedding-gte-v1,reranker-gte-multilingual-v1", channel.Models)
+	require.NotNil(t, channel.GetOtherSettings().AdvancedCustom)
+}
+
 func TestShouldUseStreamForChannelTest(t *testing.T) {
 	codexChannel := &model.Channel{Type: constant.ChannelTypeCodex}
 	openAIChannel := &model.Channel{Type: constant.ChannelTypeOpenAI}

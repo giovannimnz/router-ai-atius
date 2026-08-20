@@ -24,6 +24,45 @@ func TestChannelInfoValueReturnsJSONText(t *testing.T) {
 	}`, textValue)
 }
 
+func TestChannelInfoScanAcceptsDriverRepresentations(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "nil", value: nil},
+		{name: "empty bytes", value: []byte{}},
+		{name: "empty string", value: ""},
+		{name: "json bytes", value: []byte(`{"is_multi_key":true,"multi_key_size":2}`)},
+		{name: "json string", value: `{"is_multi_key":true,"multi_key_size":2}`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var channelInfo ChannelInfo
+			require.NoError(t, channelInfo.Scan(test.value))
+			if test.name == "json bytes" || test.name == "json string" {
+				assert.True(t, channelInfo.IsMultiKey)
+				assert.Equal(t, 2, channelInfo.MultiKeySize)
+				return
+			}
+			assert.Equal(t, ChannelInfo{}, channelInfo)
+		})
+	}
+
+	var channelInfo ChannelInfo
+	require.EqualError(t, channelInfo.Scan(123), "unsupported ChannelInfo value type int")
+
+	channelInfo = ChannelInfo{IsMultiKey: true, MultiKeySize: 9}
+	require.NoError(t, channelInfo.Scan([]byte(`{}`)))
+	assert.Equal(t, ChannelInfo{}, channelInfo)
+	channelInfo = ChannelInfo{IsMultiKey: true, MultiKeySize: 9}
+	require.NoError(t, channelInfo.Scan([]byte(`null`)))
+	assert.Equal(t, ChannelInfo{}, channelInfo)
+	channelInfo = ChannelInfo{IsMultiKey: true, MultiKeySize: 9}
+	require.Error(t, channelInfo.Scan([]byte(`{"is_multi_key":`)))
+	assert.Equal(t, ChannelInfo{IsMultiKey: true, MultiKeySize: 9}, channelInfo)
+}
+
 func TestApplyAtiusLocalEmbeddingsDefaults(t *testing.T) {
 	t.Setenv("TEI_BASE_URL", "http://embeddings.internal:3115/")
 	t.Setenv("TEI_RERANKER_BASE_URL", "http://reranker.internal:31216/")
@@ -32,7 +71,7 @@ func TestApplyAtiusLocalEmbeddingsDefaults(t *testing.T) {
 	require.NoError(t, channel.ApplyAtiusLocalEmbeddingsDefaults())
 
 	assert.Equal(t, "Atius Local Embeddings", channel.Name)
-	assert.Equal(t, "embedding-gte-v1,reranker-gte-multilingual-v1", channel.Models)
+	assert.Equal(t, "embedding-gte-v1,reranker-gte-v1", channel.Models)
 	assert.Equal(t, "default", channel.Group)
 	require.NotNil(t, channel.BaseURL)
 	assert.Equal(t, "http://embeddings.internal:3115", *channel.BaseURL)

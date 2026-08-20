@@ -227,7 +227,13 @@ func InitLogDB() (err error) {
 		LOG_DB = DB
 		common.SetLogDatabaseType(common.MainDatabaseType())
 		initCol()
-		return
+		if common.IsMasterNode {
+			if err := MigrateAtiusLocalRerankerLogAlias(LOG_DB); err != nil {
+				return err
+			}
+			return MigrateAtiusDollarCostV1()
+		}
+		return nil
 	}
 	db, dbType, err := chooseDB("LOG_SQL_DSN", true)
 	if err == nil {
@@ -255,8 +261,13 @@ func InitLogDB() (err error) {
 			return nil
 		}
 		common.SysLog("database migration started")
-		err = migrateLOGDB()
-		return err
+		if err = migrateLOGDB(); err != nil {
+			return err
+		}
+		if err = MigrateAtiusLocalRerankerLogAlias(LOG_DB); err != nil {
+			return err
+		}
+		return MigrateAtiusDollarCostV1()
 	} else {
 		common.FatalLog(err)
 	}
@@ -306,6 +317,9 @@ func migrateDB() error {
 		&CodexCatalogCandidate{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := MigrateAtiusLocalRerankerAlias(); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
@@ -381,6 +395,9 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := MigrateAtiusLocalRerankerAlias(); err != nil {
+		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {

@@ -8,8 +8,21 @@ type OpenAIModels struct {
 	Object                      string                  `json:"object"`
 	Created                     int                     `json:"created"`
 	OwnedBy                     string                  `json:"owned_by"`
+	CanonicalSlug               string                  `json:"canonical_slug,omitempty"`
+	HuggingFaceID               *string                 `json:"hugging_face_id,omitempty"`
 	Name                        string                  `json:"name,omitempty"`
+	Description                 string                  `json:"description,omitempty"`
 	Provider                    string                  `json:"provider,omitempty"`
+	Links                       *ModelLinks             `json:"links,omitempty"`
+	ContextLength               *int                    `json:"context_length,omitempty"`
+	Architecture                *ModelArchitecture      `json:"architecture,omitempty"`
+	TopProvider                 *ModelTopProvider       `json:"top_provider,omitempty"`
+	PerRequestLimits            any                     `json:"per_request_limits,omitempty"`
+	SupportedParameters         []string                `json:"supported_parameters,omitempty"`
+	DefaultParameters           map[string]any          `json:"default_parameters,omitempty"`
+	SupportedVoices             any                     `json:"supported_voices,omitempty"`
+	KnowledgeCutoff             *string                 `json:"knowledge_cutoff,omitempty"`
+	ExpirationDate              *string                 `json:"expiration_date,omitempty"`
 	ContextWindow               *ModelContextWindow     `json:"context_window,omitempty"`
 	SupportedEndpointTypes      []constant.EndpointType `json:"supported_endpoint_types"`
 	SupportedEndpointTypeLabels []string                `json:"-"`
@@ -70,10 +83,17 @@ type GeminiModel struct {
 
 type ModelCatalogEntry struct {
 	ModelName                   string                  `json:"model_name"`
+	Created                     int                     `json:"created,omitempty"`
 	Name                        string                  `json:"name,omitempty"`
+	Description                 string                  `json:"description,omitempty"`
 	Provider                    string                  `json:"provider,omitempty"`
 	OwnedBy                     string                  `json:"owned_by"`
+	CanonicalSlug               string                  `json:"canonical_slug,omitempty"`
+	HuggingFaceID               *string                 `json:"hugging_face_id,omitempty"`
 	ContextWindow               *ModelContextWindow     `json:"context_window,omitempty"`
+	Architecture                *ModelArchitecture      `json:"architecture,omitempty"`
+	SupportedParameters         []string                `json:"supported_parameters,omitempty"`
+	DefaultParameters           map[string]any          `json:"default_parameters,omitempty"`
 	EnableGroups                []string                `json:"enable_groups,omitempty"`
 	SupportedEndpointTypes      []constant.EndpointType `json:"supported_endpoint_types,omitempty"`
 	SupportedEndpointTypeLabels []string                `json:"supported_endpoint_type_labels,omitempty"`
@@ -93,13 +113,17 @@ type ModelCatalogEntry struct {
 }
 
 type ModelCatalogPricing struct {
+	Prompt            string   `json:"prompt"`
+	Completion        string   `json:"completion"`
+	Request           string   `json:"request,omitempty"`
+	Image             string   `json:"image,omitempty"`
+	InputCacheRead    string   `json:"input_cache_read,omitempty"`
+	InputCacheWrite   string   `json:"input_cache_write,omitempty"`
 	Input             float64  `json:"input"`
 	Output            float64  `json:"output"`
 	CachedInput       *float64 `json:"cached_input,omitempty"`
 	CacheWrite        *float64 `json:"cache_write,omitempty"`
 	Unit              string   `json:"unit,omitempty"`
-	Prompt            float64  `json:"prompt,omitempty"`
-	Completion        float64  `json:"completion,omitempty"`
 	CompatibilityUnit string   `json:"compatibility_unit,omitempty"`
 	Scope             string   `json:"scope,omitempty"`
 }
@@ -107,4 +131,22 @@ type ModelCatalogPricing struct {
 type ModelContextWindow struct {
 	ContextLength       int `json:"context_length,omitempty"`
 	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
+}
+
+type ModelArchitecture struct {
+	Modality         string   `json:"modality"`
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
+	Tokenizer        string   `json:"tokenizer"`
+	InstructType     *string  `json:"instruct_type"`
+}
+
+type ModelTopProvider struct {
+	ContextLength       int  `json:"context_length"`
+	MaxCompletionTokens *int `json:"max_completion_tokens"`
+	IsModerated         bool `json:"is_moderated"`
+}
+
+type ModelLinks struct {
+	Details string `json:"details"`
 }

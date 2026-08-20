@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -200,11 +201,13 @@ func TestApplyCodexMetadataUsesOAuthContextAndBillingContract(t *testing.T) {
 	require.NotNil(t, entries[0].Pricing)
 	require.Equal(t, 5.0, entries[0].Pricing.Input)
 	require.Equal(t, 30.0, entries[0].Pricing.Output)
-	require.Nil(t, entries[0].Pricing.CachedInput)
-	require.Nil(t, entries[0].Pricing.CacheWrite)
+	require.NotNil(t, entries[0].Pricing.CachedInput)
+	require.Equal(t, 0.5, *entries[0].Pricing.CachedInput)
+	require.NotNil(t, entries[0].Pricing.CacheWrite)
+	require.Equal(t, 6.25, *entries[0].Pricing.CacheWrite)
 	require.Equal(t, "usd_per_1m_tokens", entries[0].Pricing.Unit)
-	require.Equal(t, 0.000005, entries[0].Pricing.Prompt)
-	require.Equal(t, 0.00003, entries[0].Pricing.Completion)
+	require.Equal(t, "0.000005", entries[0].Pricing.Prompt)
+	require.Equal(t, "0.00003", entries[0].Pricing.Completion)
 	require.Equal(t, "usd_per_token", entries[0].Pricing.CompatibilityUnit)
 	require.Equal(t, service.CodexOpenAIReferencePricingScope, entries[0].Pricing.Scope)
 
@@ -216,11 +219,13 @@ func TestApplyCodexMetadataUsesOAuthContextAndBillingContract(t *testing.T) {
 	require.True(t, ok)
 	require.EqualValues(t, 5, pricing["input"])
 	require.EqualValues(t, 30, pricing["output"])
-	require.NotContains(t, pricing, "cached_input")
-	require.NotContains(t, pricing, "cache_write")
+	require.EqualValues(t, 0.5, pricing["cached_input"])
+	require.EqualValues(t, 6.25, pricing["cache_write"])
 	require.Equal(t, "usd_per_1m_tokens", pricing["unit"])
-	require.EqualValues(t, 0.000005, pricing["prompt"])
-	require.EqualValues(t, 0.00003, pricing["completion"])
+	require.Equal(t, "0.000005", pricing["prompt"])
+	require.Equal(t, "0.00003", pricing["completion"])
+	require.Equal(t, "0.0000005", pricing["input_cache_read"])
+	require.Equal(t, "0.00000625", pricing["input_cache_write"])
 	require.Equal(t, "usd_per_token", pricing["compatibility_unit"])
 	require.Equal(t, service.CodexOpenAIReferencePricingScope, pricing["scope"])
 	require.Equal(t, service.CodexCatalogBillingMode, public["billing_mode"])
@@ -243,6 +248,133 @@ func TestApplyCodexMetadataMapsLegacyMaxTokensToContextLength(t *testing.T) {
 	payload, err := common.Marshal(entries[0].ContextWindow)
 	require.NoError(t, err)
 	require.NotContains(t, string(payload), "max_tokens")
+}
+
+func TestOpenRouterModelFiltersPreserveDefaultAndSupportDocumentedQueries(t *testing.T) {
+	entries := []dto.ModelCatalogEntry{
+		{
+			ModelName:           "gpt-test",
+			CanonicalSlug:       "openai/gpt-test",
+			Name:                "GPT Test",
+			Provider:            "OpenAI Codex",
+			OwnedBy:             "codex",
+			Created:             200,
+			ContextWindow:       &dto.ModelContextWindow{ContextLength: 128000},
+			Architecture:        &dto.ModelArchitecture{Modality: "text->text", InputModalities: []string{"text", "image"}, OutputModalities: []string{"text"}, Tokenizer: "GPT"},
+			SupportedParameters: []string{"tools", "temperature"},
+			Pricing:             &dto.ModelCatalogPricing{Input: 5, Output: 30},
+		},
+		{
+			ModelName:           constant.AtiusLocalEmbeddingModel,
+			CanonicalSlug:       "alibaba-nlp/gte-multilingual-base",
+			Name:                "Atius: GTE Multilingual Embeddings",
+			Provider:            "Atius",
+			OwnedBy:             "atius",
+			Created:             100,
+			ContextWindow:       &dto.ModelContextWindow{ContextLength: 8192},
+			Architecture:        &dto.ModelArchitecture{Modality: "text->embeddings", InputModalities: []string{"text"}, OutputModalities: []string{"embeddings"}, Tokenizer: "XLM-R"},
+			SupportedParameters: []string{},
+			Pricing:             &dto.ModelCatalogPricing{Input: 0.07, Output: 0},
+		},
+	}
+
+	defaultContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	defaultContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	filtered, err := applyOpenRouterModelFilters(defaultContext, entries)
+	require.NoError(t, err)
+	require.Equal(t, entries, filtered)
+
+	filterContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	filterContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models?output_modalities=embeddings&q=gte&providers=Atius&context=8000&max_price=0.1", nil)
+	filtered, err = applyOpenRouterModelFilters(filterContext, entries)
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	require.Equal(t, constant.AtiusLocalEmbeddingModel, filtered[0].ModelName)
+
+	sortContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	sortContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models?sort=context-high-to-low&offset=1&limit=1", nil)
+	filtered, err = applyOpenRouterModelFilters(sortContext, entries)
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	require.Equal(t, constant.AtiusLocalEmbeddingModel, filtered[0].ModelName)
+
+	invalidContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	invalidContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models?sort=latency-low-to-high", nil)
+	_, err = applyOpenRouterModelFilters(invalidContext, entries)
+	require.EqualError(t, err, `unsupported sort mode "latency-low-to-high"`)
+
+	for _, query := range []string{"max_price=NaN", "min_price=Inf", "zdr=true", "region=us"} {
+		invalidContext, _ = gin.CreateTestContext(httptest.NewRecorder())
+		invalidContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models?"+query, nil)
+		_, err = applyOpenRouterModelFilters(invalidContext, entries)
+		require.Error(t, err, query)
+	}
+}
+
+func TestListModelsPublishesLocalGTEOpenRouterContract(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1003,
+		Username: "gte-model-list-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	channel := model.Channel{Id: 11, Type: constant.ChannelTypeAtiusLocalEmbeddings, Status: common.ChannelStatusEnabled}
+	require.NoError(t, channel.ApplyAtiusLocalEmbeddingsDefaults())
+	require.NoError(t, db.Create(&channel).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: constant.AtiusLocalEmbeddingModel, ChannelId: channel.Id, Enabled: true},
+		{Group: "default", Model: constant.AtiusLocalRerankerModel, ChannelId: channel.Id, Enabled: true},
+	}).Error)
+	model.RefreshPricing()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	ctx.Set("id", 1003)
+
+	ListModels(ctx, constant.ChannelTypeOpenAI)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var raw map[string]any
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &raw))
+	require.Equal(t, []string{"data"}, mapKeys(raw))
+	require.NotContains(t, string(recorder.Body.Bytes()), "pricing_source")
+	require.NotContains(t, string(recorder.Body.Bytes()), "pricing_estimated")
+	require.NotContains(t, string(recorder.Body.Bytes()), "pricing_version")
+
+	var response listModelsResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Len(t, response.Data, 2)
+	byID := make(map[string]dto.OpenAIModels, len(response.Data))
+	for _, item := range response.Data {
+		byID[item.Id] = item
+	}
+
+	embedding := byID[constant.AtiusLocalEmbeddingModel]
+	require.Equal(t, "alibaba-nlp/gte-multilingual-base", embedding.CanonicalSlug)
+	require.Equal(t, []string{"embeddings"}, embedding.Architecture.OutputModalities)
+	require.Equal(t, "/v1/embeddings", embedding.EndpointRoutes[string(constant.EndpointTypeEmbeddings)])
+	require.Equal(t, 8192, *embedding.ContextLength)
+
+	reranker := byID[constant.AtiusLocalRerankerModel]
+	require.NotEmpty(t, reranker.Id)
+	require.NotContains(t, byID, constant.LegacyAtiusLocalRerankerModel)
+	require.Equal(t, "alibaba-nlp/gte-multilingual-reranker-base", reranker.CanonicalSlug)
+	require.Equal(t, []string{"rerank"}, reranker.Architecture.OutputModalities)
+	require.Equal(t, []constant.EndpointType{constant.EndpointTypeJinaRerank}, reranker.SupportedEndpointTypes)
+	require.Equal(t, "/v1/rerank", reranker.EndpointRoutes[string(constant.EndpointTypeJinaRerank)])
+}
+
+func mapKeys(value map[string]any) []string {
+	keys := make([]string, 0, len(value))
+	for key := range value {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func TestRetrieveModelUsesPromotedCodexMetadataAndOfficialOutputFallback(t *testing.T) {

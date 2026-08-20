@@ -64,7 +64,8 @@ const (
 const (
 	AtiusLocalEmbeddingsChannelName = "Atius Local Embeddings"
 	AtiusLocalEmbeddingModel        = "embedding-gte-v1"
-	AtiusLocalRerankerModel         = "reranker-gte-multilingual-v1"
+	AtiusLocalRerankerModel         = "reranker-gte-v1"
+	LegacyAtiusLocalRerankerModel   = "reranker-gte-multilingual-v1"
 )
 
 var ChannelBaseURLs = []string{

@@ -377,7 +377,7 @@ func mapKeys(value map[string]any) []string {
 	return keys
 }
 
-func TestRetrieveModelUsesPromotedCodexMetadataAndOfficialOutputFallback(t *testing.T) {
+func TestModelEndpointsUsePinnedCodexContextAndOfficialOutputFallback(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.Create(&model.User{
@@ -408,6 +408,28 @@ func TestRetrieveModelUsesPromotedCodexMetadataAndOfficialOutputFallback(t *test
 		MaxTokens:           272000,
 	}).Error)
 
+	listRecorder := httptest.NewRecorder()
+	listCtx, _ := gin.CreateTestContext(listRecorder)
+	listCtx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	listCtx.Set("id", 1002)
+
+	ListModels(listCtx, constant.ChannelTypeOpenAI)
+
+	require.Equal(t, http.StatusOK, listRecorder.Code)
+	var listPayload listModelsResponse
+	require.NoError(t, common.Unmarshal(listRecorder.Body.Bytes(), &listPayload))
+	var listed *dto.OpenAIModels
+	for i := range listPayload.Data {
+		if listPayload.Data[i].Id == "gpt-5.6-sol" {
+			listed = &listPayload.Data[i]
+			break
+		}
+	}
+	require.NotNil(t, listed)
+	require.NotNil(t, listed.ContextWindow)
+	require.Equal(t, 1_000_000, listed.ContextWindow.ContextLength)
+	require.Equal(t, 128000, listed.ContextWindow.MaxCompletionTokens)
+
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models/gpt-5.6-sol", nil)
@@ -422,7 +444,7 @@ func TestRetrieveModelUsesPromotedCodexMetadataAndOfficialOutputFallback(t *test
 	require.Equal(t, "gpt-5.6-sol", payload.Id)
 	require.Equal(t, "codex", payload.OwnedBy)
 	require.NotNil(t, payload.ContextWindow)
-	require.Equal(t, 272000, payload.ContextWindow.ContextLength)
+	require.Equal(t, 1_000_000, payload.ContextWindow.ContextLength)
 	require.Equal(t, 128000, payload.ContextWindow.MaxCompletionTokens)
 }
 

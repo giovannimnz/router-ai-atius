@@ -91,12 +91,17 @@ func TestDefaultCodexCatalogPolicyIncludesOfficialGPT56Overrides(t *testing.T) {
 		"gpt-5.6-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
 		"gpt-5.6-luna":  {"low", "medium", "high", "xhigh", "max"},
 	}
+	expectedContexts := map[string]int{
+		"gpt-5.6-sol":   codexGPT56SolContextWindow,
+		"gpt-5.6-terra": 272000,
+		"gpt-5.6-luna":  272000,
+	}
 	for modelName, displayName := range expectedNames {
 		meta, ok := policy.Overrides[modelName]
 		require.True(t, ok, modelName)
 		assert.Equal(t, displayName, meta.DisplayName)
-		assert.Equal(t, 272000, meta.ContextWindowTokens)
-		assert.Equal(t, 272000, meta.MaxTokens)
+		assert.Equal(t, expectedContexts[modelName], meta.ContextWindowTokens)
+		assert.Equal(t, expectedContexts[modelName], meta.MaxTokens)
 		assert.Zero(t, meta.MaxCompletionTokens)
 		assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
 		assert.Equal(t, constant.EndpointTypeOpenAIResponse, meta.EndpointPreference)
@@ -297,7 +302,8 @@ func TestPromotedCodexMetadataUsesOfficialOutputFallbackWhenOAuthOmitsIt(t *test
 	require.NoError(t, err)
 	meta, ok := metadata["gpt-5.6-sol"]
 	require.True(t, ok)
-	assert.Equal(t, 272000, meta.MaxTokens)
+	assert.Equal(t, codexGPT56SolContextWindow, meta.ContextWindowTokens)
+	assert.Equal(t, codexGPT56SolContextWindow, meta.MaxTokens)
 	assert.Equal(t, 128000, meta.MaxCompletionTokens)
 	assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
 
@@ -314,7 +320,8 @@ func TestPromotedCodexMetadataUsesOfficialOutputFallbackWhenOAuthOmitsIt(t *test
 	metadata, err = promotedCodexMetadataByModelName([]string{"gpt-5.6-sol"})
 	require.NoError(t, err)
 	meta = metadata["gpt-5.6-sol"]
-	assert.Equal(t, 260000, meta.ContextWindowTokens)
+	assert.Equal(t, codexGPT56SolContextWindow, meta.ContextWindowTokens)
+	assert.Equal(t, codexGPT56SolContextWindow, meta.MaxTokens)
 	assert.Equal(t, 64000, meta.MaxCompletionTokens)
 }
 

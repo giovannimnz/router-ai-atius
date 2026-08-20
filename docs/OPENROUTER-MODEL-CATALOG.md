@@ -64,6 +64,12 @@ O alias legado `reranker-gte-multilingual-v1` e migrado de forma transacional no
 
 Os dois modelos pertencem ao channel `Atius Local Embeddings`, type `59`, e executam no `horistic-srv`. O reranker deve anunciar endpoint type `jina-rerank`; anunciar `openai` ou `/v1/chat/completions` e incorreto.
 
+No catalogo administrativo, o fornecedor canonico e `Atius Local`. Tanto a coluna `Icone` do modelo quanto o badge de `Fornecedor` usam a chave compartilhada `AtiusLocal`, resolvida para o mesmo SVG do channel `Atius Local Embeddings`; nao cadastrar um icone Lobe alternativo para estes dois campos.
+
+## Contexto Codex pinado
+
+`gpt-5.6-sol` publica `context_length=1000000` no channel `ChatGPT - Codex` e em `GET /v1/models`. Esse limite e uma politica deliberada do Router e vence o valor de contexto retornado pelo discovery OAuth somente para Sol. Terra e Luna continuam seguindo o contexto do discovery; `max_completion_tokens` continua sendo resolvido separadamente e preserva o valor OAuth quando presente.
+
 ## Auditoria de consumo USD do channel 11
 
 O card de consumo usa `channels.used_quota / quota_per_unit`. Com `quota_per_unit=500000` e `used_quota=7111`, o valor nominal desde a criacao do channel consolidado e:

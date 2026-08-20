@@ -35,6 +35,7 @@ const (
 	codexCatalogDenylistOptionKey          = "CodexCatalogDenylist"
 	codexCatalogOverridesOptionKey         = "CodexCatalogMetadataOverrides"
 	CodexCatalogBillingMode                = "dollar_cost"
+	codexGPT56SolContextWindow             = 1_000_000
 	codexCatalogDiscoveryClientVersionEnv  = "CODEX_DISCOVERY_CLIENT_VERSION"
 	codexCatalogDiscoveryClientVersionHint = "codex --version"
 )
@@ -128,15 +129,15 @@ func filterKnownRetiredCodexModels(values []string) []string {
 	return filtered
 }
 
-func officialGPT56CodexMetadata(displayName string, reasoningEfforts []string) CodexCatalogMetadata {
+func officialGPT56CodexMetadata(displayName string, contextWindowTokens int, reasoningEfforts []string) CodexCatalogMetadata {
 	return CodexCatalogMetadata{
 		DisplayName:               displayName,
 		Provider:                  "OpenAI Codex",
 		OwnedBy:                   "codex",
 		EndpointPreference:        constant.EndpointTypeOpenAIResponse,
 		SupportedEndpoints:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
-		ContextWindowTokens:       272000,
-		MaxTokens:                 272000,
+		ContextWindowTokens:       contextWindowTokens,
+		MaxTokens:                 contextWindowTokens,
 		BillingMode:               CodexCatalogBillingMode,
 		SupportedReasoningEfforts: append([]string(nil), reasoningEfforts...),
 		Capabilities: []string{
@@ -171,14 +172,17 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 		Overrides: map[string]CodexCatalogMetadata{
 			"gpt-5.6-sol": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Sol",
+				codexGPT56SolContextWindow,
 				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
 			),
 			"gpt-5.6-terra": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Terra",
+				272000,
 				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
 			),
 			"gpt-5.6-luna": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Luna",
+				272000,
 				[]string{"low", "medium", "high", "xhigh", "max"},
 			),
 			"gpt-5.5": {
@@ -614,6 +618,7 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 				metadata.Capabilities = append([]string(nil), overrideMetadata.Capabilities...)
 			}
 		}
+		applyCodexPinnedContextWindow(candidate.ModelName, &metadata)
 		result[candidate.ModelName] = metadata
 	}
 	return result, nil
@@ -761,6 +766,14 @@ func applyCodexDiscoveryLimits(meta *CodexCatalogMetadata, item codexDiscoveryIt
 	if maxCompletionTokens > 0 {
 		meta.MaxCompletionTokens = maxCompletionTokens
 	}
+}
+
+func applyCodexPinnedContextWindow(modelName string, meta *CodexCatalogMetadata) {
+	if meta == nil || modelName != "gpt-5.6-sol" {
+		return
+	}
+	meta.ContextWindowTokens = codexGPT56SolContextWindow
+	meta.MaxTokens = codexGPT56SolContextWindow
 }
 
 func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, override CodexCatalogMetadata) CodexCatalogMetadata {
@@ -1146,6 +1159,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		overrideMeta := policy.Overrides[modelName]
 		mergedMeta := mergeCodexCatalogMetadata(modelName, sourceMeta, overrideMeta)
 		applyCodexDiscoveryLimits(&mergedMeta, discovery.Items[modelName])
+		applyCodexPinnedContextWindow(modelName, &mergedMeta)
 
 		candidate, findErr := model.FindCodexCatalogCandidate(channelID, modelName)
 		if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {

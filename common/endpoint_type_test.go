@@ -29,7 +29,11 @@ func TestGetEndpointTypesByChannelTypeDeepSeekIsMultiProtocol(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t,
-		[]constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic},
+		[]constant.EndpointType{
+			constant.EndpointTypeOpenAIResponse,
+			constant.EndpointTypeOpenAI,
+			constant.EndpointTypeAnthropic,
+		},
 		GetEndpointTypesByChannelType(constant.ChannelTypeDeepSeek, "deepseek-v4-pro"),
 	)
 }

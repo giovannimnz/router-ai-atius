@@ -178,11 +178,13 @@ Regras praticas:
 - Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
 - Provider de embeddings Codex: `ChatGPT - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
-- MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido (`/v1/chat/completions`, `/v1/messages`, `/v1/embeddings`).
+- MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido. DeepSeek V4 suporta `/v1/chat/completions`, `/v1/messages` e `/v1/responses` no mesmo channel 2; o catalogo anuncia `openai-response`, `openai` e `anthropic`.
 - `/v1/models` sem token deve retornar 401. Isso nao indica falha.
 - DeepSeek deve permanecer ativo como canal consolidado unico no estado final restaurado.
 - MiniMax embeddings pode retornar `429` quando o upstream bloquear por quota/RPM persistente; nesse caso manter `embo-01` fora do catalogo ativo e manter o provider MiniMax desabilitado no estado final.
 - `MiniMax` e `DeepSeek` devem preferir `base_url` no provider root (`https://api.minimax.io`, `https://api.deepseek.com`), mas o relay Go tambem aceita base URL com `/v1` e normaliza automaticamente. Nao usar sufixos especificos como `/anthropic` no canal consolidado.
+- DeepSeek Responses e stateless: encaminhar o DTO OpenAI Responses nativo para `POST https://api.deepseek.com/responses`. No streaming, preservar os eventos SSE sem adicionar `data: [DONE]`; o terminal e `response.completed`, `response.incomplete` ou `response.failed` e carrega o uso para settlement.
+- A atualizacao de saldo do channel DeepSeek consulta `GET https://api.deepseek.com/user/balance` e persiste exclusivamente `balance_infos[currency=USD].total_balance`. Nao selecionar nem exibir CNY para a conta global.
 
 ## Governor de embeddings e reranking Go-native
 
@@ -400,7 +402,7 @@ Exemplo sem secrets:
 model:
   provider: custom
   default: gpt-5.6-sol
-  context_length: 272000
+  context_length: 1000000
   base_url: https://router.atius.com.br
   api_key: ${ATIUS_ROUTER_API_KEY}
   api_mode: chat_completions

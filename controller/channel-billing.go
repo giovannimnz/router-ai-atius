@@ -1,12 +1,12 @@
 package controller
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -174,7 +174,7 @@ func updateChannelCloseAIBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := OpenAICreditGrants{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -189,7 +189,7 @@ func updateChannelOpenAISBBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := OpenAISBUsageResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -213,7 +213,7 @@ func updateChannelAIProxyBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := AIProxyUserOverviewResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -232,7 +232,7 @@ func updateChannelAPI2GPTBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := API2GPTUsageResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -247,7 +247,7 @@ func updateChannelSiliconFlowBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := SiliconFlowUsageResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -268,27 +268,29 @@ func updateChannelDeepSeekBalance(channel *model.Channel) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	response := DeepSeekUsageResponse{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return 0, err
-	}
-	index := -1
-	for i, balanceInfo := range response.BalanceInfos {
-		if balanceInfo.Currency == "CNY" {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		return 0, errors.New("currency CNY not found")
-	}
-	balance, err := strconv.ParseFloat(response.BalanceInfos[index].TotalBalance, 64)
+	balance, err := parseDeepSeekUSDBalance(body)
 	if err != nil {
 		return 0, err
 	}
 	channel.UpdateBalance(balance)
 	return balance, nil
+}
+
+func parseDeepSeekUSDBalance(body []byte) (float64, error) {
+	response := DeepSeekUsageResponse{}
+	if err := common.Unmarshal(body, &response); err != nil {
+		return 0, err
+	}
+	for _, balanceInfo := range response.BalanceInfos {
+		if strings.EqualFold(strings.TrimSpace(balanceInfo.Currency), "USD") {
+			balance, err := strconv.ParseFloat(strings.TrimSpace(balanceInfo.TotalBalance), 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid DeepSeek USD total_balance %q: %w", balanceInfo.TotalBalance, err)
+			}
+			return balance, nil
+		}
+	}
+	return 0, errors.New("DeepSeek balance response does not include USD currency")
 }
 
 func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
@@ -298,7 +300,7 @@ func updateChannelAIGC2DBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := APGC2DGPTUsageResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -313,7 +315,7 @@ func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	response := OpenRouterCreditResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -343,7 +345,7 @@ func updateChannelMoonshotBalance(channel *model.Channel) (float64, error) {
 	}
 
 	response := MoonshotBalanceResponse{}
-	err = json.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &response)
 	if err != nil {
 		return 0, err
 	}
@@ -396,7 +398,7 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	subscription := OpenAISubscriptionResponse{}
-	err = json.Unmarshal(body, &subscription)
+	err = common.Unmarshal(body, &subscription)
 	if err != nil {
 		return 0, err
 	}
@@ -412,7 +414,7 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 		return 0, err
 	}
 	usage := OpenAIUsageResponse{}
-	err = json.Unmarshal(body, &usage)
+	err = common.Unmarshal(body, &usage)
 	if err != nil {
 		return 0, err
 	}

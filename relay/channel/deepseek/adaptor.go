@@ -57,21 +57,31 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	fimBaseUrl := info.ChannelBaseUrl
+	baseURL := deepSeekProviderRoot(info.ChannelBaseUrl)
+	if info.RelayMode == constant.RelayModeResponses {
+		return fmt.Sprintf("%s/responses", baseURL), nil
+	}
+
+	fimBaseUrl := baseURL
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
-		return fmt.Sprintf("%s/anthropic/v1/messages", info.ChannelBaseUrl), nil
+		return fmt.Sprintf("%s/anthropic/v1/messages", baseURL), nil
 	default:
-		if !strings.HasSuffix(info.ChannelBaseUrl, "/beta") {
+		if !strings.HasSuffix(baseURL, "/beta") {
 			fimBaseUrl += "/beta"
 		}
 		switch info.RelayMode {
 		case constant.RelayModeCompletions:
 			return fmt.Sprintf("%s/completions", fimBaseUrl), nil
 		default:
-			return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+			return fmt.Sprintf("%s/v1/chat/completions", baseURL), nil
 		}
 	}
+}
+
+func deepSeekProviderRoot(baseURL string) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+	return strings.TrimSuffix(baseURL, "/v1")
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
@@ -159,8 +169,32 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	// TODO implement me
-	return nil, errors.New("not implemented")
+	modelName := request.Model
+	if info != nil && info.ChannelMeta != nil && info.UpstreamModelName != "" {
+		modelName = info.UpstreamModelName
+	}
+	baseModel, thinkingType, effort, ok := reasoning.ParseDeepSeekV4ThinkingSuffix(modelName)
+	if !ok {
+		return request, nil
+	}
+	if thinkingType == "disabled" {
+		effort = "none"
+	}
+
+	reasoningConfig := dto.Reasoning{}
+	if request.Reasoning != nil {
+		reasoningConfig = *request.Reasoning
+	}
+	reasoningConfig.Effort = effort
+	request.Model = baseModel
+	request.Reasoning = &reasoningConfig
+	if info != nil {
+		if info.ChannelMeta != nil {
+			info.UpstreamModelName = baseModel
+		}
+		info.ReasoningEffort = effort
+	}
+	return request, nil
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
@@ -168,6 +202,13 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	if info.RelayMode == constant.RelayModeResponses {
+		if info.IsStream {
+			return openai.OaiResponsesStreamHandler(c, info, resp)
+		}
+		return openai.OaiResponsesHandler(c, info, resp)
+	}
+
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
 		adaptor := claude.Adaptor{}

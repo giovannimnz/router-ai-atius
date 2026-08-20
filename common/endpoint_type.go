@@ -38,7 +38,11 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 			endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic}
 		}
 	case constant.ChannelTypeDeepSeek:
-		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic}
+		endpointTypes = []constant.EndpointType{
+			constant.EndpointTypeOpenAIResponse,
+			constant.EndpointTypeOpenAI,
+			constant.EndpointTypeAnthropic,
+		}
 	case constant.ChannelTypeCodex:
 		if strings.HasPrefix(lowerModelName, "text-embedding-") {
 			endpointTypes = []constant.EndpointType{constant.EndpointTypeEmbeddings}

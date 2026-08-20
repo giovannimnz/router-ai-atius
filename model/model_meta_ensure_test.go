@@ -100,6 +100,8 @@ func TestEnsureAtiusLocalEmbeddingsMetadataCreatesMissingRerankerOnly(t *testing
 
 	var preserved Model
 	require.NoError(t, db.Where("model_name = ?", "embedding-gte-v1").First(&preserved).Error)
+	require.Equal(t, existingVendor.Id, preserved.VendorID)
+	require.Equal(t, "AtiusLocal", preserved.Icon)
 	require.Equal(t, "managed by administrator", preserved.Description)
 	require.Equal(t, "custom", preserved.Tags)
 	require.Equal(t, `{"embeddings":{"path":"/custom","method":"POST"}}`, preserved.Endpoints)
@@ -108,12 +110,21 @@ func TestEnsureAtiusLocalEmbeddingsMetadataCreatesMissingRerankerOnly(t *testing
 	require.NoError(t, db.Where("model_name = ?", "reranker-gte-v1").First(&reranker).Error)
 	require.Equal(t, existingVendor.Id, reranker.VendorID)
 	require.Equal(t, "TEI GTE Reranker", reranker.Description)
-	require.Equal(t, "AtlasCloud", reranker.Icon)
+	require.Equal(t, "AtiusLocal", reranker.Icon)
 	require.Equal(t, "Reranker,Local TEI,Governor", reranker.Tags)
 	require.Equal(t, `{"jina-rerank":{"method":"POST","path":"/v1/rerank"}}`, reranker.Endpoints)
 	require.Equal(t, 1, reranker.Status)
 	require.Equal(t, 1, reranker.SyncOfficial)
 	require.Equal(t, NameRuleExact, reranker.NameRule)
+
+	var vendor Vendor
+	require.NoError(t, db.First(&vendor, existingVendor.Id).Error)
+	require.Equal(t, "Atius Local", vendor.Name)
+	require.Equal(t, "AtiusLocal", vendor.Icon)
+	require.Equal(t, 1, vendor.Status)
+	var legacyVendorCount int64
+	require.NoError(t, db.Model(&Vendor{}).Where("name = ?", "Atius").Count(&legacyVendorCount).Error)
+	require.Zero(t, legacyVendorCount)
 
 	created, err = EnsureAtiusLocalEmbeddingsMetadata()
 	require.NoError(t, err)

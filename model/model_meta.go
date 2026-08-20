@@ -105,9 +105,6 @@ func GetVendorModelCounts() (map[int64]int64, error) {
 }
 
 func GetAllModels(offset int, limit int) ([]*Model, error) {
-	if _, err := EnsureAtiusLocalEmbeddingsMetadata(); err != nil {
-		return nil, err
-	}
 	var models []*Model
 	err := DB.Order("id DESC").Offset(offset).Limit(limit).Find(&models).Error
 	return models, err
@@ -196,9 +193,6 @@ func GetPreferredModelOwnerChannelTypes(modelNames []string, groups []string) (m
 }
 
 func SearchModels(keyword string, vendor string, offset int, limit int) ([]*Model, int64, error) {
-	if _, err := EnsureAtiusLocalEmbeddingsMetadata(); err != nil {
-		return nil, 0, err
-	}
 	var models []*Model
 	db := DB.Model(&Model{})
 	if keyword != "" {

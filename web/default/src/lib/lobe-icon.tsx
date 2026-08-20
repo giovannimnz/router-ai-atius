@@ -27,6 +27,9 @@ For commercial licensing, please contact support@quantumnous.com
  */
 import * as LobeIcons from '@lobehub/icons'
 
+import { AtiusLogo } from '@/components/atius-logo'
+import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+
 /**
  * Parse a property value from string to appropriate type
  * @param raw - Raw string value
@@ -97,6 +100,10 @@ export function getLobeIcon(
         ?
       </div>
     )
+  }
+
+  if (isAtiusLocalIcon(trimmedName)) {
+    return <AtiusLogo size={size} />
   }
 
   // Parse component path and chained properties

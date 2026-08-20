@@ -98,6 +98,12 @@ type exactModelMetadataSeed struct {
 	SyncOfficial int
 }
 
+const (
+	atiusLocalVendorName       = "Atius Local"
+	atiusLocalLegacyVendorName = "Atius"
+	atiusLocalIcon             = "AtiusLocal"
+)
+
 // EnsureAtiusLocalEmbeddingsMetadata registers the built-in local Atius
 // embedding and reranker aliases in the models metadata table when they are
 // missing, preserving any administrator-managed records that already exist.
@@ -141,22 +147,42 @@ func EnsureAtiusLocalEmbeddingsMetadata() (int, error) {
 	created := 0
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		var vendor Vendor
-		findVendorErr := tx.Where("name = ?", "Atius").First(&vendor).Error
+		findVendorErr := tx.Where("name = ?", atiusLocalVendorName).First(&vendor).Error
 		if findVendorErr != nil && findVendorErr != gorm.ErrRecordNotFound {
 			return findVendorErr
 		}
 		if findVendorErr == gorm.ErrRecordNotFound {
-			now := common.GetTimestamp()
-			vendor = Vendor{
-				Name:        "Atius",
-				Icon:        "AtlasCloud",
-				Status:      1,
-				CreatedTime: now,
-				UpdatedTime: now,
+			findVendorErr = tx.Where("name = ?", atiusLocalLegacyVendorName).First(&vendor).Error
+			if findVendorErr != nil && findVendorErr != gorm.ErrRecordNotFound {
+				return findVendorErr
 			}
-			if err := tx.Create(&vendor).Error; err != nil {
+			if findVendorErr == gorm.ErrRecordNotFound {
+				now := common.GetTimestamp()
+				vendor = Vendor{
+					Name:        atiusLocalVendorName,
+					Icon:        atiusLocalIcon,
+					Status:      1,
+					CreatedTime: now,
+					UpdatedTime: now,
+				}
+				if err := tx.Create(&vendor).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		if vendor.Name != atiusLocalVendorName || vendor.Icon != atiusLocalIcon || vendor.Status != 1 {
+			if err := tx.Model(&vendor).Updates(map[string]any{
+				"name":         atiusLocalVendorName,
+				"icon":         atiusLocalIcon,
+				"status":       1,
+				"updated_time": common.GetTimestamp(),
+			}).Error; err != nil {
 				return err
 			}
+			vendor.Name = atiusLocalVendorName
+			vendor.Icon = atiusLocalIcon
+			vendor.Status = 1
 		}
 
 		modelNames := make([]string, 0, len(seeds))
@@ -170,6 +196,16 @@ func EnsureAtiusLocalEmbeddingsMetadata() (int, error) {
 		existingNames := make(map[string]struct{}, len(existing))
 		for _, item := range existing {
 			existingNames[item.ModelName] = struct{}{}
+			if item.VendorID == vendor.Id && item.Icon == atiusLocalIcon {
+				continue
+			}
+			if err := tx.Model(&Model{}).Where("id = ?", item.Id).Updates(map[string]any{
+				"vendor_id":    vendor.Id,
+				"icon":         atiusLocalIcon,
+				"updated_time": common.GetTimestamp(),
+			}).Error; err != nil {
+				return err
+			}
 		}
 
 		now := common.GetTimestamp()
@@ -180,7 +216,7 @@ func EnsureAtiusLocalEmbeddingsMetadata() (int, error) {
 			item := Model{
 				ModelName:    seed.ModelName,
 				Description:  seed.Description,
-				Icon:         vendor.Icon,
+				Icon:         atiusLocalIcon,
 				Tags:         seed.Tags,
 				VendorID:     vendor.Id,
 				Endpoints:    seed.Endpoints,

@@ -296,12 +296,6 @@ export interface CodexDeviceAuthorizationStartResponse {
   data?: CodexDeviceAuthorization
 }
 
-export interface CodexDeviceAuthorizationPollResponse {
-  success: boolean
-  message?: string
-  data?: CodexCredentialMetadata | { status: 'pending' }
-}
-
 // Multi-Key Management Types
 // ============================================================================
 

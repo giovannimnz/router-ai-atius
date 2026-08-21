@@ -65,6 +65,9 @@ const (
 	AtiusLocalChannelName    = "Atius Local"
 	AtiusLocalEmbeddingModel = "embedding-gte-v1"
 	AtiusLocalRerankerModel  = "reranker-gte-v1"
+	// LegacyAtiusLocalRerankerModel remains migration-only so existing catalog,
+	// quota, and metric records can be canonicalized without re-exposing it.
+	LegacyAtiusLocalRerankerModel = "reranker-gte-multilingual-v1"
 )
 
 var ChannelBaseURLs = []string{

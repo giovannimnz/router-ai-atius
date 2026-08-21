@@ -484,7 +484,6 @@ func applyCodexMetadataToCatalogEntries(entries []dto.ModelCatalogEntry, metadat
 				}
 			}
 		}
-		modelcatalog.EnrichOpenRouterEntry(&entries[i])
 	}
 }
 

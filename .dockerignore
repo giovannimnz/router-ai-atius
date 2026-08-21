@@ -5,6 +5,10 @@
 .gitignore
 Makefile
 docs
+.agents
+.ijfw
+.planning
+graphify-out
 .eslintcache
 .gocache
 /web/node_modules

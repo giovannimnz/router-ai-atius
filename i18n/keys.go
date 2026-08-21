@@ -221,6 +221,7 @@ const (
 	MsgPasskeyUpdateFailed  = "passkey.update_failed"
 	MsgPasskeyInvalidUserId = "passkey.invalid_user_id"
 	MsgPasskeyVerifyFailed  = "passkey.verify_failed"
+	MsgPasskeyLoginDisabled = "passkey.login_disabled"
 )
 
 // 2FA related messages

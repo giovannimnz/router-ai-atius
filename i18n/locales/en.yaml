@@ -189,6 +189,7 @@ passkey.login_abnormal: "Passkey login status is abnormal"
 passkey.update_failed: "Passkey credential update failed"
 passkey.invalid_user_id: "Invalid user ID"
 passkey.verify_failed: "Passkey verification failed, please try again or contact administrator"
+passkey.login_disabled: "The administrator has not enabled Passkey login"
 
 # 2FA messages
 twofa.not_enabled: "User has not enabled 2FA"

@@ -190,6 +190,7 @@ passkey.login_abnormal: "Passkey 登录状态异常"
 passkey.update_failed: "Passkey 凭证更新失败"
 passkey.invalid_user_id: "无效的用户 ID"
 passkey.verify_failed: "Passkey 验证失败，请重试或联系管理员"
+passkey.login_disabled: "管理员未启用 Passkey 登录"
 
 # 2FA messages
 twofa.not_enabled: "用户未启用2FA"

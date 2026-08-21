@@ -39,6 +39,7 @@ i18n
     supportedLngs: supportedLanguages,
     resources: {
       en: enTranslation,
+      pt: ptTranslation,
       'zh-CN': zhCNTranslation,
       'zh-TW': zhTWTranslation,
       fr: frTranslation,

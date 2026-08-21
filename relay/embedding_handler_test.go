@@ -344,3 +344,109 @@ func TestRerankHelperRejectsGovernedDocumentCountAboveTEICap(t *testing.T) {
 		assert.NotContains(t, err.Error(), document)
 	}
 }
+
+func TestRerankHelperPassesGovernorRequestMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	query := strings.Repeat("q", 12)
+	first := strings.Repeat("a", 24)
+	second := strings.Repeat("b", 40)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/rerank", nil)
+	c.Request.Header.Set("X-Rerank-Workload", "batch")
+	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeAdvancedCustom)
+	common.SetContextKey(c, constant.ContextKeyChannelId, 78)
+	common.SetContextKey(c, constant.ContextKeyChannelName, "Local TEI - GTE Reranker")
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, "http://127.0.0.1:31216")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-multilingual-v1")
+	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, dto.ChannelOtherSettings{
+		AdvancedCustom: &dto.AdvancedCustomConfig{Routes: []dto.AdvancedCustomRoute{{
+			IncomingPath: "/v1/rerank",
+			UpstreamPath: "/rerank",
+			Converter:    dto.AdvancedCustomConverterJinaRerankToTEINative,
+			Auth:         &dto.AdvancedCustomRouteAuth{Type: dto.AdvancedCustomAuthTypeNone},
+		}}},
+	})
+
+	request := &dto.RerankRequest{
+		Model:     "reranker-gte-multilingual-v1",
+		Query:     query,
+		Documents: []any{first, second},
+	}
+	info := relaycommon.GenRelayInfoRerank(c, request)
+
+	originalAcquire := acquireRerankGovernor
+	t.Cleanup(func() {
+		acquireRerankGovernor = originalAcquire
+	})
+
+	var captured embeddinggovernor.Request
+	acquireRerankGovernor = func(ctx context.Context, req embeddinggovernor.Request) (*embeddinggovernor.Lease, *embeddinggovernor.Reject) {
+		captured = req
+		return nil, &embeddinggovernor.Reject{
+			StatusCode: http.StatusTooManyRequests,
+			Code:       "embedding_governor_queue_full",
+			Message:    "synthetic governor reject",
+			RetryAfter: 3 * time.Second,
+		}
+	}
+
+	err := RerankHelper(c, info)
+
+	require.NotNil(t, err)
+	assert.Equal(t, http.StatusTooManyRequests, err.StatusCode)
+	assert.Equal(t, "3", recorder.Header().Get("Retry-After"))
+	assert.Equal(t, "embedding_governor_queue_full", string(err.GetErrorCode()))
+	assert.Equal(t, "reranker-gte-multilingual-v1", captured.Model)
+	assert.Equal(t, 78, captured.ChannelID)
+	assert.Equal(t, "Local TEI - GTE Reranker", captured.ChannelName)
+	assert.Equal(t, "batch", captured.Workload)
+	assert.Equal(t, 2, captured.InputCount)
+	assert.Equal(t, len(query)+len(first)+len(second), captured.InputChars)
+	assert.NotContains(t, err.Error(), query)
+	assert.NotContains(t, err.Error(), first)
+	assert.NotContains(t, err.Error(), second)
+}
+
+func TestRerankHelperRejectsGovernedDocumentCountAboveTEICap(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	documents := make([]any, maxGovernedTEIRerankDocuments+1)
+	for i := range documents {
+		documents[i] = strings.Repeat("x", i+1)
+	}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/rerank", nil)
+	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeAdvancedCustom)
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "reranker-gte-multilingual-v1")
+
+	request := &dto.RerankRequest{
+		Model:     "reranker-gte-multilingual-v1",
+		Query:     "consulta",
+		Documents: documents,
+	}
+	info := relaycommon.GenRelayInfoRerank(c, request)
+
+	originalAcquire := acquireRerankGovernor
+	t.Cleanup(func() {
+		acquireRerankGovernor = originalAcquire
+	})
+	acquireCalled := false
+	acquireRerankGovernor = func(ctx context.Context, req embeddinggovernor.Request) (*embeddinggovernor.Lease, *embeddinggovernor.Reject) {
+		acquireCalled = true
+		return nil, nil
+	}
+
+	err := RerankHelper(c, info)
+
+	require.NotNil(t, err)
+	assert.Equal(t, http.StatusBadRequest, err.StatusCode)
+	assert.Equal(t, string(types.ErrorCodeInvalidRequest), string(err.GetErrorCode()))
+	assert.Contains(t, err.Error(), "at most 20 documents")
+	assert.False(t, acquireCalled)
+	for _, document := range documents {
+		assert.NotContains(t, err.Error(), document)
+	}
+}

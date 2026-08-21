@@ -182,6 +182,7 @@ passkey.update_failed: Atualização de credencial Passkey falhou
 passkey.invalid_user_id: ID de usuário inválido
 passkey.verify_failed: Verificação de Passkey falhou, por favor tente novamente ou
   contate o administrador
+passkey.login_disabled: O administrador não habilitou o login via Passkey
 twofa.not_enabled: Usuário não habilitou 2FA
 twofa.user_id_empty: ID do usuário não pode estar vazio
 twofa.already_exists: Usuário já tem 2FA configurado

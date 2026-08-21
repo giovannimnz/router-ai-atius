@@ -118,7 +118,7 @@ func EnsureAtiusLocalEmbeddingsMetadata() (int, error) {
 		return 0, err
 	}
 	rerankEndpoints, err := common.Marshal(map[string]any{
-		string(constant.EndpointTypeJinaRerank): map[string]string{
+		string(constant.EndpointTypeReranker): map[string]string{
 			"path":   "/v1/rerank",
 			"method": "POST",
 		},

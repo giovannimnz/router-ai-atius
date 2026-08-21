@@ -1,9 +1,16 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm"
+)
+
+const (
+	canonicalOpenAIVendorName = "OpenAI"
+	legacyOpenAIVendorName    = "OpenAI Codex"
 )
 
 // Vendor 用于存储供应商信息，供模型引用
@@ -21,6 +28,52 @@ type Vendor struct {
 	CreatedTime int64          `json:"created_time" gorm:"bigint"`
 	UpdatedTime int64          `json:"updated_time" gorm:"bigint"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_vendor_name_delete_at,priority:2"`
+}
+
+// MigrateOpenAICodexVendor consolidates the legacy metadata supplier into the
+// canonical OpenAI vendor without changing model names, channels, or OAuth.
+func MigrateOpenAICodexVendor() (int64, error) {
+	var moved int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var legacy Vendor
+		if err := tx.Where("name = ?", legacyOpenAIVendorName).First(&legacy).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		var canonical Vendor
+		if err := tx.Where("name = ?", canonicalOpenAIVendorName).First(&canonical).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			return tx.Model(&legacy).Updates(map[string]any{
+				"name":         canonicalOpenAIVendorName,
+				"icon":         "OpenAI",
+				"status":       1,
+				"updated_time": common.GetTimestamp(),
+			}).Error
+		}
+
+		result := tx.Model(&Model{}).Where("vendor_id = ?", legacy.Id).Updates(map[string]any{
+			"vendor_id":    canonical.Id,
+			"updated_time": common.GetTimestamp(),
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		moved = result.RowsAffected
+		if err := tx.Model(&canonical).Updates(map[string]any{
+			"icon":         "OpenAI",
+			"status":       1,
+			"updated_time": common.GetTimestamp(),
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&legacy).Error
+	})
+	return moved, err
 }
 
 // Insert 创建新的供应商记录

@@ -428,6 +428,63 @@ func TestHealthHysteresisHealthySampleResetsBadWindows(t *testing.T) {
 	assert.Equal(t, 3, afterReset.CurrentConcurrency)
 }
 
+func TestHealthGuardrailRejectsAdmissionAndRecovers(t *testing.T) {
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.HealthProbeEnabled = true
+		cfg.HealthProbeURL = "http://tei.local/health"
+		cfg.HealthBadWindowThreshold = 1
+	}), false)
+
+	g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+	require.Nil(t, lease)
+	require.NotNil(t, reject)
+	assert.Equal(t, http.StatusServiceUnavailable, reject.StatusCode)
+	assert.Equal(t, "embedding_governor_upstream_unhealthy", reject.Code)
+	assert.Equal(t, g.cfg.HealthProbeInterval, reject.RetryAfter)
+
+	g.observeHealthSample(http.StatusOK, time.Millisecond, nil)
+	lease, reject = g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, lease)
+	lease.Finish(true, http.StatusOK, time.Millisecond)
+}
+
+func TestHealthGuardrailReleasesQueuedRequestWithFastReject(t *testing.T) {
+	g := newGovernor(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 1
+		cfg.MaxConcurrency = 1
+		cfg.HealthProbeEnabled = true
+		cfg.HealthProbeURL = "http://tei.local/health"
+		cfg.HealthBadWindowThreshold = 1
+	}), false)
+
+	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, first)
+
+	waiting := make(chan *Lease, 1)
+	waitingReject := make(chan *Reject, 1)
+	go func() {
+		lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+		waiting <- lease
+		waitingReject <- reject
+	}()
+	require.Eventually(t, func() bool {
+		return g.Snapshot().WaitingInteractive == 1
+	}, time.Second, 10*time.Millisecond)
+
+	g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	require.Nil(t, <-waiting)
+	reject = <-waitingReject
+	require.NotNil(t, reject)
+	assert.Equal(t, http.StatusServiceUnavailable, reject.StatusCode)
+	assert.Equal(t, "embedding_governor_upstream_unhealthy", reject.Code)
+	assert.Equal(t, 0, g.Snapshot().WaitingInteractive)
+
+	first.Finish(false, http.StatusServiceUnavailable, time.Millisecond)
+}
+
 func TestLoadConfigNormalizesHealthProbeSettings(t *testing.T) {
 	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED", "true")
 	t.Setenv("EMBEDDING_GOVERNOR_HEALTH_PROBE_URL", "http://127.0.0.1:9999/health")
@@ -442,7 +499,7 @@ func TestLoadConfigNormalizesHealthProbeSettings(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:9999/health", cfg.HealthProbeURL)
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeTimeout)
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
-	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
+	assert.Equal(t, 1, cfg.HealthBadWindowThreshold)
 	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
 }
 

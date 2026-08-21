@@ -65,7 +65,7 @@ Antes de qualquer cutover:
 
 - TEI e dependencia externa desta fase.
 - O contrato live atual fica fora do cluster, no `horistic-srv`, pela faixa OCI DRG:
-  - embeddings: `http://10.21.1.21:3115`
+  - embeddings HA: `http://10.21.1.21:31115`
   - reranker: `http://10.21.1.21:31216`
 - O ConfigMap guarda esses endpoints em `TEI_BASE_URL` e
   `TEI_RERANKER_BASE_URL`.

@@ -1,0 +1,18 @@
+[Unit]
+Description=Synchronize fresh Codex Desktop OAuth credential into Atius Router
+After=container-router-ai-atius.service
+
+[Service]
+Type=oneshot
+Environment=CODEX_AUTH_FILE=/home/ubuntu/.codex/auth.json
+Environment=CODEX_CHANNEL_ID=5
+Environment=ROUTER_CONTAINER=router-ai-atius
+Environment=ROUTER_UNIT=container-router-ai-atius.service
+ExecStart=/home/ubuntu/GitHub/containers/router-ai-atius/scripts/atius-codex-channel-credential-sync.sh --apply
+TimeoutStartSec=120
+Nice=10
+CPUQuota=10%
+MemoryMax=256M
+IOSchedulingClass=idle
+UMask=0077
+NoNewPrivileges=true

@@ -148,7 +148,7 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     id: 59,
     name: CHANNEL_TYPES[59],
     icon: 'atius',
-    defaultBaseUrl: 'http://10.21.1.21:3115',
+    defaultBaseUrl: 'http://10.21.1.21:31115',
     hints: {
       baseUrl: 'TEI embeddings endpoint on horistic-srv',
       key: 'No upstream authentication required',

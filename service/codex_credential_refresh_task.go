@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 
@@ -30,6 +31,14 @@ var (
 
 func shouldAutoRefreshCodexChannelStatus(status int) bool {
 	return status == common.ChannelStatusEnabled || status == common.ChannelStatusAutoDisabled
+}
+
+func shouldAutoRefreshCodexChannel(channel *model.Channel) bool {
+	if channel == nil || !shouldAutoRefreshCodexChannelStatus(channel.Status) || channel.ChannelInfo.IsMultiKey {
+		return false
+	}
+	credentialSource := strings.TrimSpace(channel.GetSetting().CodexCredentialSource)
+	return !strings.EqualFold(credentialSource, dto.CodexCredentialSourceExternalFile)
 }
 
 func StartCodexCredentialAutoRefreshTask() {
@@ -68,7 +77,7 @@ func runCodexCredentialAutoRefreshOnce() {
 	for {
 		var channels []*model.Channel
 		err := model.DB.
-			Select("id", "name", "key", "status", "channel_info").
+			Select("id", "name", "key", "status", "setting", "channel_info").
 			Where("type = ? AND (status = ? OR status = ?)",
 				constant.ChannelTypeCodex,
 				common.ChannelStatusEnabled,
@@ -88,11 +97,8 @@ func runCodexCredentialAutoRefreshOnce() {
 		offset += codexCredentialRefreshBatchSize
 
 		for _, ch := range channels {
-			if ch == nil {
-				continue
-			}
 			scanned++
-			if ch.ChannelInfo.IsMultiKey {
+			if !shouldAutoRefreshCodexChannel(ch) {
 				continue
 			}
 

@@ -29,7 +29,7 @@ import {
   validateAdvancedCustomConfig,
 } from './advanced-custom'
 
-describe('Atius Local Embeddings channel preset', () => {
+describe('Atius Local channel preset', () => {
   test('keeps the production Codex channel name canonical', () => {
     assert.equal(CHANNEL_TYPES[57], 'ChatGPT - Codex')
   })
@@ -41,7 +41,7 @@ describe('Atius Local Embeddings channel preset', () => {
     assert.deepEqual(config.advanced_routes, [
       {
         incoming_path: '/v1/embeddings',
-        upstream_path: 'http://10.21.1.21:3115/v1/embeddings',
+        upstream_path: 'http://10.21.1.21:31115/v1/embeddings',
         converter: 'none',
         auth: { type: 'none' },
       },

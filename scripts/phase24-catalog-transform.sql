@@ -90,12 +90,12 @@ INSERT INTO public.channels (
   param_override, header_override, remark, channel_info, settings
 )
 VALUES (
-  11, 59, '', NULL, 'embedding-gte-v1', 1, 'Atius Local Embeddings', 0,
-  EXTRACT(EPOCH FROM NOW())::bigint, 0, 0, 'http://10.21.1.21:3115', NULL, NULL, NULL,
+	11, 59, '', NULL, 'embedding-gte-v1', 1, 'Atius Local', 0,
+  EXTRACT(EPOCH FROM NOW())::bigint, 0, 0, 'http://10.21.1.21:31115', NULL, NULL, NULL,
   'embedding-gte-v1,reranker-gte-v1', 'default', 0, '', '', 0, 0, NULL, NULL, NULL, NULL, NULL,
   '2026-08-16: consolidated horistic-srv TEI embeddings and reranker into dedicated channel type 59.',
   NULL,
-  '{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/embeddings","upstream_path":"http://10.21.1.21:3115/v1/embeddings","converter":"none","auth":{"type":"none"}},{"incoming_path":"/v1/rerank","upstream_path":"http://10.21.1.21:31216/rerank","converter":"jina_rerank_to_tei_native","auth":{"type":"none"}}]}}'
+  '{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/embeddings","upstream_path":"http://10.21.1.21:31115/v1/embeddings","converter":"none","auth":{"type":"none"}},{"incoming_path":"/v1/rerank","upstream_path":"http://10.21.1.21:31216/rerank","converter":"jina_rerank_to_tei_native","auth":{"type":"none"}}]}}'
 )
 ON CONFLICT (id) DO UPDATE
 SET type = EXCLUDED.type,

@@ -467,7 +467,7 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		return fmt.Errorf("channel cannot be empty")
 	}
 	if err := channel.ApplyAtiusLocalEmbeddingsDefaults(); err != nil {
-		return fmt.Errorf("failed to apply Atius Local Embeddings defaults: %w", err)
+		return fmt.Errorf("failed to apply Atius Local defaults: %w", err)
 	}
 	// 校验 channel settings
 	if err := channel.ValidateSettings(); err != nil {

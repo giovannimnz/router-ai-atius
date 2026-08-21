@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service/embeddinggovernor"
 	"github.com/QuantumNous/new-api/types"
@@ -114,7 +116,7 @@ func TestEmbeddingHelperPassesGovernorRequestMetadata(t *testing.T) {
 	}
 }
 
-func TestEmbeddingHelperRejectsGovernedInputAboveTEICap(t *testing.T) {
+func TestEmbeddingHelperSplitsGovernedInputAboveTEICap(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	makeArray := func(n int) []string {
@@ -125,93 +127,116 @@ func TestEmbeddingHelperRejectsGovernedInputAboveTEICap(t *testing.T) {
 		return items
 	}
 
-	tests := []struct {
-		name           string
-		model          string
-		workloadHeader string
-		input          any
-		wantStatus     int
-		wantCode       string
-		wantAcquire    bool
-	}{
-		{
-			name:        "governed request above cap fails closed",
-			model:       "embedding-gte-v1",
-			input:       makeArray(5),
-			wantStatus:  http.StatusBadRequest,
-			wantCode:    string(types.ErrorCodeInvalidRequest),
-			wantAcquire: false,
-		},
-		{
-			name:           "interactive header cannot bypass governed cap",
-			model:          "embedding-gte-v1",
-			workloadHeader: "interactive",
-			input:          makeArray(5),
-			wantStatus:     http.StatusBadRequest,
-			wantCode:       string(types.ErrorCodeInvalidRequest),
-			wantAcquire:    false,
-		},
-		{
-			name:        "unknown model keeps existing no-op governor behavior",
-			model:       "text-embedding-3-small",
-			input:       makeArray(5),
-			wantStatus:  http.StatusTooManyRequests,
-			wantCode:    "embedding_governor_queue_full",
-			wantAcquire: true,
-		},
-	}
-
-	originalAcquire := acquireEmbeddingGovernor
+	originalChunkExecutor := executeEmbeddingChunkRequest
+	originalPostConsume := postEmbeddingConsumeQuota
 	t.Cleanup(func() {
-		acquireEmbeddingGovernor = originalAcquire
+		executeEmbeddingChunkRequest = originalChunkExecutor
+		postEmbeddingConsumeQuota = originalPostConsume
 	})
+	postEmbeddingConsumeQuota = func(*gin.Context, *relaycommon.RelayInfo, *dto.Usage, []string) {}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(recorder)
-			c.Request = httptest.NewRequest(http.MethodPost, "/v1/embeddings", nil)
-			if tc.workloadHeader != "" {
-				c.Request.Header.Set("X-Embedding-Workload", tc.workloadHeader)
-			}
-			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
-			common.SetContextKey(c, constant.ContextKeyChannelId, 77)
-			common.SetContextKey(c, constant.ContextKeyChannelName, "Local TEI - GTE Embeddings")
-			common.SetContextKey(c, constant.ContextKeyOriginalModel, tc.model)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/embeddings", nil)
+	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+	common.SetContextKey(c, constant.ContextKeyChannelId, 77)
+	common.SetContextKey(c, constant.ContextKeyChannelName, "Local TEI - GTE Embeddings")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "embedding-gte-v1")
 
-			info := &relaycommon.RelayInfo{
-				OriginModelName: tc.model,
-				Request: &dto.EmbeddingRequest{
-					Model: tc.model,
-					Input: tc.input,
-				},
-			}
-
-			acquireCalled := false
-			acquireEmbeddingGovernor = func(ctx context.Context, req embeddinggovernor.Request) (*embeddinggovernor.Lease, *embeddinggovernor.Reject) {
-				acquireCalled = true
-				return nil, &embeddinggovernor.Reject{
-					StatusCode: http.StatusTooManyRequests,
-					Code:       "embedding_governor_queue_full",
-					Message:    "synthetic governor reject",
-					RetryAfter: 3 * time.Second,
-				}
-			}
-
-			err := EmbeddingHelper(c, info)
-
-			require.NotNil(t, err)
-			assert.Equal(t, tc.wantStatus, err.StatusCode)
-			assert.Equal(t, tc.wantCode, string(err.GetErrorCode()))
-			assert.Equal(t, tc.wantAcquire, acquireCalled)
-			if tc.model == "embedding-gte-v1" {
-				assert.Contains(t, err.Error(), "at most 4 input items")
-			}
-			for _, item := range tc.input.([]string) {
-				assert.NotContains(t, err.Error(), item)
-			}
-		})
+	inputs := makeArray(5)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "embedding-gte-v1",
+		Request: &dto.EmbeddingRequest{
+			Model: "embedding-gte-v1",
+			Input: inputs,
+		},
 	}
+
+	var capturedChunks [][]string
+	executeEmbeddingChunkRequest = func(c *gin.Context, info *relaycommon.RelayInfo, adaptor relaychannel.Adaptor, request *dto.EmbeddingRequest, publicModelName string) (*dto.OpenAIEmbeddingResponse, *dto.Usage, *types.NewAPIError) {
+		chunkInputs := request.ParseInput()
+		capturedChunks = append(capturedChunks, append([]string(nil), chunkInputs...))
+		data := make([]dto.OpenAIEmbeddingResponseItem, 0, len(chunkInputs))
+		for idx := range chunkInputs {
+			data = append(data, dto.OpenAIEmbeddingResponseItem{
+				Object:    "embedding",
+				Index:     idx,
+				Embedding: []float64{float64(len(capturedChunks)), float64(idx)},
+			})
+		}
+		response := &dto.OpenAIEmbeddingResponse{
+			Object: "list",
+			Data:   data,
+			Model:  request.Model,
+			Usage: dto.Usage{
+				PromptTokens: len(chunkInputs),
+				TotalTokens:  len(chunkInputs),
+				InputTokens:  len(chunkInputs),
+			},
+		}
+		return response, &response.Usage, nil
+	}
+
+	err := EmbeddingHelper(c, info)
+
+	if err != nil {
+		require.FailNowf(t, "unexpected embedding relay error", "message=%q code=%q status=%d chunks=%d", err.Error(), err.GetErrorCode(), err.StatusCode, len(capturedChunks))
+	}
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, [][]string{inputs[:4], inputs[4:]}, capturedChunks)
+
+	var response dto.OpenAIEmbeddingResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Len(t, response.Data, 5)
+	for idx, item := range response.Data {
+		assert.Equal(t, idx, item.Index)
+	}
+	assert.Equal(t, 5, response.Usage.PromptTokens)
+	assert.Equal(t, 5, response.Usage.TotalTokens)
+	assert.Equal(t, 5, response.Usage.InputTokens)
+}
+
+func TestChunkEmbeddingInputsSplitsAtGovernedCap(t *testing.T) {
+	inputs := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}
+
+	chunks := chunkEmbeddingInputs(inputs, maxGovernedTEIInputCount)
+
+	require.Equal(t, [][]string{
+		{"a", "b", "c", "d"},
+		{"e", "f", "g", "h"},
+		{"i"},
+	}, chunks)
+}
+
+func TestMergeOpenAIEmbeddingResponsesReindexesAndSumsUsage(t *testing.T) {
+	merged := mergeOpenAIEmbeddingResponses([]*dto.OpenAIEmbeddingResponse{
+		{
+			Object: "list",
+			Model:  "embedding-gte-v1",
+			Data: []dto.OpenAIEmbeddingResponseItem{
+				{Object: "embedding", Index: 0, Embedding: []float64{1}},
+				{Object: "embedding", Index: 1, Embedding: []float64{2}},
+			},
+			Usage: dto.Usage{PromptTokens: 2, TotalTokens: 2, InputTokens: 2},
+		},
+		{
+			Object: "list",
+			Model:  "embedding-gte-v1",
+			Data: []dto.OpenAIEmbeddingResponseItem{
+				{Object: "embedding", Index: 0, Embedding: []float64{3}},
+			},
+			Usage: dto.Usage{PromptTokens: 1, TotalTokens: 1, InputTokens: 1},
+		},
+	}, "fallback-model")
+
+	require.Equal(t, "embedding-gte-v1", merged.Model)
+	require.Len(t, merged.Data, 3)
+	assert.Equal(t, 0, merged.Data[0].Index)
+	assert.Equal(t, 1, merged.Data[1].Index)
+	assert.Equal(t, 2, merged.Data[2].Index)
+	assert.Equal(t, 3, merged.Usage.PromptTokens)
+	assert.Equal(t, 3, merged.Usage.TotalTokens)
+	assert.Equal(t, 3, merged.Usage.InputTokens)
 }
 
 func TestRerankHelperPassesGovernorRequestMetadata(t *testing.T) {

@@ -453,7 +453,7 @@ func codexOpenAIReferencePricingPatches(snapshot codexOpenAIReferencePricingSnap
 
 func reconcileCodexOpenAIReferencePricing(snapshot codexOpenAIReferencePricingSnapshot, extraOptions map[string]string) (int, int, error) {
 	modelNames := codexOpenAIPricedModelIDs(snapshot)
-	registeredModels, err := model.EnsureExactModelMetadata(modelNames, "OpenAI Codex", "OpenAI")
+	registeredModels, err := model.EnsureExactModelMetadata(modelNames, "OpenAI", "OpenAI")
 	if err != nil {
 		return 0, 0, err
 	}

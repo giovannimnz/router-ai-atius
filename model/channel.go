@@ -995,7 +995,7 @@ func (channel *Channel) ApplyAtiusLocalEmbeddingsDefaults() error {
 	}
 
 	if strings.TrimSpace(channel.Name) == "" {
-		channel.Name = constant.AtiusLocalEmbeddingsChannelName
+		channel.Name = constant.AtiusLocalChannelName
 	}
 	if strings.TrimSpace(channel.Models) == "" {
 		channel.Models = constant.AtiusLocalEmbeddingModel + "," + constant.AtiusLocalRerankerModel
@@ -1007,7 +1007,7 @@ func (channel *Channel) ApplyAtiusLocalEmbeddingsDefaults() error {
 		channel.TestModel = common.GetPointer(constant.AtiusLocalEmbeddingModel)
 	}
 
-	embeddingsBaseURL := strings.TrimRight(common.GetEnvOrDefaultString("TEI_BASE_URL", "http://10.21.1.21:3115"), "/")
+	embeddingsBaseURL := strings.TrimRight(common.GetEnvOrDefaultString("TEI_BASE_URL", "http://10.21.1.21:31115"), "/")
 	rerankerBaseURL := strings.TrimRight(common.GetEnvOrDefaultString("TEI_RERANKER_BASE_URL", "http://10.21.1.21:31216"), "/")
 	if channel.BaseURL == nil || strings.TrimSpace(*channel.BaseURL) == "" {
 		channel.BaseURL = common.GetPointer(embeddingsBaseURL)
@@ -1037,6 +1037,41 @@ func (channel *Channel) ApplyAtiusLocalEmbeddingsDefaults() error {
 		channel.SetOtherSettings(settings)
 	}
 	return nil
+}
+
+func MigrateAtiusLocalChannelName() (int64, error) {
+	result := DB.Model(&Channel{}).
+		Where("type = ? AND name = ?", constant.ChannelTypeAtiusLocalEmbeddings, "Atius Local Embeddings").
+		Update("name", constant.AtiusLocalChannelName)
+	return result.RowsAffected, result.Error
+}
+
+func MigrateAtiusLocalEmbeddingEndpoint() (int64, error) {
+	const legacyBaseURL = "http://10.21.1.21:3115"
+	const currentBaseURL = "http://10.21.1.21:31115"
+	legacyEmbeddingsURL := legacyBaseURL + "/v1/embeddings"
+	currentEmbeddingsURL := currentBaseURL + "/v1/embeddings"
+
+	result := DB.Model(&Channel{}).
+		Where(
+			"type = ? AND (base_url = ? OR settings LIKE ?)",
+			constant.ChannelTypeAtiusLocalEmbeddings,
+			legacyBaseURL,
+			"%"+legacyEmbeddingsURL+"%",
+		).
+		Updates(map[string]interface{}{
+			"base_url": gorm.Expr(
+				"CASE WHEN base_url = ? THEN ? ELSE base_url END",
+				legacyBaseURL,
+				currentBaseURL,
+			),
+			"settings": gorm.Expr(
+				"REPLACE(settings, ?, ?)",
+				legacyEmbeddingsURL,
+				currentEmbeddingsURL,
+			),
+		})
+	return result.RowsAffected, result.Error
 }
 
 func (channel *Channel) GetSetting() dto.ChannelSettings {

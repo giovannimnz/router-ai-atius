@@ -324,6 +324,10 @@ func (g *Governor) Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 	}
 
 	g.mu.Lock()
+	if reject := g.upstreamHealthRejectLocked(); reject != nil {
+		g.mu.Unlock()
+		return nil, reject
+	}
 	if reject := g.queueCapacityRejectLocked(batch); reject != nil {
 		g.mu.Unlock()
 		return nil, reject
@@ -356,6 +360,10 @@ func (g *Governor) Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 			g.decrementWaiterLocked(batch)
 			return nil, rejectFromContext(ctx.Err(), timeout)
 		}
+		if reject := g.upstreamHealthRejectLocked(); reject != nil {
+			g.decrementWaiterLocked(batch)
+			return nil, reject
+		}
 		if wait := g.cooldownWaitLocked(g.clock()); wait > 0 {
 			g.mu.Unlock()
 			waitForCooldown(ctx, wait)
@@ -372,6 +380,18 @@ func (g *Governor) Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 			return &Lease{g: g, batch: batch}, nil
 		}
 		g.cond.Wait()
+	}
+}
+
+func (g *Governor) upstreamHealthRejectLocked() *Reject {
+	if !g.healthGuardrailActiveLocked() {
+		return nil
+	}
+	return &Reject{
+		StatusCode: http.StatusServiceUnavailable,
+		Code:       "embedding_governor_upstream_unhealthy",
+		Message:    "embedding upstream is temporarily unavailable",
+		RetryAfter: g.cfg.HealthProbeInterval,
 	}
 }
 
@@ -1268,7 +1288,7 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.HealthProbeInterval < defaultHealthProbeInterval {
 		cfg.HealthProbeInterval = defaultHealthProbeInterval
 	}
-	if cfg.HealthBadWindowThreshold < defaultHealthBadWindowThreshold {
+	if cfg.HealthBadWindowThreshold < 1 {
 		cfg.HealthBadWindowThreshold = defaultHealthBadWindowThreshold
 	}
 	if cfg.HealthSlowDuration <= 0 {

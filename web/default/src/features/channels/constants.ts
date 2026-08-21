@@ -77,7 +77,7 @@ export const CHANNEL_TYPES = {
   56: 'Replicate',
   57: 'ChatGPT - Codex',
   58: 'Advanced Custom',
-  59: 'Atius Local Embeddings',
+  59: 'Atius Local',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [

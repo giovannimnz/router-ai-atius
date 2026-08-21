@@ -443,6 +443,73 @@ Arquivada em [`milestones/v2.17-phases/`](milestones/v2.17-phases/); execução 
 
 ---
 
+## v2.18 — Reranker reliability, observability, and readiness [PLANNED]
+
+**Status:** Planned — verification passed
+
+- [ ] Phase 33: reranker-reliability-observability-and-readiness
+
+| Phase | Name | Plans | Status | Completed |
+|---|---|---|---|---|
+| 33 | reranker-reliability-observability-and-readiness | 0/16 | Planned | — |
+
+### Phase 33: reranker-reliability-observability-and-readiness
+
+**Goal:** Tornar a saúde do reranker operacionalmente correta e acionável: separar rejeições de cliente, governor, routing e upstream; contabilizar indisponibilidade antes da seleção de canal; apresentar agregações ponderadas no dashboard; adicionar readiness determinístico após cache sync; limitar timeout/retry do TEI; preservar o contrato de até 20 documentos; e impedir regressões do reranker governado durante sync/deploy do fork.
+**Review status:** Verified — ready to execute
+**Milestone:** v2.18 — Reranker reliability, observability, and readiness
+**Requirements:** PHASE-33-METRICS-OUTCOME-TAXONOMY, PHASE-33-ROUTING-AVAILABILITY, PHASE-33-WEIGHTED-DASHBOARD, PHASE-33-CHANNEL-READINESS, PHASE-33-TEI-TIMEOUT-RETRY, PHASE-33-RERANK-BATCH-CONTRACT, PHASE-33-FORK-SYNC-PERSISTENCE, PHASE-33-TEST-DOC-LIVE-EVIDENCE
+**Depends on:** Phase 25 and the governed reranker production baseline from 2026-08-14
+**Plans:** 16 plans in 9 waves
+**Review gate:** Independent checker PASS with zero blockers/warnings; execution is ready. During Plan 33-16, versioned `post-commit`/`pre-push` hooks are installed through local `core.hooksPath=.githooks`; asynchronous `graphify.auto_update` is disabled. Canonical `docs(33-16):...` and later `docs(phase-33):...` commits only invalidate prior PASS to atomic mode-0600 PENDING/NO-GO plus HEAD in less than 10 seconds, using bounded awaited foreground `git rev-parse`/`git show`/`mktemp`/`chmod`/`mv`/`rm`; the fixture requires less than 2 seconds, zero Graphify/network/container/build calls, and no surviving background/orphan helper. Release remains NO-GO until a relevant `git push` caller allows at least 720 seconds and synchronous foreground `pre-push` derives the full fingerprint, establishes PASS, and revalidates the pushed HEAD/fingerprint before network mutation.
+
+Plans:
+
+**Wave 1**
+
+- [ ] 33-01-PLAN.md — backend outcome/routing tests and plan-set source audit
+- [ ] 33-02-PLAN.md — TEI context/retry and channel-readiness test scaffolds
+- [ ] 33-03-PLAN.md — frontend weighted-outcome helpers and smoke contract
+- [ ] 33-04-PLAN.md — fork-sync and candidate-release guard scaffolds
+
+**Wave 2**
+
+- [ ] 33-05-PLAN.md — additive v2 metrics schema, aggregation, and compatibility
+- [ ] 33-07-PLAN.md — evidence-derived TEI timeout configuration
+- [ ] 33-09-PLAN.md — authenticated channel readiness and cache synchronization
+- [ ] 33-10-PLAN.md — weighted dashboard data contract and helpers
+
+**Wave 3**
+
+- [ ] 33-06-PLAN.md — exactly-once routing and terminal outcome integration
+- [ ] 33-11-PLAN.md — dashboard rendering, partial states, and accessibility
+
+**Wave 4**
+
+- [ ] 33-08-PLAN.md — bounded retry accounting and 20-document contract
+
+**Wave 5**
+
+- [ ] 33-12-PLAN.md — Router/Omni release verification integration
+
+**Wave 6**
+
+- [ ] 33-13-PLAN.md — clean pinned Omni worktree and fork-sync persistence
+
+**Wave 7**
+
+- [ ] 33-14-PLAN.md — isolated v2 candidate proof and candidate readiness
+
+**Wave 8**
+
+- [ ] 33-15-PLAN.md — transactional promotion, state-aware live gate, and rollback
+
+**Wave 9**
+
+- [ ] 33-16-PLAN.md — exact knowledge sync, Git-hook closeout lifecycle, and retained-worktree cleanup
+
+---
+
 ## v1.6 — Future
 
 - Monitoring & Health Checks (logs centralizados, métricas, alerting)

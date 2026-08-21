@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
+  AlertTriangle,
   BookOpen,
   Check,
   ChevronDown,
@@ -45,6 +46,7 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
@@ -373,9 +375,9 @@ function RequestPreview(props: {
           <span className='bg-success size-2 rounded-full' />
         </div>
         <div className='flex flex-col gap-1 overflow-hidden'>
-          {previewLines.map((line, index) => (
+          {previewLines.map((line) => (
             <code
-              key={`${line}-${index}`}
+              key={line}
               className='text-muted-foreground truncate'
               title={line}
             >
@@ -420,17 +422,15 @@ function QuickActionItem(props: { action: QuickAction }) {
   return (
     <Button
       variant='outline'
-      className='h-auto justify-start rounded-xl px-3 py-3 text-left'
+      className='h-auto w-full min-w-0 items-start justify-start rounded-xl px-3 py-3 text-left whitespace-normal'
       render={<Link to={props.action.to} />}
     >
       <span className='bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg'>
         <Icon className='size-4' aria-hidden='true' />
       </span>
       <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-        <span className='truncate text-sm font-medium'>
-          {props.action.title}
-        </span>
-        <span className='text-muted-foreground line-clamp-2 text-xs leading-relaxed'>
+        <span className='text-sm font-medium'>{props.action.title}</span>
+        <span className='text-muted-foreground text-sm leading-relaxed'>
           {props.action.description}
         </span>
       </span>
@@ -477,7 +477,10 @@ export function OverviewDashboard() {
     queryKey: ['dashboard', 'overview', 'api-keys'],
     queryFn: async () => {
       const result = await getApiKeys({ p: 1, size: 10 })
-      return result.success ? (result.data?.items ?? []) : []
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to load API keys')
+      }
+      return result.data?.items ?? []
     },
     staleTime: 60 * 1000,
   })
@@ -486,7 +489,10 @@ export function OverviewDashboard() {
     queryKey: ['dashboard', 'overview', 'user-models'],
     queryFn: async () => {
       const result = await getUserModels()
-      return result.success ? (result.data ?? []) : []
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to load models')
+      }
+      return result.data ?? []
     },
     staleTime: 5 * 60 * 1000,
   })
@@ -533,7 +539,7 @@ export function OverviewDashboard() {
       },
       {
         title: t('Channels'),
-        description: t('Configure upstream providers and routing.'),
+        description: t('Configure upstream providers and routing'),
         to: '/channels',
         icon: RadioTower,
         adminOnly: true,
@@ -559,6 +565,15 @@ export function OverviewDashboard() {
     [isAdmin, quickActions]
   )
 
+  let authSignalValue = t('Needs API key')
+  if (apiKeysQuery.isPending) authSignalValue = t('Loading')
+  else if (apiKeysQuery.isError) authSignalValue = t('Failed to load')
+  else if (preferredKey) authSignalValue = t('Secured')
+
+  let modelSignalValue = modelsQuery.data?.[0] ?? t('No models available')
+  if (modelsQuery.isPending) modelSignalValue = t('Loading')
+  else if (modelsQuery.isError) modelSignalValue = t('Failed to load')
+
   const heroSignals = useMemo<HeroSignal[]>(
     () => [
       {
@@ -568,23 +583,30 @@ export function OverviewDashboard() {
       },
       {
         label: t('Auth configured'),
-        value: preferredKey ? t('Secured') : t('Needs API key'),
+        value: authSignalValue,
         icon: ShieldCheck,
       },
       {
         label: t('Model selected'),
-        value: modelsQuery.data?.[0] ?? t('Loading'),
+        value: modelSignalValue,
         icon: Timer,
       },
     ],
-    [apiInfoItems.length, modelsQuery.data, preferredKey, t]
+    [apiInfoItems.length, authSignalValue, modelSignalValue, t]
   )
 
   const requestExample = useMemo<RequestExample>(() => {
     const endpoint = normalizeEndpoint(apiInfoItems[0]?.url)
-    const model = modelsQuery.data?.[0] ?? 'gpt-4o-mini'
+    const model = modelsQuery.isSuccess
+      ? (modelsQuery.data?.[0] ?? t('No models available'))
+      : t('Unavailable')
     const keyName = preferredKey?.name ?? t('No API key yet')
-    const ready = Boolean(preferredKey?.id && model)
+    const ready = Boolean(
+      apiKeysQuery.isSuccess &&
+      modelsQuery.isSuccess &&
+      preferredKey?.id &&
+      modelsQuery.data?.[0]
+    )
 
     return {
       endpoint,
@@ -596,7 +618,14 @@ export function OverviewDashboard() {
         : 'sk-...',
       ready,
     }
-  }, [apiInfoItems, modelsQuery.data, preferredKey, t])
+  }, [
+    apiInfoItems,
+    apiKeysQuery.isSuccess,
+    modelsQuery.data,
+    modelsQuery.isSuccess,
+    preferredKey,
+    t,
+  ])
 
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length
@@ -616,11 +645,11 @@ export function OverviewDashboard() {
   return (
     <div className='flex flex-col gap-4'>
       {setupGuideExpanded ? (
-        <CardStaggerContainer className='grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-          <CardStaggerItem className='bg-card h-full overflow-hidden rounded-2xl border shadow-xs'>
+        <CardStaggerContainer className='grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
+          <CardStaggerItem className='bg-card h-full min-w-0 overflow-hidden rounded-2xl border shadow-xs'>
             <div className='relative h-full overflow-hidden p-4 sm:p-5'>
               <SetupGuideBackdrop />
-              <div className='relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]'>
+              <div className='relative grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]'>
                 <div className='flex min-w-0 flex-col gap-5'>
                   <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='flex max-w-2xl flex-col gap-1'>
@@ -653,6 +682,26 @@ export function OverviewDashboard() {
                     </div>
                   </div>
 
+                  {(apiKeysQuery.isError || modelsQuery.isError) && (
+                    <Alert variant='destructive'>
+                      <AlertTriangle />
+                      <AlertTitle>{t('Failed to load setup data')}</AlertTitle>
+                      <AlertDescription className='flex flex-wrap items-center justify-between gap-3'>
+                        <span>{t('Please try again later.')}</span>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => {
+                            void apiKeysQuery.refetch()
+                            void modelsQuery.refetch()
+                          }}
+                        >
+                          {t('Retry')}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <ol className='bg-background/45 rounded-2xl border p-2 backdrop-blur'>
                     {startSteps.map((step, index) => (
                       <StartStepItem
@@ -673,8 +722,8 @@ export function OverviewDashboard() {
             </div>
           </CardStaggerItem>
 
-          <CardStaggerItem className='bg-card h-full rounded-2xl border p-4 shadow-xs sm:p-5'>
-            <div className='flex h-full flex-col gap-4'>
+          <CardStaggerItem className='bg-card h-full min-w-0 rounded-2xl border p-4 shadow-xs sm:p-5'>
+            <div className='flex h-full min-w-0 flex-col gap-4'>
               <div className='flex flex-col gap-1'>
                 <div className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                   {t('Recommended actions')}
@@ -683,7 +732,7 @@ export function OverviewDashboard() {
                   {t('Keep the platform ready')}
                 </h3>
               </div>
-              <div className='grid gap-2'>
+              <div className='grid min-w-0 gap-2'>
                 {visibleQuickActions.map((action) => (
                   <QuickActionItem key={action.title} action={action} />
                 ))}

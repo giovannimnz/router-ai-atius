@@ -61,7 +61,7 @@ const ModelTestModal = ({
   const streamToggleDisabled = [
     'embeddings',
     'image-generation',
-    'jina-rerank',
+    'reranker',
     'openai-response-compact',
   ].includes(selectedEndpointType);
 
@@ -92,7 +92,7 @@ const ModelTestModal = ({
       value: 'gemini',
       label: 'Gemini (/v1beta/models/{model}:generateContent)',
     },
-    { value: 'jina-rerank', label: 'Jina Rerank (/v1/rerank)' },
+    { value: 'reranker', label: 'Reranker (/v1/rerank)' },
     {
       value: 'image-generation',
       label: t('图像生成') + ' (/v1/images/generations)',
@@ -199,7 +199,9 @@ const ModelTestModal = ({
                     theme='light'
                     type='warning'
                     icon={<Settings size={12} />}
-                    onClick={() => window.open('/console/setting?tab=ratio', '_blank')}
+                    onClick={() =>
+                      window.open('/console/setting?tab=ratio', '_blank')
+                    }
                     style={{ width: 'fit-content' }}
                   >
                     {t('前往设置')}

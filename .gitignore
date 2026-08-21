@@ -49,3 +49,30 @@ graphify-out/
 .local-tests/
 service/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
+
+# Local task/session state and generated validation artifacts.
+.ijfw/
+runtime/evidence/
+**/__pycache__/
+*.py[cod]
+temp.txt
+AGENTS.md.bak*
+web/default/AGENTS.md.bak*
+.planning/tmp/
+
+# --- Wayland (managed): skill symlinks & knowledge, safe to keep ---
+.claude/
+.codebuddy/
+.codex/
+.cursor/
+.factory/
+.gemini/
+.goose/
+.grok/
+.kimi/
+.opencode/
+.qwen/
+.vibe/
+.wayland-core/
+.wayland/
+# --- end Wayland ---

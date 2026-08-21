@@ -50,7 +50,7 @@ HealthLogDestination= journal
 Restart=always
 RestartSec=10
 TimeoutStartSec=180
-TimeoutStopSec=30
+TimeoutStopSec=150
 # Inherit user/group from the unit so rootless Podman gets the right uid/gid.
 User=%U
 Group=%U

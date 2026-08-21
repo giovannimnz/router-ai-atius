@@ -28,8 +28,8 @@ export const CHANNEL_TYPE_ADVANCED_CUSTOM = 58
 export const CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS = 59
 
 export const ATIUS_LOCAL_EMBEDDINGS_DEFAULTS = {
-  name: 'Atius Local Embeddings',
-  baseUrl: 'http://10.21.1.21:3115',
+  name: 'Atius Local',
+  baseUrl: 'http://10.21.1.21:31115',
   models: 'embedding-gte-v1,reranker-gte-v1',
   testModel: 'embedding-gte-v1',
 } as const
@@ -46,7 +46,7 @@ export function createAtiusLocalEmbeddingsConfig(): AdvancedCustomConfig {
     advanced_routes: [
       {
         incoming_path: '/v1/embeddings',
-        upstream_path: 'http://10.21.1.21:3115/v1/embeddings',
+        upstream_path: 'http://10.21.1.21:31115/v1/embeddings',
         converter: 'none',
         auth: { type: 'none' },
       },
@@ -259,7 +259,7 @@ export const ADVANCED_CUSTOM_TEMPLATE_OPTIONS: AdvancedCustomTemplateOption[] =
     },
     {
       value: 'atius_local_embeddings',
-      label: 'Atius Local Embeddings',
+      label: 'Atius Local',
       config: createAtiusLocalEmbeddingsConfig(),
     },
     {

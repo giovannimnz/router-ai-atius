@@ -106,7 +106,7 @@ func TestValidateChannelAppliesAtiusLocalEmbeddingsDefaultsWithoutKey(t *testing
 
 	require.NoError(t, validateChannel(channel, true))
 	assert.Empty(t, channel.Key)
-	assert.Equal(t, constant.AtiusLocalEmbeddingsChannelName, channel.Name)
+	assert.Equal(t, constant.AtiusLocalChannelName, channel.Name)
 	assert.Equal(t, "embedding-gte-v1,reranker-gte-v1", channel.Models)
 	require.NotNil(t, channel.GetOtherSettings().AdvancedCustom)
 }

@@ -231,10 +231,16 @@ func updatePricing() {
 		if err := json.Unmarshal([]byte(meta.Endpoints), &raw); err == nil {
 			endpoints := make([]string, 0, len(raw))
 			for k, v := range raw {
+				canonicalKey := string(constant.NormalizeEndpointType(constant.EndpointType(k)))
+				if canonicalKey != k {
+					if _, hasCanonical := raw[canonicalKey]; hasCanonical {
+						continue
+					}
+				}
 				switch v.(type) {
 				case string, map[string]interface{}:
-					if !common.StringsContains(endpoints, k) {
-						endpoints = append(endpoints, k)
+					if !common.StringsContains(endpoints, canonicalKey) {
+						endpoints = append(endpoints, canonicalKey)
 					}
 				}
 			}
@@ -274,9 +280,15 @@ func updatePricing() {
 		var raw map[string]interface{}
 		if err := json.Unmarshal([]byte(meta.Endpoints), &raw); err == nil {
 			for k, v := range raw {
+				canonicalKey := string(constant.NormalizeEndpointType(constant.EndpointType(k)))
+				if canonicalKey != k {
+					if _, hasCanonical := raw[canonicalKey]; hasCanonical {
+						continue
+					}
+				}
 				switch val := v.(type) {
 				case string:
-					supportedEndpointMap[k] = common.EndpointInfo{Path: val, Method: "POST"}
+					supportedEndpointMap[canonicalKey] = common.EndpointInfo{Path: val, Method: "POST"}
 				case map[string]interface{}:
 					ep := common.EndpointInfo{Method: "POST"}
 					if p, ok := val["path"].(string); ok {
@@ -285,7 +297,7 @@ func updatePricing() {
 					if m, ok := val["method"].(string); ok {
 						ep.Method = strings.ToUpper(m)
 					}
-					supportedEndpointMap[k] = ep
+					supportedEndpointMap[canonicalKey] = ep
 				default:
 					// ignore unsupported types
 				}

@@ -29,6 +29,21 @@ type ModelRequest struct {
 	Group string `json:"group,omitempty"`
 }
 
+var legacyPublicModelAliases = map[string]string{
+	"reranker-gte-multilingual-v1": "reranker-gte-v1",
+}
+
+func normalizePublicModelName(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	if canonical, ok := legacyPublicModelAliases[model]; ok {
+		return canonical
+	}
+	return model
+}
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
@@ -404,6 +419,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
+	modelRequest.Model = normalizePublicModelName(modelRequest.Model)
 	return &modelRequest, shouldSelectChannel, nil
 }
 

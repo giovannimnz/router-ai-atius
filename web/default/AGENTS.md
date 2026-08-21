@@ -178,3 +178,21 @@
 - **2026-01-29**：重组文档结构，合并重复内容，明确主次与交叉引用。
 - **2026-01-31**：在 3.2 中补充「类型检查」要求：改动 TS/TSX 后须执行 typecheck 并修复至无错。
 - **2026-06-21**：在 3.2 中补充「Lint 检查」要求：完成代码改动前须修复所涉及文件的所有 lint error。
+
+<!-- CODEX-MULTIAGENT-HEADLESS:START -->
+## Codex Multi-Agent and Headless Browser Policy
+
+- Standing explicit authorization: Codex may use multi-agent delegation for work in this project or host without requesting task-by-task confirmation.
+- Writer serialization is mandatory: concurrent agents may research and validate in parallel, but file mutations must be coordinated so only one writer changes any given file or overlapping scope at a time.
+- Chrome DevTools, Playwright, Chrome, Chromium, and browser automation must run headless by default.
+- Do not open visible browser windows or use XRDP/noVNC desktop sessions for browser automation unless the user gives a task-specific override.
+- Browser validation must retain headless evidence appropriate to the task, such as command output, traces, screenshots, snapshots, or test artifacts.
+<!-- CODEX-MULTIAGENT-HEADLESS:END -->
+
+<!-- codex-policy:parallel-headless:start -->
+## Paralelismo e automacao de browser
+
+- Use multiplos subagentes sempre que houver trabalho paralelo util. Atribua objetivos delimitados e sem sobreposicao, depois integre e valide os resultados no agente principal.
+- Toda automacao de browser deve executar em modo headless, incluindo chrome-devtools, Playwright, Selenium, Puppeteer ou ferramenta equivalente. Nao abra janelas visiveis do browser.
+
+<!-- codex-policy:parallel-headless:end -->

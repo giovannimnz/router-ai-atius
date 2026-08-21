@@ -62,10 +62,9 @@ const (
 )
 
 const (
-	AtiusLocalEmbeddingsChannelName = "Atius Local Embeddings"
-	AtiusLocalEmbeddingModel        = "embedding-gte-v1"
-	AtiusLocalRerankerModel         = "reranker-gte-v1"
-	LegacyAtiusLocalRerankerModel   = "reranker-gte-multilingual-v1"
+	AtiusLocalChannelName    = "Atius Local"
+	AtiusLocalEmbeddingModel = "embedding-gte-v1"
+	AtiusLocalRerankerModel  = "reranker-gte-v1"
 )
 
 var ChannelBaseURLs = []string{
@@ -128,7 +127,7 @@ var ChannelBaseURLs = []string{
 	"https://api.replicate.com",                 //56
 	"https://chatgpt.com",                       //57
 	"",                                          //58
-	"http://10.21.1.21:3115",                    //59
+	"http://10.21.1.21:31115",                   //59
 }
 
 var ChannelTypeNames = map[int]string{
@@ -187,7 +186,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeReplicate:            "Replicate",
 	ChannelTypeCodex:                "ChatGPT - Codex",
 	ChannelTypeAdvancedCustom:       "Advanced Custom",
-	ChannelTypeAtiusLocalEmbeddings: AtiusLocalEmbeddingsChannelName,
+	ChannelTypeAtiusLocalEmbeddings: AtiusLocalChannelName,
 }
 
 func IsAdvancedCustomChannelType(channelType int) bool {

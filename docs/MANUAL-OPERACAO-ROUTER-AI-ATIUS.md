@@ -104,19 +104,17 @@ Estado validado em 2026-06-18:
 
 - O backend Go e o dono do catalogo enriquecido em `/v1/models`; o middleware Python nao e fonte do contrato de model-list.
 - O root publico de `/v1/models` em modos model-list contem somente `data`: nao expor top-level `object`, `success`, `first_id`, `last_id` ou `has_more`.
-- Os campos enriquecidos publicos incluem o nucleo OpenRouter (`canonical_slug`, `description`, `context_length`, `architecture`, `top_provider`, `supported_parameters`, `default_parameters`, `links` e `pricing`) e as extensoes historicas do Router.
+- Os campos enriquecidos publicos esperados por item sao `pricing`, `supported_endpoint_types`, `endpoint_routes` e `billing_mode` quando disponivel.
 - O objeto publico `pricing` de modelos com preco USD expoe `input`, `output` e `unit=usd_per_1m_tokens`.
 - Modelos do channel Codex OAuth type `57` com preco oficial publicam `billing_mode=dollar_cost`. O Router usa os mesmos `InputPrice`/`OutputPrice` em USD/1M e os ratios oficiais de cached input/cache write no settlement e no catalogo, com `scope=openai_api_standard_reference`.
-- `pricing.prompt`, `pricing.completion`, `pricing.input_cache_read` e `pricing.input_cache_write` seguem o padrao OpenRouter: strings em USD por token. Os campos legados `input`, `output`, `cached_input` e `cache_write` seguem em USD por 1M tokens para compatibilidade retroativa.
-- Filtros locais compativeis: `q`, modalidades, parametros, contexto, precos, arquitetura, autores, providers, paginacao e ordenacao por data/contexto/preco. A referencia completa esta em `docs/OPENROUTER-MODEL-CATALOG.md`.
-- O default continua incluindo texto, embeddings e reranker; o root permanece somente `data`, sem `total_count` ou `links` top-level, por contrato protegido do fork.
+- O pricing Codex tambem expoe `prompt` e `completion` em `usd_per_token` para compatibilidade com Hermes antigos; `cached_input` e `cache_write` seguem a unidade principal por 1M tokens.
 - Modelos sem preco explicito e modelos com `tiered_expr` nao publicam um preco plano derivado do fallback generico.
 - O payload publico nao expoe os aliases redundantes `input_price`/`output_price`, `quota_type`, `enable_groups` ou `supported_endpoint_type_labels`.
 - `pricing_version` e campo interno e nao deve aparecer no payload publico de `/v1/models`.
 - `pricing_source` e `pricing_estimated` ficam internos e nao devem aparecer no payload publico de `/v1/models`.
 - A ordenacao publica e deterministica: texto antes de embeddings; providers MiniMax, DeepSeek e OpenAI/OpenAI Codex; dentro do provider, modelos mais recentes/capazes primeiro.
 - Regras de variante: versao numerica maior sobe; `-highspeed` fica acima da variante sem `-highspeed`; `pro` fica acima de `flash`, que fica como variante secundaria.
-- Contrato Codex vigente: `gpt-5.6-sol` usa `context_length=1000000` por politica pinada do Router, inclusive quando o discovery OAuth publica um limite menor. Terra, Luna e 5.5 seguem o contexto publicado pelo discovery; Spark usa `128000`. A resolucao de `max_completion_tokens` permanece independente: o valor OAuth vence quando presente e, quando ausente, Sol/Terra/Luna/5.5 usam o fallback `128000` das paginas oficiais Standard da OpenAI.
+- Contrato Codex OAuth vigente: Sol, Terra, Luna e 5.5 usam `context_length=272000` publicado pelo discovery; Spark usa `128000`. A resolucao e campo a campo: um `max_completion_tokens` publicado pelo OAuth vence; quando ausente, Sol/Terra/Luna/5.5 usam o `128000` das paginas oficiais Standard da OpenAI sem substituir o contexto OAuth.
 - `api_format=anthropic` e headers Anthropic selecionam modelos Anthropic-capable no catalogo Go, mantendo o mesmo root `{"data":[...]}`.
 - Graphify fica obrigatorio no fluxo GSD desta area quando habilitado no checkout. Em 2026-06-18, este checkout retornou `graphify status: disabled` e nao tinha `.planning/config.json`; nesse caso registrar Graphify como indisponivel e usar testes/CLI/smoke como evidencias.
 - Modelos sem preco oficial ou configuracao explicita omitem `pricing`; o Router nao publica fallback estimado como se fosse valor real.
@@ -174,17 +172,15 @@ Regras praticas:
 
 - Para clientes OpenAI-Compatible, usar `/v1/chat/completions`, `/v1/responses`, `/v1/models` etc com `base_url=https://router.atius.com.br/v1`.
 - Para clientes Anthropic-Compatible, usar `/v1/messages` com `base_url=https://router.atius.com.br` ou `https://router.atius.com.br/v1` conforme SDK/cliente.
-- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. O provider dedicado `Atius Local Embeddings`, tipo `59`, consolida o alias publico `embedding-gte-v1` (dimensao `768`) e `reranker-gte-v1`, apontando para os servicos TEI do `horistic-srv`. `http://10.100.100.4:3115` fica apenas como fallback/reserva explicitamente validado, nao como upstream primario do router.
+- Para embeddings OpenAI-compatible, usar `/v1/embeddings` somente quando o modelo estiver anunciado em `/v1/models`. O provider dedicado `Atius Local`, tipo `59`, consolida o alias publico `embedding-gte-v1` (dimensao `768`) e `reranker-gte-v1`, apontando para os servicos TEI do `horistic-srv`. `http://10.100.100.4:3115` fica apenas como fallback/reserva explicitamente validado, nao como upstream primario do router.
 - Provider de embeddings MiniMax: canal unico `MiniMax` tipo `35` com `embo-01`; a conversao OpenAI -> MiniMax native acontece no adaptador Go, mas o provider fica restaurado e desabilitado no estado final da Phase 24.
 - Provider de embeddings Codex: `ChatGPT - Codex` channel 5 com `text-embedding-3-small` e `text-embedding-3-large`; fica desativado ate a quota/licenca upstream aceitar chamadas reais.
 - Nao reativar `OpenAI - Embeddings` separado nem depender de chave OpenAI duplicada para estes modelos; a regra do fork e compartilhar a credencial Codex OAuth.
-- MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido. DeepSeek V4 suporta `/v1/chat/completions`, `/v1/messages` e `/v1/responses` no mesmo channel 2; o catalogo anuncia `openai-response`, `openai` e `anthropic`.
+- MiniMax e DeepSeek nao precisam de canais duplicados por protocolo: o tipo do canal identifica o provider e o relay Go escolhe URL/formato conforme o endpoint recebido (`/v1/chat/completions`, `/v1/messages`, `/v1/embeddings`).
 - `/v1/models` sem token deve retornar 401. Isso nao indica falha.
 - DeepSeek deve permanecer ativo como canal consolidado unico no estado final restaurado.
 - MiniMax embeddings pode retornar `429` quando o upstream bloquear por quota/RPM persistente; nesse caso manter `embo-01` fora do catalogo ativo e manter o provider MiniMax desabilitado no estado final.
 - `MiniMax` e `DeepSeek` devem preferir `base_url` no provider root (`https://api.minimax.io`, `https://api.deepseek.com`), mas o relay Go tambem aceita base URL com `/v1` e normaliza automaticamente. Nao usar sufixos especificos como `/anthropic` no canal consolidado.
-- DeepSeek Responses e stateless: encaminhar o DTO OpenAI Responses nativo para `POST https://api.deepseek.com/responses`. No streaming, preservar os eventos SSE sem adicionar `data: [DONE]`; o terminal e `response.completed`, `response.incomplete` ou `response.failed` e carrega o uso para settlement.
-- A atualizacao de saldo do channel DeepSeek consulta `GET https://api.deepseek.com/user/balance` e persiste exclusivamente `balance_infos[currency=USD].total_balance`. Nao selecionar nem exibir CNY para a conta global.
 
 ## Governor de embeddings e reranking Go-native
 
@@ -194,8 +190,7 @@ Estado atualizado em 2026-07-05:
 - Implementacao principal: `service/embeddinggovernor/`, com integracao em `relay/embedding_handler.go` e `relay/rerank_handler.go`.
 - Escopo default: `embedding-gte-v1` e `reranker-gte-v1`. Outros modelos passam pelo relay normal sem fila do governor.
 - Os dois aliases publicos locais devem permanecer em `EMBEDDING_GOVERNOR_MODELS=embedding-gte-v1,reranker-gte-v1` durante recovery, catalog restore, upstream sync e deploy.
-- Canal TEI live consolidado no router: `Atius Local Embeddings`, tipo `59`, com os modelos `embedding-gte-v1` e `reranker-gte-v1`. A rota `/v1/embeddings` segue para `TEI_BASE_URL` (fallback `http://10.21.1.21:3115`) e `/v1/rerank` segue para `TEI_RERANKER_BASE_URL` (fallback `http://10.21.1.21:31216`) com conversor `jina_rerank_to_tei_native` e sem autenticacao upstream. Os canais legados `9` e `10` foram removidos apos validacao E2E.
-- O catalogo administrativo usa o fornecedor `Atius Local` e a chave de icone `AtiusLocal` em `models` e `vendors`. O frontend resolve essa chave para o mesmo SVG canonico do channel 11 nas colunas `Icone` e `Fornecedor`; nao substituir por um icone Lobe aproximado.
+- Canal TEI live consolidado no router: `Atius Local`, tipo `59`, com os modelos `embedding-gte-v1` e `reranker-gte-v1`. O metadado canonico do reranker usa `endpoint_type=reranker` e `{"path":"/v1/rerank","method":"POST"}`; `jina-rerank` e aceito somente como alias legado. A rota `/v1/embeddings` segue para `TEI_BASE_URL` (fallback HA `http://10.21.1.21:31115`) e `/v1/rerank` segue para `TEI_RERANKER_BASE_URL` (fallback `http://10.21.1.21:31216`) com conversor `jina_rerank_to_tei_native` e sem autenticacao upstream. Os canais legados `9` e `10` foram removidos apos validacao E2E.
 - Envelope automatico protegido: `min=1`, `initial=2`, `max=0` e `batch_concurrency=0`, fila interativa `128`, fila batch `512`, timeout interativo `30s`, timeout batch `10m`, cooldown `10m`. Valor `0` em `EMBEDDING_GOVERNOR_MAX_CONCURRENCY` ou `EMBEDDING_GOVERNOR_BATCH_CONCURRENCY` significa sem teto estatico no router; a capacidade passa a crescer pelo feedback do governor, pelos sinais de health/capacidade/latencia/cooldown e pela capacidade real dos pods TEI disponiveis.
 - Classificacao de workload e metadata-only. `X-Embedding-Workload` e opcional para clientes normais e fica como override operacional para operadores. Ordem de precedencia:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
@@ -258,9 +253,9 @@ read-only na faixa OCI DRG:
 
 ```bash
 EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=true
-EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=http://10.21.1.21:3115/health
+EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=http://10.21.1.21:31115/health
 EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=true
-EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=http://10.21.1.21:3115/metrics
+EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=http://10.21.1.21:31115/metrics
 EMBEDDING_GOVERNOR_CAPACITY_MAX_USED_PERCENT=80
 ```
 
@@ -402,7 +397,7 @@ Exemplo sem secrets:
 model:
   provider: custom
   default: gpt-5.6-sol
-  context_length: 1000000
+  context_length: 272000
   base_url: https://router.atius.com.br
   api_key: ${ATIUS_ROUTER_API_KEY}
   api_mode: chat_completions
@@ -506,6 +501,31 @@ Nunca colar callback, authorization code, access token ou refresh token em logs,
 docs, Obsidian, GBrain ou tickets. A interface mantém o callback somente no
 estado transitório do diálogo.
 
+### Sincronizacao da credencial Codex Desktop no atius-srv-1
+
+O channel `5` em producao usa `codex_credential_source=external_file` para
+evitar que o Router e o Codex Desktop tentem rotacionar o mesmo refresh token.
+A fonte privada e `/home/ubuntu/.codex/auth.json`; nenhum token e copiado para
+logs, docs ou evidence.
+
+- `scripts/atius-codex-channel-credential-sync.sh` valida `auth_mode=chatgpt`,
+  conta, JWT e expiracao, compara o hash do access token e atualiza o channel
+  somente quando a credencial realmente mudou.
+- `atius-codex-channel-sync.path` observa mudancas no `auth.json`.
+- `atius-codex-channel-sync.timer` roda a cada 5 minutos como fallback.
+- O auto-refresh interno ignora credenciais com source `external_file`; isso
+  impede a rotacao concorrente que gerava `refresh_token_invalidated`.
+- A atualizacao e atomica, limpa `requires_regeneration`, reinicia o Router para
+  recarregar o cache e exige `/api/status` saudavel antes de concluir.
+
+Checks seguros:
+
+```bash
+scripts/atius-codex-channel-credential-sync.sh --check
+systemctl --user status atius-codex-channel-sync.path atius-codex-channel-sync.timer
+journalctl --user -u atius-codex-channel-sync.service --since '1 hour ago'
+```
+
 ## Protecao contra sync upstream
 
 O fork-sync do `omni-srv-admin` usa merge strategy `theirs`. Por isso, toda customizacao abaixo precisa ficar em `protected_paths` e ser conferida em dry-run antes de merge upstream:
@@ -521,6 +541,9 @@ O fork-sync do `omni-srv-admin` usa merge strategy `theirs`. Por isso, toda cust
 - `tools/clianything.py` e `tests/test_clianything.py`: `phase19-apply` deve consolidar canais e nunca recriar providers duplicados como rota ativa.
 - `relay/channel/codex/`: adaptador Codex OAuth com suporte a embeddings.
 - `service/codex_*.go`: refresh OAuth e protecao de referencias `shared:codex`.
+- `scripts/atius-codex-channel-credential-sync.sh` e
+  `podman/systemd/atius-codex-channel-sync.*`: espelho seguro da credencial
+  gerenciada pelo Codex Desktop, sem rotacao concorrente.
 - `controller/channel.go`, `controller/codex_*.go`, `router/channel-router.go`,
   `types/error.go`, `dto/channel_settings.go` e handlers gerais em `relay/`:
   lifecycle OAuth, health sanitizado e taxonomia de auth upstream.
@@ -545,7 +568,7 @@ Estado atualizado em 2026-06-26 apos a instalacao do TEI local:
 - Wrapper ativo: `/home/ubuntu/.local/bin/gbrain`.
 - O wrapper define `GBRAIN_STATEMENT_TIMEOUT=0`, `GBRAIN_IDLE_TX_TIMEOUT=0`, `OPENAI_BASE_URL=http://127.0.0.1:3000/v1` e `OPENAI_API_KEY` a partir de `~/.gbrain/config.json`.
 - `~/.gbrain/config.json` deve usar `embedding_model: openai:embedding-gte-v1` e `embedding_dimensions: 768`.
-- O GBrain deve chegar direto ao Go router; o provider ativo e `Atius Local Embeddings`, tipo `59`, com alias `embedding-gte-v1` e upstream primario `http://10.21.1.21:3115` no `horistic-srv`.
+- O GBrain deve chegar direto ao Go router; o provider ativo e `Atius Local`, tipo `59`, com alias `embedding-gte-v1` e upstream HA `http://10.21.1.21:31115` no `horistic-srv`.
 - O mesmo provider encaminha `reranker-gte-v1` ao upstream `http://10.21.1.21:31216`, compartilhando o envelope do governor e aplicando a conversao Jina -> TEI nativa.
 - O governor Go-native protege esse caminho antes de despachar a chamada ao TEI.
 - `embo-01` e `text-embedding-3-*` ficam como historico/desativados ate MiniMax/Codex aceitarem chamadas reais sem `429`.

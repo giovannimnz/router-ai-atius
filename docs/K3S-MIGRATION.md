@@ -1,179 +1,221 @@
-# K3S runtime - router-ai-atius
+# K3S migration - router-ai-atius
 
-## Estado canonico
+## Estado atual
 
-Desde 2026-07-19, o runtime publico do Router esta no k3s do
-`atius-srv-1`:
+- Runtime de producao atual: Podman rootless via `container-router-ai-atius.service`.
+- Edge publico atual: Apache/Cloudflare apontando para `127.0.0.1:3000`.
+- Runtime canonico atual: backend Go-only, sem `model-detailed` no caminho `/v1/`.
+- Banco ativo observado no runtime: `postgresql://admin:${POSTGRES_PASSWORD}@10.11.1.11:6432/DBRouterAiAtius`.
+- Redis ativo observado no runtime: `redis://:${REDIS_PASSWORD}@localhost:6379`.
+- Providers ativos observados:
+  - `DeepSeek`
+  - `ChatGPT - Codex`
+  - `TEI - GTE Embeddings`
+  - `TEI - GTE Reranker`
+- Provider desabilitado mas preservado no catalogo:
+  - `MiniMax`
 
-- namespace: `router-ai-atius`;
-- edge: Apache/Cloudflare;
-- backend Apache do app/API: `http://10.43.102.221:3000`;
-- docs continuam fora do k3s Router em `http://127.0.0.1:3003`;
-- app: `Deployment/router-ai-atius`, uma replica, `500m` request/limit;
-- banco: `StatefulSet/router-ai-atius-postgres`, PostgreSQL 17, `500m`;
-- Redis: `Deployment/router-ai-atius-redis`, efemero, `500m`;
-- storage: `local-path`, RWO, single-node, PVs protegidos com `Retain`;
-- node selector obrigatorio: `kubernetes.io/hostname=atius-srv-1`;
-- release: `ghcr.io/giovannimnz/router-ai-atius:v2.17.3`;
-- image ID: `7b3f62f2694046caacb99ed28a29bad3eb3b1d3a3978e5bc2055e582d0d06f29`;
-- manifest OCI importado no CRI: `sha256:4d41867fa1332220d6a04ce87bf3eb893f2129f5f4bb52898fd62ec21e12b064`.
+Podman continua sendo o rollback ate o cutover k3s passar nos smokes.
 
-O Router Podman fica parado, mas preservado como rollback pela user unit
-`container-router-ai-atius.service`. Nao remover a imagem, o unit ou o banco
-fonte anterior durante o soak operacional.
+## Decisoes bloqueantes
 
-## Decisoes de arquitetura
+- Namespace dedicado: `router-ai-atius`.
+- Apache/Cloudflare continuam como edge inicial; esta fase nao introduz
+  ingress controller.
+- `model-detailed` must not return to the `/v1/` path.
+- Shadow deployment primeiro; trafego publico so muda depois.
+- Banco e estado continuam com rollback explicito ate restore rehearsal e
+  shadow smoke passarem.
 
-- O Router permanece Go-only; `model-detailed` nao participa de `/v1/`.
-- Nao existe Ingress adicional. Apache continua sendo o edge e aponta para o
-  `ClusterIP` do Service.
-- A replica unica usa `maxSurge: 0` e `maxUnavailable: 1`. O host nao reserva
-  CPU para dois pods Router de `500m` durante rollout.
-- Nao tolerar `node.kubernetes.io/disk-pressure`. Se `DiskPressure=True`, o
-  rollout e `no-go`; adicionar toleration provoca eviction loop e nao resolve
-  capacidade.
-- A imagem e importada no namespace containerd `k8s.io` e usada com tag de
-  release + `imagePullPolicy: IfNotPresent`. Como o GHCR e privado para pulls
-  anonimos, a preimportacao autenticada e obrigatoria enquanto nao houver um
-  `imagePullSecret` provisionado no namespace.
-- Secrets reais permanecem fora do git no Secret
-  `router-ai-atius-secrets`.
-- O TEI e dependencia externa pela faixa OCI DRG em
-  `http://10.21.1.21:3115`; esta arvore nao gerencia seus recursos.
+Bloqueadores atuais observados no cluster:
 
-## CPU e storage
+- `DiskPressure` em `atius-srv-1`.
+- `image filesystem` pressure e ausencia de `Metrics API` para leitura de uso
+  em `atius-srv-2`/cluster.
+- storage `local-path` como unica classe observada.
+- ausencia de `IngressClass`.
 
-Cada pod normal desta stack segue a unidade operacional do host:
+## Preflight
 
-```text
-1 pod = requests.cpu 500m = limits.cpu 500m
-```
-
-Antes de apply ou rollout:
+Rodar antes de qualquer `kubectl apply`:
 
 ```bash
-sudo k3s kubectl get node atius-srv-1 \
-  -o jsonpath='{.status.conditions[?(@.type=="DiskPressure")].status}{"\n"}'
-df -h /
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+scripts/k3s-router-preflight.sh
+```
+
+O preflight coleta:
+
+- `graphify status`
+- baseline Podman e `bin/clianything`
+- providers ativos
+- nodes, storage, ingress e eventos do k3s
+- evidencia suficiente para `go/no-go`
+
+Interpretacao minima:
+
+- `DiskPressure` ou `image filesystem` pressure exigem mitigacao ou
+  node-selection explicito antes de cutover.
+- `Metrics API not available` nao bloqueia escrever manifests, mas bloqueia
+  qualquer narrativa de capacidade madura.
+- `local-path` implica persistencia single-node, `RWO`, reclaim `Delete`,
+  sem volume expansion.
+
+## Arquitetura alvo inicial
+
+- Namespace: `router-ai-atius`
+- Sem ingress controller nesta fase.
+- Apache continua como edge, retargeteando manualmente para um Service k3s
+  somente apos shadow validado.
+- Stack inicial em k3s:
+  - `Deployment/router-ai-atius` com `replicas: 1`
+  - `StatefulSet/postgres`
+  - `Deployment/redis`
+  - `Service/router-ai-atius`
+  - PVC de `/data` do router
+  - PVC do Postgres
+  - `emptyDir` para logs e Redis no shadow inicial
+
+Dependencia externa/adjacente:
+
+- TEI continua fora desta fase e so e lido como dependencia.
+- Contrato live atual dos upstreams privados TEI:
+  - embeddings HA: `http://10.21.1.21:31115` (`horistic-srv`)
+  - reranker: `http://10.21.1.21:31216` (`horistic-srv`)
+- `tei-gte.ai-search.svc.cluster.local` so deve ser usado se a propria dependencia TEI for internalizada no cluster e validada com backup, smoke e rollback; nao e a fonte de verdade do runtime Podman atual.
+
+## Dados e secrets
+
+- Nenhum secret real vai para git.
+- Secrets sao criados em apply-time via:
+  `kubectl -n router-ai-atius create secret generic router-ai-atius-secrets`.
+- Campos minimos esperados:
+  - `POSTGRES_PASSWORD`
+  - `REDIS_PASSWORD`
+  - `SESSION_SECRET`
+  - `ROUTER_ADMIN_TOKEN`
+  - `ATIUS_ROUTER_TOKEN`
+
+### Backup
+
+Antes de qualquer restore rehearsal ou shadow deploy:
+
+```bash
+cd /home/ubuntu/GitHub/containers/router-ai-atius
+scripts/k3s-router-backup.sh
+```
+
+Backup required evidence:
+
+- backup path
+- `clianything` metadata snapshot
+- dump Postgres criado com `pg_dump`
+- backup de channels/tokens quando suportado pelo CLI
+
+O backup path must be recorded before shadow deploy.
+
+## Shadow deployment
+
+Shadow-only, sem tocar Apache publico:
+
+```bash
+cd /home/ubuntu/GitHub/containers/router-ai-atius
 scripts/k3s-router-validate-manifests.sh
+RUN_K3S_ROUTER_APPLY=1 scripts/k3s-router-apply-shadow.sh
 ```
 
-O resultado deve ser `False`. `local-path` nao e HA; por isso backup validado e
-reclaim `Retain` sao obrigatorios.
-
-## Backup canonico
+Depois do rollout:
 
 ```bash
-./scripts/podman-admin.sh profile-run -- \
-  /usr/bin/bash scripts/k3s-router-backup.sh
-```
-
-`k3s-router-backup.sh` usa `umask 077` e aceita:
-
-- `ROUTER_BACKUP_SOURCE=auto`: detecta o backend ativo no vhost Apache;
-- `ROUTER_BACKUP_SOURCE=k3s`: dump direto do StatefulSet PostgreSQL;
-- `ROUTER_BACKUP_SOURCE=podman`: dump do `SQL_DSN` runtime do rollback.
-
-No modo k3s, o script salva recursos sem Kubernetes Secrets e gera dump com
-permissao `600`. O dump so e aceito quando contem tabelas e o marcador final do
-PostgreSQL.
-
-Backup k3s validado depois do cutover:
-
-```text
-backups/k3s-router-20260719T201321Z
-source_mode=k3s
-dump_bytes=53737224
-```
-
-## Apply e rollout
-
-```bash
-scripts/k3s-router-validate-manifests.sh
-sudo k3s kubectl apply -f k8s/router-ai-atius/
-sudo k3s kubectl -n router-ai-atius rollout status \
-  deployment/router-ai-atius --timeout=240s
-```
-
-O manifest usa `imagePullPolicy: IfNotPresent`: recriacao depois de garbage
-collection tenta recuperar a release da GHCR, enquanto o cache CRI local evita
-pull desnecessario. Para preaquecer ou operar sem acesso temporario a GHCR:
-
-```bash
-podman save --format oci-archive \
-  ghcr.io/giovannimnz/router-ai-atius:v2.17.3 | \
-  sudo k3s ctr -n k8s.io images import --digests -
-```
-
-Depois da importacao, o nome do tag no manifest deve existir em
-`sudo k3s ctr -n k8s.io images list`; um alias criado fora do namespace
-`k8s.io` nao e suficiente para o kubelet.
-
-## Smoke shadow ou publico
-
-```bash
-K3S_ROUTER_BASE_URL=http://10.43.102.221:3000 \
-ATIUS_ROUTER_TOKEN="$ATIUS_ROUTER_TOKEN" \
-scripts/k3s-router-smoke.sh
-
-K3S_ROUTER_BASE_URL=https://router.atius.com.br \
-ATIUS_ROUTER_TOKEN="$ATIUS_ROUTER_TOKEN" \
+K3S_ROUTER_BASE_URL=http://<node-or-forwarded-endpoint> \
+ATIUS_ROUTER_TOKEN=<token-de-teste> \
 scripts/k3s-router-smoke.sh
 ```
 
-O script valida:
+Shadow smoke minimo:
 
-- health `200`;
-- `/v1/models` sem token `401`;
-- `/v1/models` autenticado com root `data` only;
-- ausencia de `pricing_source`, `pricing_estimated` e `pricing_version`;
-- `embedding-gte-v1` com dimensao `768` no mesmo base URL informado.
+- `/api/status` ou `/health` HTTP 200
+- `/v1/models` sem token HTTP 401
+- `/v1/models` com token HTTP 200 com root `data` only
+- campos proibidos ausentes:
+  - `pricing_source`
+  - `pricing_estimated`
+  - `pricing_version`
+- `embedding-gte-v1` retorna dimensao `768`
 
-O ultimo item depende de `ATIUS_ROUTER_EMBEDDINGS_BASE_URL=${base_url}/v1`.
-Nao voltar a usar a variavel generica que fazia o smoke cair no default
-`127.0.0.1:3000` e testar acidentalmente o Podman.
+## Restore rehearsal
 
-## Evidencia do cutover
+Checklist obrigatorio antes de qualquer cutover:
 
-O handoff final usou um freeze curto do Router Podman, seguido de dump e restore
-com `ON_ERROR_STOP`. As contagens fonte e destino convergiram:
+- record `backup directory`
+- record `target namespace`
+- record `restore command`
+- record `kubectl get pods -n router-ai-atius`
+- record `bin/clianything` ou verificacao equivalente do DB restaurado
+- record `shadow smoke`
+- record explicit `go/no-go`
 
-```text
-channels=4
-models=11
-abilities=9
-tokens=13
-users=11
-logs=88677
-```
+failed restore or failed smoke means no production cutover
 
-Artefatos locais protegidos:
+## Cutover manual
 
-- pre-cutover: `backups/k3s-router-20260719T195842Z`;
-- handoff final: `backups/k3s-router-cutover-20260719T200250Z`;
-- backup pos-cutover: `backups/k3s-router-20260719T201321Z`;
-- vhosts: `/var/backups/router-ai-atius/`.
+Sequencia exata:
 
-O catalogo publico validado publica Sol/Terra/Luna com contexto OAuth `272000`,
-output oficial fallback `128000` e precos Standard `5/30`, `2.5/15`, `1/6`.
-`/v1/responses` nao streaming e embeddings tambem passaram no endpoint publico.
-O profile k3s consulta `10.21.1.21:3115/health` e `/metrics`; `te_queue_size>0`
-e tratado como saturacao de capacidade e bloqueia scale-up do governor.
+1. Validar shadow com `scripts/k3s-router-smoke.sh`.
+2. Fazer backup do vhost Apache atual.
+3. Editar manualmente o backend target do Apache para o endpoint k3s validado.
+4. Rodar `apache2ctl configtest`.
+5. Recarregar Apache.
+6. Rodar smoke publico.
+7. Monitorar logs e manter Podman ativo durante soak.
+
+Smokes publicos minimos:
+
+- `https://router.atius.com.br/health` -> 200
+- `https://router.atius.com.br/v1/models` sem token -> 401
+- `https://router.atius.com.br/v1/models` com token -> 200 com root `data`
+  apenas
+- forbidden fields ausentes
+- `embedding-gte-v1` -> `768`
+
+Podman remains active during soak.
 
 ## Rollback
 
-1. Restaurar os dois vhosts a partir de `/var/backups/router-ai-atius/`.
-2. Rodar `sudo apache2ctl configtest`.
-3. Recarregar Apache.
-4. Iniciar `systemctl --user start container-router-ai-atius.service`.
-5. Esperar `http://127.0.0.1:3000/api/status` retornar `200`.
-6. Rodar o smoke publico.
+Sequencia de rollback:
 
-Nao apontar Apache ao Podman enquanto o unit estiver inativo. Nao apagar o
-StatefulSet/PVC durante rollback; primeiro estabilizar o edge, depois decidir a
-fonte de dados e reconciliar escritas.
+1. restore Apache vhost backup
+2. `apache2ctl configtest`
+3. recarregar Apache
+4. validar Podman
+5. rodar smoke publico
 
-## Registro detalhado
+Comandos essenciais:
 
-O incidente, restore, release e provas HTTP estao em
-`docs/K3S-CUTOVER-2026-07-19.md`.
+```bash
+systemctl --user restart container-router-ai-atius.service
+bin/clianything status
+podman ps --filter pod=atius-ai-router
+```
+
+## Go/no-go
+
+Go:
+
+- manifests passam em `--dry-run=server`
+- restore rehearsal registrada
+- shadow rollout Ready
+- shadow smoke passa
+- blockers de node/storage documentados com mitigacao real
+- Apache backup pronto
+- rollback validado
+
+No-go:
+
+- `DiskPressure` sem mitigacao
+- `image filesystem` pressure sem mitigacao
+- restore rehearsal falha
+- shadow smoke falha
+- `/v1/models` muda shape ou vaza campos internos
+- `embedding-gte-v1` nao retorna `768`
+- rollback nao esta documentado e testavel

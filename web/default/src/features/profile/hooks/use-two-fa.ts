@@ -34,6 +34,7 @@ const DEFAULT_STATUS: TwoFAStatus = {
 
 export function useTwoFA(enabled = true) {
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
   const [status, setStatus] = useState<TwoFAStatus>(DEFAULT_STATUS)
 
   const fetchStatus = useCallback(async () => {
@@ -41,13 +42,19 @@ export function useTwoFA(enabled = true) {
 
     try {
       setLoading(true)
+      setError(null)
       const response = await get2FAStatus()
       if (response.success && response.data) {
         setStatus(response.data)
+        return
       }
+      throw new Error(response.message || 'Failed to load 2FA status')
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch 2FA status:', error)
+      setError(
+        error instanceof Error ? error : new Error('Failed to load 2FA status')
+      )
     } finally {
       setLoading(false)
     }
@@ -60,6 +67,7 @@ export function useTwoFA(enabled = true) {
   return {
     status,
     loading,
+    error,
     refetch: fetchStatus,
   }
 }

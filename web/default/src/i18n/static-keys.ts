@@ -60,7 +60,7 @@ export const STATIC_I18N_KEYS = [
   'Token-based',
   'Per Request',
   'All Types',
-  'Atius Local Embeddings',
+  'Atius Local',
   'Jina Rerank to TEI Native',
   'No upstream credentials are required for the local TEI services.',
   'Chat',

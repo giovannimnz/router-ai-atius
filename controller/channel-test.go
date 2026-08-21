@@ -44,7 +44,7 @@ type testResult struct {
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
 	normalized := strings.TrimSpace(endpointType)
 	if normalized != "" {
-		return normalized
+		return string(constant.NormalizeEndpointType(constant.EndpointType(normalized)))
 	}
 	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
 		return string(constant.EndpointTypeOpenAIResponseCompact)
@@ -197,7 +197,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			relayFormat = types.RelayFormatClaude
 		case constant.EndpointTypeGemini:
 			relayFormat = types.RelayFormatGemini
-		case constant.EndpointTypeJinaRerank:
+		case constant.EndpointTypeReranker:
 			relayFormat = types.RelayFormatRerank
 		case constant.EndpointTypeImageGeneration:
 			relayFormat = types.RelayFormatOpenAIImage
@@ -721,7 +721,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				N:      lo.ToPtr(uint(1)),
 				Size:   "1024x1024",
 			}
-		case constant.EndpointTypeJinaRerank:
+		case constant.EndpointTypeReranker:
 			// 返回 RerankRequest
 			return &dto.RerankRequest{
 				Model:     model,

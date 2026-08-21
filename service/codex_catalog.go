@@ -28,14 +28,13 @@ const (
 	codexCatalogDefaultChannelID           = 5
 	codexCatalogDefaultClientVersion       = "0.111.0"
 	codexCatalogDefaultReply               = "Ok"
-	codexCatalogValidationContractVersion  = "3"
+	codexCatalogValidationContractVersion  = "2"
 	codexCatalogDefaultDiscoveryTimeout    = 20 * time.Second
 	codexCatalogDefaultValidationTimeout   = 30 * time.Second
 	codexCatalogDefaultModelOptionKey      = "CodexCatalogDefaultModel"
 	codexCatalogDenylistOptionKey          = "CodexCatalogDenylist"
 	codexCatalogOverridesOptionKey         = "CodexCatalogMetadataOverrides"
 	CodexCatalogBillingMode                = "dollar_cost"
-	codexGPT56SolContextWindow             = 1_000_000
 	codexCatalogDiscoveryClientVersionEnv  = "CODEX_DISCOVERY_CLIENT_VERSION"
 	codexCatalogDiscoveryClientVersionHint = "codex --version"
 )
@@ -43,14 +42,9 @@ const (
 var (
 	codexCatalogVersionPattern = regexp.MustCompile(`\b\d+\.\d+\.\d+\b`)
 	codexCatalogMutex          sync.Mutex
-	knownRetiredCodexModels    = map[string]struct{}{
-		"gpt-5.4":      {},
-		"gpt-5.4-mini": {},
-	}
 )
 
 type CodexCatalogMetadata struct {
-	CreatedTime               int                     `json:"created_time,omitempty"`
 	DisplayName               string                  `json:"display_name,omitempty"`
 	Provider                  string                  `json:"provider,omitempty"`
 	OwnedBy                   string                  `json:"owned_by,omitempty"`
@@ -71,18 +65,7 @@ type codexCatalogPolicy struct {
 }
 
 type codexDiscoveryItem struct {
-	Slug                string `json:"slug"`
-	Visibility          string `json:"visibility,omitempty"`
-	ContextWindow       int    `json:"context_window,omitempty"`
-	MaxContextWindow    int    `json:"max_context_window,omitempty"`
-	MaxOutputTokens     int    `json:"max_output_tokens,omitempty"`
-	MaxCompletionTokens int    `json:"max_completion_tokens,omitempty"`
-}
-
-type codexDiscoveryResult struct {
-	Models []string
-	Hidden []string
-	Items  map[string]codexDiscoveryItem
+	Slug string `json:"slug"`
 }
 
 type codexDiscoveryResponse struct {
@@ -118,27 +101,16 @@ func normalizeCodexCatalogModelNames(values []string) []string {
 	return normalized
 }
 
-func filterKnownRetiredCodexModels(values []string) []string {
-	filtered := make([]string, 0, len(values))
-	for _, modelName := range normalizeCodexCatalogModelNames(values) {
-		if _, retired := knownRetiredCodexModels[modelName]; retired {
-			continue
-		}
-		filtered = append(filtered, modelName)
-	}
-	return filtered
-}
-
-func officialGPT56CodexMetadata(displayName string, contextWindowTokens int, reasoningEfforts []string) CodexCatalogMetadata {
+func officialGPT56CodexMetadata(displayName string, reasoningEfforts []string) CodexCatalogMetadata {
 	return CodexCatalogMetadata{
 		DisplayName:               displayName,
 		Provider:                  "OpenAI Codex",
 		OwnedBy:                   "codex",
 		EndpointPreference:        constant.EndpointTypeOpenAIResponse,
 		SupportedEndpoints:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
-		ContextWindowTokens:       contextWindowTokens,
-		MaxTokens:                 contextWindowTokens,
-		BillingMode:               CodexCatalogBillingMode,
+		ContextWindowTokens:       1050000,
+		MaxTokens:                 1050000,
+		MaxCompletionTokens:       128000,
 		SupportedReasoningEfforts: append([]string(nil), reasoningEfforts...),
 		Capabilities: []string{
 			"text_input",
@@ -163,7 +135,7 @@ func officialGPT56CodexMetadata(displayName string, contextWindowTokens int, rea
 
 func defaultCodexCatalogPolicy() codexCatalogPolicy {
 	return codexCatalogPolicy{
-		DefaultModel: "gpt-5.6-terra",
+		DefaultModel: "gpt-5.4",
 		Denylist: []string{
 			"codex-auto-review",
 			"gpt-5.4-1m",
@@ -172,17 +144,14 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 		Overrides: map[string]CodexCatalogMetadata{
 			"gpt-5.6-sol": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Sol",
-				codexGPT56SolContextWindow,
 				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
 			),
 			"gpt-5.6-terra": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Terra",
-				272000,
 				[]string{"low", "medium", "high", "xhigh", "max", "ultra"},
 			),
 			"gpt-5.6-luna": officialGPT56CodexMetadata(
 				"OpenAI Codex GPT-5.6 Luna",
-				272000,
 				[]string{"low", "medium", "high", "xhigh", "max"},
 			),
 			"gpt-5.5": {
@@ -193,7 +162,27 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 				ContextWindowTokens: 272000,
 				MaxTokens:           272000,
-				BillingMode:         CodexCatalogBillingMode,
+				MaxCompletionTokens: 128000,
+			},
+			"gpt-5.4": {
+				DisplayName:         "OpenAI Codex GPT-5.4",
+				Provider:            "OpenAI Codex",
+				OwnedBy:             "codex",
+				EndpointPreference:  constant.EndpointTypeOpenAIResponse,
+				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
+				ContextWindowTokens: 1000000,
+				MaxTokens:           1000000,
+				MaxCompletionTokens: 128000,
+			},
+			"gpt-5.4-mini": {
+				DisplayName:         "OpenAI Codex GPT-5.4-mini",
+				Provider:            "OpenAI Codex",
+				OwnedBy:             "codex",
+				EndpointPreference:  constant.EndpointTypeOpenAIResponse,
+				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
+				ContextWindowTokens: 272000,
+				MaxTokens:           272000,
+				MaxCompletionTokens: 64000,
 			},
 			"gpt-5.3-codex-spark": {
 				DisplayName:         "OpenAI Codex GPT-5.3-codex-spark",
@@ -203,7 +192,7 @@ func defaultCodexCatalogPolicy() codexCatalogPolicy {
 				SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 				ContextWindowTokens: 128000,
 				MaxTokens:           128000,
-				BillingMode:         CodexCatalogBillingMode,
+				MaxCompletionTokens: 32000,
 			},
 		},
 	}
@@ -215,46 +204,16 @@ func fallbackCodexModelIDs() []string {
 		"gpt-5.6-terra",
 		"gpt-5.6-luna",
 		"gpt-5.5",
+		"gpt-5.4",
+		"gpt-5.4-mini",
 		"gpt-5.3-codex-spark",
 	}
 }
 
-func codexCatalogCandidateModelIDs(discovered []string, hidden []string) []string {
+func codexCatalogCandidateModelIDs(discovered []string) []string {
 	candidates := append([]string(nil), discovered...)
 	candidates = append(candidates, fallbackCodexModelIDs()...)
-	candidates = normalizeCodexCatalogModelNames(candidates)
-	if len(hidden) == 0 {
-		return candidates
-	}
-
-	hiddenSet := make(map[string]struct{}, len(hidden))
-	for _, modelName := range normalizeCodexCatalogModelNames(hidden) {
-		hiddenSet[modelName] = struct{}{}
-	}
-	visible := make([]string, 0, len(candidates))
-	for _, modelName := range candidates {
-		if _, isHidden := hiddenSet[modelName]; isHidden {
-			continue
-		}
-		visible = append(visible, modelName)
-	}
-	return visible
-}
-
-func codexCatalogModelsAfterFailedPromotion(currentModels string, hidden []string) []string {
-	hiddenSet := make(map[string]struct{}, len(hidden))
-	for _, modelName := range normalizeCodexCatalogModelNames(hidden) {
-		hiddenSet[modelName] = struct{}{}
-	}
-
-	visible := make([]string, 0)
-	for _, modelName := range normalizeCodexCatalogModelNames(strings.Split(currentModels, ",")) {
-		if _, isHidden := hiddenSet[modelName]; isHidden {
-			continue
-		}
-		visible = append(visible, modelName)
-	}
-	return filterKnownRetiredCodexModels(visible)
+	return normalizeCodexCatalogModelNames(candidates)
 }
 
 func readOptionMapValue(key string) string {
@@ -312,51 +271,21 @@ func normalizeCodexDiscoveryError(statusCode int, payload codexDiscoveryResponse
 	return fmt.Errorf("codex discovery failed: status=%d body=%s", statusCode, bodyText)
 }
 
-func normalizeCodexDiscoveryResult(items []codexDiscoveryItem) codexDiscoveryResult {
-	result := codexDiscoveryResult{
-		Models: make([]string, 0, len(items)),
-		Hidden: make([]string, 0),
-		Items:  make(map[string]codexDiscoveryItem, len(items)),
-	}
-	visibleSeen := make(map[string]struct{}, len(items))
-	hiddenSeen := make(map[string]struct{})
+func normalizeCodexModelIDs(items []codexDiscoveryItem) []string {
+	models := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
 	for _, item := range items {
 		slug := strings.TrimSpace(item.Slug)
 		if slug == "" {
 			continue
 		}
-		visibility := strings.ToLower(strings.TrimSpace(item.Visibility))
-		if visibility != "" && visibility != "list" {
-			if _, ok := hiddenSeen[slug]; !ok {
-				hiddenSeen[slug] = struct{}{}
-				result.Hidden = append(result.Hidden, slug)
-			}
+		if _, ok := seen[slug]; ok {
 			continue
 		}
-		if _, ok := visibleSeen[slug]; ok {
-			continue
-		}
-		visibleSeen[slug] = struct{}{}
-		result.Models = append(result.Models, slug)
-		item.Slug = slug
-		item.Visibility = visibility
-		result.Items[slug] = item
+		seen[slug] = struct{}{}
+		models = append(models, slug)
 	}
-	if len(result.Hidden) > 0 {
-		hiddenSet := make(map[string]struct{}, len(result.Hidden))
-		for _, slug := range result.Hidden {
-			hiddenSet[slug] = struct{}{}
-			delete(result.Items, slug)
-		}
-		visible := result.Models[:0]
-		for _, slug := range result.Models {
-			if _, hidden := hiddenSet[slug]; !hidden {
-				visible = append(visible, slug)
-			}
-		}
-		result.Models = visible
-	}
-	return result
+	return models
 }
 
 func resolveCodexDiscoveryClientVersion() string {
@@ -389,34 +318,34 @@ func resolveCodexDiscoveryBaseURL(channel *model.Channel) string {
 	return baseURL + "/backend-api/codex"
 }
 
-func doCodexDiscoveryRequest(ctx context.Context, channel *model.Channel, clientVersion string) (codexDiscoveryResult, error) {
+func doCodexDiscoveryRequest(ctx context.Context, channel *model.Channel, clientVersion string) ([]string, error) {
 	if channel == nil {
-		return codexDiscoveryResult{}, errors.New("codex discovery: nil channel")
+		return nil, errors.New("codex discovery: nil channel")
 	}
 	if channel.Type != constant.ChannelTypeCodex {
-		return codexDiscoveryResult{}, fmt.Errorf("codex discovery: invalid channel type %d", channel.Type)
+		return nil, fmt.Errorf("codex discovery: invalid channel type %d", channel.Type)
 	}
 
 	oauthKey, err := parseCodexOAuthKey(strings.TrimSpace(channel.Key))
 	if err != nil {
-		return codexDiscoveryResult{}, err
+		return nil, err
 	}
 	accessToken := strings.TrimSpace(oauthKey.AccessToken)
 	accountID := strings.TrimSpace(oauthKey.AccountID)
 	if accessToken == "" || accountID == "" {
-		return codexDiscoveryResult{}, errors.New("codex discovery: access_token/account_id are required")
+		return nil, errors.New("codex discovery: access_token/account_id are required")
 	}
 
 	client, err := NewProxyHttpClient(channel.GetSetting().Proxy)
 	if err != nil {
-		return codexDiscoveryResult{}, err
+		return nil, err
 	}
 
 	baseURL := resolveCodexDiscoveryBaseURL(channel)
 	requestURL := fmt.Sprintf("%s/models?client_version=%s", baseURL, clientVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return codexDiscoveryResult{}, err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("chatgpt-account-id", accountID)
@@ -425,51 +354,51 @@ func doCodexDiscoveryRequest(ctx context.Context, channel *model.Channel, client
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return codexDiscoveryResult{}, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return codexDiscoveryResult{}, err
+		return nil, err
 	}
 
 	var payload codexDiscoveryResponse
 	decodeErr := common.Unmarshal(body, &payload)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return codexDiscoveryResult{}, newCodexUpstreamAuthError("codex discovery", resp.StatusCode, body)
+			return nil, newCodexUpstreamAuthError("codex discovery", resp.StatusCode, body)
 		}
 		if decodeErr != nil {
-			return codexDiscoveryResult{}, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
+			return nil, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
 		}
-		return codexDiscoveryResult{}, normalizeCodexDiscoveryError(resp.StatusCode, payload, string(body))
+		return nil, normalizeCodexDiscoveryError(resp.StatusCode, payload, string(body))
 	}
 	if decodeErr != nil {
-		return codexDiscoveryResult{}, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
+		return nil, fmt.Errorf("codex discovery returned invalid JSON: %w", decodeErr)
 	}
 
-	result := normalizeCodexDiscoveryResult(payload.Models)
-	if len(result.Models) == 0 && len(result.Hidden) == 0 {
-		return codexDiscoveryResult{}, errors.New("codex discovery returned an empty model list")
+	models := normalizeCodexModelIDs(payload.Models)
+	if len(models) == 0 {
+		return nil, errors.New("codex discovery returned an empty model list")
 	}
-	return result, nil
+	return models, nil
 }
 
-func discoverCodexModels(ctx context.Context, channel *model.Channel) (codexDiscoveryResult, string, error) {
+func DiscoverCodexModelIDs(ctx context.Context, channel *model.Channel) ([]string, string, error) {
 	clientVersion := resolveCodexDiscoveryClientVersion()
-	result, err := doCodexDiscoveryRequest(ctx, channel, clientVersion)
+	models, err := doCodexDiscoveryRequest(ctx, channel, clientVersion)
 	if err == nil {
-		return result, clientVersion, nil
+		return models, clientVersion, nil
 	}
 
 	if channel != nil && channel.Id > 0 {
 		refreshCtx, cancel := context.WithTimeout(ctx, codexCatalogDefaultDiscoveryTimeout)
 		defer cancel()
 		if _, refreshedChannel, refreshErr := RefreshCodexChannelCredential(refreshCtx, channel.Id, CodexCredentialRefreshOptions{ResetCaches: false}); refreshErr == nil {
-			result, retryErr := doCodexDiscoveryRequest(ctx, refreshedChannel, clientVersion)
+			models, retryErr := doCodexDiscoveryRequest(ctx, refreshedChannel, clientVersion)
 			if retryErr == nil {
-				return result, clientVersion, nil
+				return models, clientVersion, nil
 			}
 			err = retryErr
 		} else if issue := ClassifyCodexCredentialIssue(refreshErr, 0); issue.IsAuth {
@@ -480,12 +409,7 @@ func discoverCodexModels(ctx context.Context, channel *model.Channel) (codexDisc
 			}
 		}
 	}
-	return codexDiscoveryResult{}, clientVersion, err
-}
-
-func DiscoverCodexModelIDs(ctx context.Context, channel *model.Channel) ([]string, string, error) {
-	result, clientVersion, err := discoverCodexModels(ctx, channel)
-	return result.Models, clientVersion, err
+	return nil, clientVersion, err
 }
 
 func ListCachedCodexDiscoveredModelIDs(channelID int) []string {
@@ -497,7 +421,7 @@ func ListCachedCodexDiscoveredModelIDs(channelID int) []string {
 	if err == nil && snapshot != nil && strings.TrimSpace(snapshot.Snapshot) != "" {
 		var items []codexDiscoveryItem
 		if common.UnmarshalJsonStr(snapshot.Snapshot, &items) == nil {
-			models := filterKnownRetiredCodexModels(normalizeCodexDiscoveryResult(items).Models)
+			models := normalizeCodexModelIDs(items)
 			if len(models) > 0 {
 				return models
 			}
@@ -519,7 +443,7 @@ func ListCachedCodexDiscoveredModelIDs(channelID int) []string {
 		}
 		models = append(models, modelName)
 	}
-	return filterKnownRetiredCodexModels(models)
+	return normalizeCodexCatalogModelNames(models)
 }
 
 func ListPromotedCodexModelIDs(channelID int) []string {
@@ -573,6 +497,7 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 	if err := model.DB.Where("promoted = ? AND model_name IN ?", true, normalized).Find(&candidates).Error; err != nil {
 		return nil, err
 	}
+	policy := loadCodexCatalogPolicy()
 	result := make(map[string]CodexCatalogMetadata, len(candidates))
 	for _, candidate := range candidates {
 		if candidate == nil {
@@ -580,7 +505,6 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 		}
 		endpoints := parseCodexCatalogEndpoints(candidate.SupportedEndpoints)
 		metadata := CodexCatalogMetadata{
-			CreatedTime:         int(candidate.CreatedTime),
 			DisplayName:         strings.TrimSpace(candidate.DisplayName),
 			Provider:            strings.TrimSpace(candidate.Provider),
 			OwnedBy:             strings.TrimSpace(candidate.OwnedBy),
@@ -589,20 +513,6 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 			ContextWindowTokens: candidate.ContextWindowTokens,
 			MaxTokens:           candidate.MaxTokens,
 			MaxCompletionTokens: candidate.MaxCompletionTokens,
-			BillingMode:         CodexCatalogBillingMode,
-		}
-		var discoveryItem codexDiscoveryItem
-		if err := common.UnmarshalJsonStr(candidate.DiscoveryMetadata, &discoveryItem); err == nil {
-			activeContext, activeOutput := codexDiscoveryLimits(discoveryItem)
-			if activeContext > 0 {
-				metadata.ContextWindowTokens = activeContext
-				metadata.MaxTokens = activeContext
-			}
-			if activeOutput > 0 {
-				metadata.MaxCompletionTokens = activeOutput
-			} else if reference, ok := CodexOpenAIReferencePriceForModel(candidate.ModelName); ok {
-				metadata.MaxCompletionTokens = reference.MaxCompletionTokens
-			}
 		}
 		var sourceMetadata CodexCatalogMetadata
 		if err := common.UnmarshalJsonStr(candidate.SourceMetadata, &sourceMetadata); err == nil {
@@ -618,8 +528,7 @@ func promotedCodexMetadataByModelName(modelNames []string) (map[string]CodexCata
 				metadata.Capabilities = append([]string(nil), overrideMetadata.Capabilities...)
 			}
 		}
-		applyCodexPinnedContextWindow(candidate.ModelName, &metadata)
-		result[candidate.ModelName] = metadata
+		result[candidate.ModelName] = mergeCodexCatalogMetadata(candidate.ModelName, metadata, policy.Overrides[candidate.ModelName])
 	}
 	return result, nil
 }
@@ -659,27 +568,15 @@ func codexCatalogStorageReady() bool {
 		model.DB.Migrator().HasTable(&model.CodexCatalogSnapshot{})
 }
 
-func codexCatalogSignature(models []string, policy codexCatalogPolicy, discoveryItems map[string]codexDiscoveryItem) (string, error) {
+func codexCatalogSignature(models []string, policy codexCatalogPolicy) (string, error) {
 	normalized := normalizeCodexCatalogModelNames(models)
 	sort.Strings(normalized)
-	canonicalDiscovery := make([]codexDiscoveryItem, 0, len(normalized))
-	for _, modelName := range normalized {
-		item := discoveryItems[modelName]
-		item.Slug = modelName
-		item.Visibility = ""
-		canonicalDiscovery = append(canonicalDiscovery, item)
-	}
-	discoveryPayload, err := common.Marshal(canonicalDiscovery)
-	if err != nil {
-		return "", err
-	}
 	policyPayload, err := common.Marshal(policy)
 	if err != nil {
 		return "", err
 	}
 	payload := strings.Join(normalized, "\n") +
 		"\n--validation-contract--\n" + codexCatalogValidationContractVersion +
-		"\n--oauth-discovery--\n" + string(discoveryPayload) +
 		"\n--policy--\n" + string(policyPayload)
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(payload))), nil
 }
@@ -731,57 +628,23 @@ func codexFallbackMetadataForModel(modelName string) CodexCatalogMetadata {
 		SupportedEndpoints:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
 		ContextWindowTokens: 272000,
 		MaxTokens:           272000,
-		BillingMode:         CodexCatalogBillingMode,
+		MaxCompletionTokens: 128000,
 	}
 	normalized := strings.ToLower(modelName)
 	switch {
+	case strings.Contains(normalized, "mini"):
+		meta.MaxCompletionTokens = 64000
 	case strings.Contains(normalized, "spark"):
 		meta.ContextWindowTokens = 128000
 		meta.MaxTokens = 128000
-	}
-	if reference, ok := CodexOpenAIReferencePriceForModel(modelName); ok {
-		meta.MaxCompletionTokens = reference.MaxCompletionTokens
+		meta.MaxCompletionTokens = 32000
 	}
 	return meta
-}
-
-func codexDiscoveryLimits(item codexDiscoveryItem) (int, int) {
-	contextLength := item.ContextWindow
-	if contextLength <= 0 {
-		contextLength = item.MaxContextWindow
-	}
-	maxCompletionTokens := item.MaxCompletionTokens
-	if maxCompletionTokens <= 0 {
-		maxCompletionTokens = item.MaxOutputTokens
-	}
-	return contextLength, maxCompletionTokens
-}
-
-func applyCodexDiscoveryLimits(meta *CodexCatalogMetadata, item codexDiscoveryItem) {
-	contextLength, maxCompletionTokens := codexDiscoveryLimits(item)
-	if contextLength > 0 {
-		meta.ContextWindowTokens = contextLength
-		meta.MaxTokens = contextLength
-	}
-	if maxCompletionTokens > 0 {
-		meta.MaxCompletionTokens = maxCompletionTokens
-	}
-}
-
-func applyCodexPinnedContextWindow(modelName string, meta *CodexCatalogMetadata) {
-	if meta == nil || modelName != "gpt-5.6-sol" {
-		return
-	}
-	meta.ContextWindowTokens = codexGPT56SolContextWindow
-	meta.MaxTokens = codexGPT56SolContextWindow
 }
 
 func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, override CodexCatalogMetadata) CodexCatalogMetadata {
 	meta := codexFallbackMetadataForModel(modelName)
 
-	if source.CreatedTime > 0 {
-		meta.CreatedTime = source.CreatedTime
-	}
 	if source.DisplayName != "" {
 		meta.DisplayName = source.DisplayName
 	}
@@ -815,9 +678,6 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 
 	if override.DisplayName != "" {
 		meta.DisplayName = override.DisplayName
-	}
-	if override.CreatedTime > 0 {
-		meta.CreatedTime = override.CreatedTime
 	}
 	if override.Provider != "" {
 		meta.Provider = override.Provider
@@ -862,12 +722,14 @@ func mergeCodexCatalogMetadata(modelName string, source CodexCatalogMetadata, ov
 	if meta.DisplayName == "" {
 		meta.DisplayName = modelName
 	}
-	meta.BillingMode = CodexCatalogBillingMode
 	if meta.MaxTokens <= 0 {
 		meta.MaxTokens = meta.ContextWindowTokens
 	}
 	if meta.ContextWindowTokens <= 0 {
 		meta.ContextWindowTokens = meta.MaxTokens
+	}
+	if meta.MaxCompletionTokens <= 0 {
+		meta.MaxCompletionTokens = 128000
 	}
 	return meta
 }
@@ -1024,12 +886,12 @@ func isExpectedCodexValidationOutput(output string) bool {
 	return strings.EqualFold(strings.TrimSpace(normalized), codexCatalogDefaultReply)
 }
 
-func syncCodexChannelModels(channel *model.Channel, promotedModels []string, allowEmpty bool) error {
+func syncCodexChannelModels(channel *model.Channel, promotedModels []string) error {
 	if channel == nil {
 		return errors.New("codex catalog sync: nil channel")
 	}
 	promotedModels = normalizeCodexCatalogModelNames(promotedModels)
-	if len(promotedModels) == 0 && !allowEmpty {
+	if len(promotedModels) == 0 {
 		return errors.New("codex catalog sync: refusing to replace channel models with an empty promoted catalog")
 	}
 	newModels := strings.Join(promotedModels, ",")
@@ -1046,16 +908,9 @@ func syncCodexChannelModels(channel *model.Channel, promotedModels []string, all
 		tx.Rollback()
 		return err
 	}
-	if len(promotedModels) == 0 {
-		if err := tx.Where("channel_id = ?", channel.Id).Delete(&model.Ability{}).Error; err != nil {
-			tx.Rollback()
-			return err
-		}
-	} else {
-		if err := channel.UpdateAbilities(tx); err != nil {
-			tx.Rollback()
-			return err
-		}
+	if err := channel.UpdateAbilities(tx); err != nil {
+		tx.Rollback()
+		return err
 	}
 	return tx.Commit().Error
 }
@@ -1095,18 +950,14 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		return nil, fmt.Errorf("codex catalog sync: channel %d is not codex", channelID)
 	}
 
-	discovery, clientVersion, err := discoverCodexModels(ctx, channel)
+	discoveredModels, clientVersion, err := DiscoverCodexModelIDs(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
-	discoveredModels := codexCatalogCandidateModelIDs(discovery.Models, discovery.Hidden)
-	hiddenModels := make(map[string]struct{}, len(discovery.Hidden))
-	for _, modelName := range discovery.Hidden {
-		hiddenModels[modelName] = struct{}{}
-	}
+	discoveredModels = codexCatalogCandidateModelIDs(discoveredModels)
 
 	policy := loadCodexCatalogPolicy()
-	signature, err := codexCatalogSignature(discoveredModels, policy, discovery.Items)
+	signature, err := codexCatalogSignature(discoveredModels, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -1117,10 +968,6 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		if len(existingCandidates) == 0 || len(promotedModels) == 0 {
 			latestSnapshot = nil
 		} else {
-			promotedModels = prioritizeCodexDefaultModel(promotedModels, policy.DefaultModel)
-			if err := syncCodexChannelModels(channel, promotedModels, false); err != nil {
-				return nil, err
-			}
 			return &CodexCatalogSyncResult{
 				ChannelID:  channelID,
 				Discovered: discoveredModels,
@@ -1132,9 +979,7 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 
 	snapshotItems := make([]codexDiscoveryItem, 0, len(discoveredModels))
 	for _, modelName := range discoveredModels {
-		item := discovery.Items[modelName]
-		item.Slug = modelName
-		snapshotItems = append(snapshotItems, item)
+		snapshotItems = append(snapshotItems, codexDiscoveryItem{Slug: modelName})
 	}
 	snapshotPayload, err := common.Marshal(snapshotItems)
 	if err != nil {
@@ -1147,6 +992,10 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		ModelCount:    len(discoveredModels),
 		Snapshot:      string(snapshotPayload),
 	}
+	if err := snapshot.Save(); err != nil {
+		return nil, err
+	}
+
 	sourceMetadata := codexSourceMetadataByModelName(discoveredModels)
 	now := common.GetTimestamp()
 	seen := make(map[string]struct{}, len(discoveredModels))
@@ -1158,8 +1007,6 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		sourceMeta := sourceMetadata[modelName]
 		overrideMeta := policy.Overrides[modelName]
 		mergedMeta := mergeCodexCatalogMetadata(modelName, sourceMeta, overrideMeta)
-		applyCodexDiscoveryLimits(&mergedMeta, discovery.Items[modelName])
-		applyCodexPinnedContextWindow(modelName, &mergedMeta)
 
 		candidate, findErr := model.FindCodexCatalogCandidate(channelID, modelName)
 		if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
@@ -1172,9 +1019,10 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 			}
 		}
 
-		discoveryItem := discovery.Items[modelName]
-		discoveryItem.Slug = modelName
-		discoveryPayload, _ := common.Marshal(discoveryItem)
+		discoveryPayload, _ := common.Marshal(map[string]any{
+			"model":          modelName,
+			"client_version": clientVersion,
+		})
 		sourcePayload, _ := common.Marshal(sourceMeta)
 		overridePayload, _ := common.Marshal(overrideMeta)
 
@@ -1250,30 +1098,15 @@ func SyncCodexCatalog(ctx context.Context, channelID int) (*CodexCatalogSyncResu
 		}
 		candidate.Promoted = false
 		candidate.Status = model.CodexCatalogStatusRejected
-		if _, hidden := hiddenModels[candidate.ModelName]; hidden {
-			candidate.ValidationState = "hidden_upstream"
-			candidate.ValidationError = "model hidden by upstream visibility policy"
-		} else {
-			candidate.ValidationState = "no_longer_discovered"
-			candidate.ValidationError = "model disappeared from dynamic discovery"
-		}
+		candidate.ValidationState = "no_longer_discovered"
+		candidate.ValidationError = "model disappeared from dynamic discovery"
 		if err := candidate.Save(); err != nil {
 			return nil, err
 		}
 	}
 
 	promotedModels = prioritizeCodexDefaultModel(promotedModels, policy.DefaultModel)
-	modelsToSync := promotedModels
-	allowEmptyCatalog := false
-	if len(modelsToSync) == 0 && len(discovery.Hidden) > 0 {
-		// Visibility is authoritative even when every visible/fallback candidate fails validation.
-		modelsToSync = codexCatalogModelsAfterFailedPromotion(channel.Models, discovery.Hidden)
-		allowEmptyCatalog = true
-	}
-	if err := syncCodexChannelModels(channel, modelsToSync, allowEmptyCatalog); err != nil {
-		return nil, err
-	}
-	if err := snapshot.Save(); err != nil {
+	if err := syncCodexChannelModels(channel, promotedModels); err != nil {
 		return nil, err
 	}
 

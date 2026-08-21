@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch Codex Desktop OAuth credential for Atius Router synchronization
+
+[Path]
+PathChanged=/home/ubuntu/.codex/auth.json
+PathModified=/home/ubuntu/.codex/auth.json
+Unit=atius-codex-channel-sync.service
+
+[Install]
+WantedBy=default.target

@@ -331,6 +331,18 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if _, err := MigrateLegacyRerankerEndpointType(); err != nil {
+		return err
+	}
+	if _, err := MigrateOpenAICodexVendor(); err != nil {
+		return err
+	}
+	if _, err := MigrateAtiusLocalChannelName(); err != nil {
+		return err
+	}
+	if _, err := MigrateAtiusLocalEmbeddingEndpoint(); err != nil {
+		return err
+	}
 	if _, err := EnsureAtiusLocalEmbeddingsMetadata(); err != nil {
 		return err
 	}
@@ -410,6 +422,18 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if _, err := MigrateLegacyRerankerEndpointType(); err != nil {
+		return err
+	}
+	if _, err := MigrateOpenAICodexVendor(); err != nil {
+		return err
+	}
+	if _, err := MigrateAtiusLocalChannelName(); err != nil {
+		return err
+	}
+	if _, err := MigrateAtiusLocalEmbeddingEndpoint(); err != nil {
+		return err
 	}
 	if _, err := EnsureAtiusLocalEmbeddingsMetadata(); err != nil {
 		return err

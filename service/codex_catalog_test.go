@@ -18,6 +18,29 @@ import (
 	"gorm.io/gorm"
 )
 
+func setupCodexCatalogTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	common.RedisEnabled = false
+
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	model.LOG_DB = db
+	require.NoError(t, db.AutoMigrate(&model.CodexCatalogCandidate{}, &model.CodexCatalogSnapshot{}))
+
+	t.Cleanup(func() {
+		sqlDB, err := db.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	return db
+}
+
 func TestValidateCodexCandidateUsesListInput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
@@ -71,7 +94,7 @@ func TestValidateCodexCandidateDetectsStreamWithoutContentType(t *testing.T) {
 func TestSyncCodexChannelModelsRejectsEmptyPromotion(t *testing.T) {
 	channel := &model.Channel{Id: 5, Models: "gpt-5.4,gpt-5.4-mini"}
 
-	err := syncCodexChannelModels(channel, nil, false)
+	err := syncCodexChannelModels(channel, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty promoted catalog")
@@ -91,19 +114,13 @@ func TestDefaultCodexCatalogPolicyIncludesOfficialGPT56Overrides(t *testing.T) {
 		"gpt-5.6-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
 		"gpt-5.6-luna":  {"low", "medium", "high", "xhigh", "max"},
 	}
-	expectedContexts := map[string]int{
-		"gpt-5.6-sol":   codexGPT56SolContextWindow,
-		"gpt-5.6-terra": 272000,
-		"gpt-5.6-luna":  272000,
-	}
 	for modelName, displayName := range expectedNames {
 		meta, ok := policy.Overrides[modelName]
 		require.True(t, ok, modelName)
 		assert.Equal(t, displayName, meta.DisplayName)
-		assert.Equal(t, expectedContexts[modelName], meta.ContextWindowTokens)
-		assert.Equal(t, expectedContexts[modelName], meta.MaxTokens)
-		assert.Zero(t, meta.MaxCompletionTokens)
-		assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
+		assert.Equal(t, 1050000, meta.ContextWindowTokens)
+		assert.Equal(t, 1050000, meta.MaxTokens)
+		assert.Equal(t, 128000, meta.MaxCompletionTokens)
 		assert.Equal(t, constant.EndpointTypeOpenAIResponse, meta.EndpointPreference)
 		assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI}, meta.SupportedEndpoints)
 		assert.Equal(t, expectedEfforts[modelName], meta.SupportedReasoningEfforts)
@@ -134,203 +151,17 @@ func TestFallbackCodexModelIDsIncludesOfficialGPT56Models(t *testing.T) {
 	assert.Contains(t, fallback, "gpt-5.6-sol")
 	assert.Contains(t, fallback, "gpt-5.6-terra")
 	assert.Contains(t, fallback, "gpt-5.6-luna")
-	assert.NotContains(t, fallback, "gpt-5.4")
-	assert.NotContains(t, fallback, "gpt-5.4-mini")
 }
 
 func TestCodexCatalogCandidateModelIDsCombinesDiscoveryAndCuratedFallback(t *testing.T) {
-	candidates := codexCatalogCandidateModelIDs(
-		[]string{"gpt-5.4", "codex-auto-review"},
-		[]string{"gpt-5.4"},
-	)
+	candidates := codexCatalogCandidateModelIDs([]string{"gpt-5.4", "codex-auto-review"})
 
-	assert.NotContains(t, candidates, "gpt-5.4")
+	assert.Equal(t, 1, countModelName(candidates, "gpt-5.4"))
 	assert.Contains(t, candidates, "codex-auto-review")
 	assert.Contains(t, candidates, "gpt-5.5")
 	assert.Contains(t, candidates, "gpt-5.6-sol")
 	assert.Contains(t, candidates, "gpt-5.6-terra")
 	assert.Contains(t, candidates, "gpt-5.6-luna")
-}
-
-func TestNormalizeCodexDiscoveryResultHidesSlugAcrossDuplicates(t *testing.T) {
-	result := normalizeCodexDiscoveryResult([]codexDiscoveryItem{
-		{Slug: "gpt-5.6-terra", Visibility: "list"},
-		{Slug: "gpt-5.4"},
-		{Slug: "gpt-5.4", Visibility: " HIDE "},
-		{Slug: "gpt-5.5", Visibility: "list"},
-		{Slug: "gpt-5.5"},
-		{Slug: "gpt-5.3", Visibility: "none"},
-		{Slug: "gpt-future", Visibility: "preview"},
-	})
-
-	require.Equal(t, []string{"gpt-5.6-terra", "gpt-5.5"}, result.Models)
-	require.Equal(t, []string{"gpt-5.4", "gpt-5.3", "gpt-future"}, result.Hidden)
-	require.Contains(t, result.Items, "gpt-5.6-terra")
-	require.NotContains(t, result.Items, "gpt-5.4")
-}
-
-func TestNormalizeCodexDiscoveryResultPreservesActiveLimits(t *testing.T) {
-	result := normalizeCodexDiscoveryResult([]codexDiscoveryItem{{
-		Slug:             "gpt-5.6-sol",
-		Visibility:       "list",
-		ContextWindow:    272000,
-		MaxContextWindow: 1050000,
-		MaxOutputTokens:  64000,
-	}})
-
-	contextLength, maxCompletionTokens := codexDiscoveryLimits(result.Items["gpt-5.6-sol"])
-	require.Equal(t, 272000, contextLength)
-	require.Equal(t, 64000, maxCompletionTokens)
-}
-
-func TestDoCodexDiscoveryRequestAcceptsHiddenOnlyCatalog(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/backend-api/codex/models", r.URL.Path)
-		_, _ = w.Write([]byte(`{"models":[{"slug":"gpt-5.4","visibility":"hide"}]}`))
-	}))
-	defer server.Close()
-
-	channel := &model.Channel{
-		Type: constant.ChannelTypeCodex,
-		Key:  `{"access_token":"access-test","account_id":"acct-test"}`,
-	}
-	channel.BaseURL = common.GetPointer(server.URL)
-
-	result, err := doCodexDiscoveryRequest(context.Background(), channel, "0.144.6")
-
-	require.NoError(t, err)
-	assert.Empty(t, result.Models)
-	require.Equal(t, []string{"gpt-5.4"}, result.Hidden)
-}
-
-func TestSyncCodexChannelModelsRemovesAbilitiesForAuthoritativeEmptyCatalog(t *testing.T) {
-	originalDB := model.DB
-	t.Cleanup(func() { model.DB = originalDB })
-
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	model.DB = db
-	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
-
-	channel := &model.Channel{
-		Id:     5,
-		Type:   constant.ChannelTypeCodex,
-		Name:   "OpenAI - Codex",
-		Models: "gpt-5.4",
-		Group:  "default",
-		Status: common.ChannelStatusEnabled,
-	}
-	require.NoError(t, db.Create(channel).Error)
-	require.NoError(t, db.Create(&model.Ability{
-		Group:     "default",
-		Model:     "gpt-5.4",
-		ChannelId: channel.Id,
-		Enabled:   true,
-	}).Error)
-
-	require.NoError(t, syncCodexChannelModels(channel, nil, true))
-
-	var stored model.Channel
-	require.NoError(t, db.First(&stored, channel.Id).Error)
-	assert.Empty(t, stored.Models)
-	var abilityCount int64
-	require.NoError(t, db.Model(&model.Ability{}).Where("channel_id = ?", channel.Id).Count(&abilityCount).Error)
-	assert.Zero(t, abilityCount)
-}
-
-func TestCodexCatalogModelsAfterFailedPromotionRemovesHiddenAndRetiredModels(t *testing.T) {
-	models := codexCatalogModelsAfterFailedPromotion(
-		"gpt-5.4,gpt-5.5,gpt-5.6-terra,internal-preview",
-		[]string{"internal-preview", "gpt-5.4"},
-	)
-
-	assert.Equal(t, []string{"gpt-5.5", "gpt-5.6-terra"}, models)
-}
-
-func TestLegacyCodexSnapshotAndCandidatesCannotReintroduceKnownRetiredModels(t *testing.T) {
-	originalDB := model.DB
-	t.Cleanup(func() { model.DB = originalDB })
-
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	model.DB = db
-	require.NoError(t, db.AutoMigrate(&model.CodexCatalogSnapshot{}, &model.CodexCatalogCandidate{}))
-
-	snapshotPayload, err := common.Marshal([]codexDiscoveryItem{
-		{Slug: "gpt-5.4"},
-		{Slug: "gpt-5.4-mini"},
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.CodexCatalogSnapshot{
-		ChannelID:    5,
-		SnapshotHash: "legacy",
-		ModelCount:   2,
-		Snapshot:     string(snapshotPayload),
-		CreatedTime:  1,
-	}).Error)
-	require.NoError(t, db.Create(&[]model.CodexCatalogCandidate{
-		{ChannelID: 5, ModelName: "gpt-5.4", Promoted: true},
-		{ChannelID: 5, ModelName: "gpt-5.4-mini", Promoted: true},
-	}).Error)
-
-	assert.Empty(t, ListCachedCodexDiscoveredModelIDs(5))
-}
-
-func TestPromotedCodexMetadataUsesOfficialOutputFallbackWhenOAuthOmitsIt(t *testing.T) {
-	originalDB := model.DB
-	t.Cleanup(func() { model.DB = originalDB })
-
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	model.DB = db
-	require.NoError(t, db.AutoMigrate(&model.CodexCatalogSnapshot{}, &model.CodexCatalogCandidate{}))
-	require.NoError(t, db.Create(&model.CodexCatalogCandidate{
-		ChannelID:           5,
-		ModelName:           "gpt-5.6-sol",
-		Promoted:            true,
-		ContextWindowTokens: 272000,
-		MaxTokens:           272000,
-		MaxCompletionTokens: 128000,
-		SupportedEndpoints:  `["openai-response","openai"]`,
-		EndpointPreference:  string(constant.EndpointTypeOpenAIResponse),
-	}).Error)
-
-	metadata, err := promotedCodexMetadataByModelName([]string{"gpt-5.6-sol"})
-	require.NoError(t, err)
-	meta, ok := metadata["gpt-5.6-sol"]
-	require.True(t, ok)
-	assert.Equal(t, codexGPT56SolContextWindow, meta.ContextWindowTokens)
-	assert.Equal(t, codexGPT56SolContextWindow, meta.MaxTokens)
-	assert.Equal(t, 128000, meta.MaxCompletionTokens)
-	assert.Equal(t, CodexCatalogBillingMode, meta.BillingMode)
-
-	discovery, err := common.Marshal(codexDiscoveryItem{
-		Slug:            "gpt-5.6-sol",
-		ContextWindow:   260000,
-		MaxOutputTokens: 64000,
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.Model(&model.CodexCatalogCandidate{}).
-		Where("model_name = ?", "gpt-5.6-sol").
-		Update("discovery_metadata", string(discovery)).Error)
-
-	metadata, err = promotedCodexMetadataByModelName([]string{"gpt-5.6-sol"})
-	require.NoError(t, err)
-	meta = metadata["gpt-5.6-sol"]
-	assert.Equal(t, codexGPT56SolContextWindow, meta.ContextWindowTokens)
-	assert.Equal(t, codexGPT56SolContextWindow, meta.MaxTokens)
-	assert.Equal(t, 64000, meta.MaxCompletionTokens)
-}
-
-func TestDefaultCodexCatalogModelTracksVisibleReplacement(t *testing.T) {
-	policy := defaultCodexCatalogPolicy()
-
-	assert.Equal(t, "gpt-5.6-terra", policy.DefaultModel)
-	assert.NotContains(t, policy.Overrides, "gpt-5.4")
-	assert.NotContains(t, policy.Overrides, "gpt-5.4-mini")
 }
 
 func TestDefaultCodexCatalogPolicyDeniesInternalAutoReviewModel(t *testing.T) {
@@ -358,29 +189,14 @@ func countModelName(models []string, target string) int {
 func TestCodexCatalogSignatureChangesWithPolicy(t *testing.T) {
 	models := []string{"gpt-5.6-sol", "gpt-5.4"}
 	basePolicy := defaultCodexCatalogPolicy()
-	baseSignature, err := codexCatalogSignature(models, basePolicy, nil)
+	baseSignature, err := codexCatalogSignature(models, basePolicy)
 	require.NoError(t, err)
 
 	changedPolicy := defaultCodexCatalogPolicy()
 	meta := changedPolicy.Overrides["gpt-5.6-sol"]
-	meta.MaxTokens = 260000
+	meta.MaxCompletionTokens = 64000
 	changedPolicy.Overrides["gpt-5.6-sol"] = meta
-	changedSignature, err := codexCatalogSignature(models, changedPolicy, nil)
-	require.NoError(t, err)
-
-	assert.NotEqual(t, baseSignature, changedSignature)
-}
-
-func TestCodexCatalogSignatureChangesWithOAuthLimits(t *testing.T) {
-	models := []string{"gpt-5.6-sol"}
-	policy := defaultCodexCatalogPolicy()
-	baseSignature, err := codexCatalogSignature(models, policy, map[string]codexDiscoveryItem{
-		"gpt-5.6-sol": {ContextWindow: 272000},
-	})
-	require.NoError(t, err)
-	changedSignature, err := codexCatalogSignature(models, policy, map[string]codexDiscoveryItem{
-		"gpt-5.6-sol": {ContextWindow: 272000, MaxOutputTokens: 64000},
-	})
+	changedSignature, err := codexCatalogSignature(models, changedPolicy)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, baseSignature, changedSignature)
@@ -399,9 +215,6 @@ func TestNextCodexCatalogSyncDelay(t *testing.T) {
 
 	delay = nextCodexCatalogSyncDelay(time.Date(2026, 7, 7, 4, 30, 0, 0, location))
 	assert.Equal(t, 23*time.Hour+30*time.Minute, delay)
-
-	delay = nextCodexCatalogSyncDelay(time.Date(2026, 7, 7, 6, 30, 0, 0, time.UTC))
-	assert.Equal(t, 30*time.Minute, delay)
 }
 
 func TestMergeCodexCatalogMetadataPrefersOverrideAndKeepsContextWindowGroup(t *testing.T) {
@@ -415,8 +228,8 @@ func TestMergeCodexCatalogMetadataPrefersOverrideAndKeepsContextWindowGroup(t *t
 			DisplayName:               "Override Name",
 			EndpointPreference:        constant.EndpointTypeOpenAIResponse,
 			SupportedEndpoints:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI},
-			ContextWindowTokens:       1050000,
-			MaxTokens:                 1050000,
+			ContextWindowTokens:       1000000,
+			MaxTokens:                 1000000,
 			MaxCompletionTokens:       128000,
 			SupportedReasoningEfforts: []string{"none", "high", "max"},
 			Capabilities:              []string{"streaming", "function_calling"},
@@ -425,26 +238,51 @@ func TestMergeCodexCatalogMetadataPrefersOverrideAndKeepsContextWindowGroup(t *t
 
 	assert.Equal(t, "Override Name", meta.DisplayName)
 	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAI}, meta.SupportedEndpoints)
-	assert.Equal(t, 1050000, meta.ContextWindowTokens)
-	assert.Equal(t, 1050000, meta.MaxTokens)
+	assert.Equal(t, 1000000, meta.ContextWindowTokens)
+	assert.Equal(t, 1000000, meta.MaxTokens)
 	assert.Equal(t, 128000, meta.MaxCompletionTokens)
 	assert.Equal(t, []string{"none", "high", "max"}, meta.SupportedReasoningEfforts)
 	assert.Equal(t, []string{"streaming", "function_calling"}, meta.Capabilities)
 }
 
-func TestApplyCodexDiscoveryLimitsPrefersOAuthPerField(t *testing.T) {
-	meta := codexFallbackMetadataForModel("gpt-5.6-sol")
-	require.Equal(t, 128000, meta.MaxCompletionTokens)
-
-	applyCodexDiscoveryLimits(&meta, codexDiscoveryItem{ContextWindow: 272000})
-	require.Equal(t, 272000, meta.ContextWindowTokens)
-	require.Equal(t, 128000, meta.MaxCompletionTokens)
-
-	applyCodexDiscoveryLimits(&meta, codexDiscoveryItem{
-		ContextWindow:    260000,
-		MaxOutputTokens:  64000,
-		MaxContextWindow: 1050000,
+func TestPromotedCodexMetadataByModelNameReappliesCurrentPolicyOverrides(t *testing.T) {
+	db := setupCodexCatalogTestDB(t)
+	endpoints, err := common.Marshal([]string{
+		string(constant.EndpointTypeOpenAIResponse),
+		string(constant.EndpointTypeOpenAI),
 	})
-	require.Equal(t, 260000, meta.ContextWindowTokens)
-	require.Equal(t, 64000, meta.MaxCompletionTokens)
+	require.NoError(t, err)
+
+	require.NoError(t, db.Create(&model.CodexCatalogCandidate{
+		ChannelID:            9,
+		ModelName:            "gpt-5.4",
+		Promoted:             true,
+		DisplayName:          "Stale GPT-5.4",
+		Provider:             "OpenAI Codex",
+		OwnedBy:              "codex",
+		EndpointPreference:   string(constant.EndpointTypeOpenAIResponse),
+		SupportedEndpoints:   string(endpoints),
+		ContextWindowTokens:  272000,
+		MaxTokens:            272000,
+		MaxCompletionTokens:  128000,
+		SourceMetadata:       `{}`,
+		OverrideMetadata:     `{}`,
+		DiscoveryMetadata:    `{}`,
+		DiscoveryHash:        "hash",
+		LastDiscoveredTime:   common.GetTimestamp(),
+		LastSeenTime:         common.GetTimestamp(),
+		LastValidatedTime:    common.GetTimestamp(),
+		LastPromotedTime:     common.GetTimestamp(),
+		Status:               model.CodexCatalogStatusPromoted,
+		ValidationState:      "ok",
+	}).Error)
+
+	metadataByModel, err := promotedCodexMetadataByModelName([]string{"gpt-5.4"})
+	require.NoError(t, err)
+	meta, ok := metadataByModel["gpt-5.4"]
+	require.True(t, ok)
+	assert.Equal(t, "OpenAI Codex GPT-5.4", meta.DisplayName)
+	assert.Equal(t, 1000000, meta.ContextWindowTokens)
+	assert.Equal(t, 1000000, meta.MaxTokens)
+	assert.Equal(t, 128000, meta.MaxCompletionTokens)
 }

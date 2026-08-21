@@ -112,7 +112,7 @@ func TestEnsureAtiusLocalEmbeddingsMetadataCreatesMissingRerankerOnly(t *testing
 	require.Equal(t, "TEI GTE Reranker", reranker.Description)
 	require.Equal(t, "AtiusLocal", reranker.Icon)
 	require.Equal(t, "Reranker,Local TEI,Governor", reranker.Tags)
-	require.Equal(t, `{"jina-rerank":{"method":"POST","path":"/v1/rerank"}}`, reranker.Endpoints)
+	require.Equal(t, `{"reranker":{"method":"POST","path":"/v1/rerank"}}`, reranker.Endpoints)
 	require.Equal(t, 1, reranker.Status)
 	require.Equal(t, 1, reranker.SyncOfficial)
 	require.Equal(t, NameRuleExact, reranker.NameRule)

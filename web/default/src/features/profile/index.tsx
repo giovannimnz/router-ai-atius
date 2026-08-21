@@ -56,7 +56,7 @@ export function Profile() {
 
           <CardStaggerItem>
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
-              <div className='space-y-4 sm:space-y-6'>
+              <div className='min-w-0 space-y-4 sm:space-y-6'>
                 <ProfileSettingsCard
                   profile={profile}
                   loading={loading}
@@ -69,7 +69,7 @@ export function Profile() {
                 <ProfileSecurityCard profile={profile} loading={loading} />
               </div>
 
-              <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
+              <div className='min-w-0 space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
                 {checkinEnabled && (
                   <CheckinCalendarCard
                     checkinEnabled={checkinEnabled}

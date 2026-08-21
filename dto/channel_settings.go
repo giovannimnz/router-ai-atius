@@ -17,7 +17,10 @@ type ChannelSettings struct {
 	// Use for channels like MiniMax that may occasionally generate CJK tokens in non-CJK contexts.
 	StripCJK              bool                   `json:"strip_cjk,omitempty"`
 	CodexCredentialHealth *CodexCredentialHealth `json:"codex_credential_health,omitempty"`
+	CodexCredentialSource string                 `json:"codex_credential_source,omitempty"`
 }
+
+const CodexCredentialSourceExternalFile = "external_file"
 
 type CodexCredentialHealth struct {
 	LastProbeAt          string `json:"last_probe_at,omitempty"`

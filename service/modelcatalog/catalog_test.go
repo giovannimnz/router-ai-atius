@@ -173,6 +173,18 @@ func TestModelCatalogEndpointTypeLabelsDeduplicateResponseModes(t *testing.T) {
 	require.Equal(t, []string{"OpenAI-Responses", "OpenAI-Compatible"}, labels)
 }
 
+func TestModelCatalogCanonicalizesRerankerRouteAndLabel(t *testing.T) {
+	t.Parallel()
+
+	endpointTypes := []constant.EndpointType{
+		constant.EndpointTypeJinaRerank,
+		constant.EndpointTypeReranker,
+	}
+
+	require.Equal(t, []string{"Reranker"}, EndpointTypeLabels(endpointTypes))
+	require.Equal(t, map[string]string{"reranker": "/v1/rerank"}, EndpointRoutes(endpointTypes))
+}
+
 func TestModelCatalogPricingPublishesExplicitUnit(t *testing.T) {
 	ratio_setting.InitRatioSettings()
 	entry := BuildCatalogEntry(model.Pricing{

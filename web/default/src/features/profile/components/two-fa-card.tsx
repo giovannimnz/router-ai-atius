@@ -20,6 +20,7 @@ import { Shield, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -48,7 +49,7 @@ type DialogKey = 'setup' | 'disable' | 'backup'
 
 export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
   const { t } = useTranslation()
-  const { status, loading, refetch } = useTwoFA(!pageLoading)
+  const { status, loading, error, refetch } = useTwoFA(!pageLoading)
   const dialogs = useDialogs<DialogKey>()
 
   if (pageLoading || loading) {
@@ -69,8 +70,10 @@ export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
     <>
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='p-3 sm:p-5'>
-          <CardTitle className='text-lg tracking-tight sm:text-xl'>
-            {t('Two-Factor Authentication')}
+          <CardTitle>
+            <h2 className='text-lg tracking-tight sm:text-xl'>
+              {t('Two-Factor Authentication')}
+            </h2>
           </CardTitle>
           <CardDescription className='text-xs sm:text-sm'>
             {t('Add an extra layer of security to your account')}
@@ -78,82 +81,102 @@ export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
         </CardHeader>
 
         <CardContent className='p-3 sm:p-5'>
-          <div className='space-y-6'>
-            {/* Status Section */}
-            <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between xl:flex-col 2xl:flex-row'>
-              <div className='flex items-start gap-4'>
-                <div className='bg-muted rounded-md p-2'>
-                  <Shield className='h-5 w-5' />
-                </div>
-                <div className='space-y-1'>
-                  <div className='flex items-center gap-2'>
-                    <p className='font-medium'>{t('Two-Step Verification')}</p>
-                    {status.enabled ? (
-                      <StatusBadge
-                        label={t('Enabled')}
-                        variant='success'
-                        showDot
-                        copyable={false}
-                      />
-                    ) : (
-                      <StatusBadge
-                        label={t('Disabled')}
-                        variant='neutral'
-                        showDot
-                        copyable={false}
-                      />
-                    )}
-                    {status.locked && (
-                      <StatusBadge
-                        label={t('Locked')}
-                        variant='danger'
-                        showDot
-                        copyable={false}
-                      />
-                    )}
-                  </div>
-                  <p className='text-muted-foreground text-sm'>
-                    {status.enabled
-                      ? t('Backup codes remaining: {{count}}', {
-                          count: status.backup_codes_remaining,
-                        })
-                      : t('Add an extra layer of security to your account')}
-                  </p>
-                </div>
-              </div>
-
-              {!status.enabled && (
-                <Button
-                  className='w-full sm:w-auto xl:w-full 2xl:w-auto'
-                  onClick={() => dialogs.open('setup')}
-                >
-                  {t('Enable')}
-                </Button>
-              )}
-            </div>
-
-            {/* Actions Section - Only show when enabled */}
-            {status.enabled && (
-              <div className='flex flex-col gap-3 border-t pt-6 sm:flex-row xl:flex-col 2xl:flex-row'>
+          {error && (
+            <Alert variant='destructive'>
+              <AlertTriangle />
+              <AlertTitle>{t('Failed to load')}</AlertTitle>
+              <AlertDescription className='flex flex-wrap items-center justify-between gap-3'>
+                <span>{t('Failed to load 2FA status')}</span>
                 <Button
                   variant='outline'
-                  className='flex-1'
-                  onClick={() => dialogs.open('backup')}
+                  size='sm'
+                  onClick={() => void refetch()}
                 >
-                  <RefreshCw className='mr-2 h-4 w-4' />
-                  {t('Regenerate Backup Codes')}
+                  {t('Retry')}
                 </Button>
-                <Button
-                  variant='destructive'
-                  className='flex-1'
-                  onClick={() => dialogs.open('disable')}
-                >
-                  <AlertTriangle className='mr-2 h-4 w-4' />
-                  {t('Disable 2FA')}
-                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {!error && (
+            <div className='min-w-0 space-y-6'>
+              {/* Status Section */}
+              <div className='flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between xl:flex-col 2xl:flex-row'>
+                <div className='flex min-w-0 items-start gap-4'>
+                  <div className='bg-muted rounded-md p-2'>
+                    <Shield className='h-5 w-5' />
+                  </div>
+                  <div className='min-w-0 space-y-1'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <p className='font-medium'>
+                        {t('Two-Step Verification')}
+                      </p>
+                      {status.enabled ? (
+                        <StatusBadge
+                          label={t('Enabled')}
+                          variant='success'
+                          showDot
+                          copyable={false}
+                        />
+                      ) : (
+                        <StatusBadge
+                          label={t('Disabled')}
+                          variant='neutral'
+                          showDot
+                          copyable={false}
+                        />
+                      )}
+                      {status.locked && (
+                        <StatusBadge
+                          label={t('Locked')}
+                          variant='danger'
+                          showDot
+                          copyable={false}
+                        />
+                      )}
+                    </div>
+                    <p className='text-muted-foreground text-sm'>
+                      {status.enabled
+                        ? t('Backup codes remaining: {{count}}', {
+                            count: status.backup_codes_remaining,
+                          })
+                        : t('Add an extra layer of security to your account')}
+                    </p>
+                  </div>
+                </div>
+
+                {!status.enabled && (
+                  <Button
+                    className='w-full whitespace-normal sm:w-auto xl:w-full 2xl:w-auto'
+                    onClick={() => dialogs.open('setup')}
+                  >
+                    {t('Enable')}
+                  </Button>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Actions Section - Only show when enabled */}
+              {status.enabled && (
+                <div className='flex flex-col gap-3 border-t pt-6 2xl:flex-row'>
+                  <Button
+                    variant='outline'
+                    className='h-auto min-w-0 items-start justify-start px-3 py-2.5 text-left whitespace-normal 2xl:flex-1'
+                    onClick={() => dialogs.open('backup')}
+                  >
+                    <RefreshCw className='mt-0.5 mr-2 h-4 w-4 shrink-0' />
+                    {t('Regenerate Backup Codes')}
+                  </Button>
+                  <Button
+                    variant='destructive'
+                    className='h-auto min-w-0 items-start justify-start px-3 py-2.5 text-left whitespace-normal 2xl:flex-1'
+                    onClick={() => dialogs.open('disable')}
+                  >
+                    <AlertTriangle className='mt-0.5 mr-2 h-4 w-4 shrink-0' />
+                    {t('Disable 2FA')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

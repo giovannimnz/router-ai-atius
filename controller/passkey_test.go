@@ -16,7 +16,8 @@ func TestRespondPasskeyDisabledUsesRequestLocale(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	require.NoError(t, i18n.Init())
 
-	ctx, recorder := gin.CreateTestContext(httptest.NewRecorder())
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/user/passkey/login/begin", nil)
 	ctx.Request.Header.Set("Accept-Language", "pt-BR,pt;q=0.9")
 

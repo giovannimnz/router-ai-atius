@@ -3,7 +3,7 @@
 ## Estado atual
 
 - O runtime live do router usa `SQL_DSN` via host PgBouncer para o banco `newapi`.
-- O unit file ativo aponta para `10.1.1.1:6432/newapi`.
+- O unit file ativo aponta para `10.11.1.11:6432/newapi`.
 - O banco live atual continua sendo a fonte de verdade para dados operacionais recentes.
 - `users, tokens e logs permanecem vindo do banco live`.
 - A recuperacao da Fase 24 nao pode sobrescrever esses dados com dumps antigos.
@@ -18,13 +18,13 @@
 
 ### Uso de cada fonte
 
-- O `catalogo 2026-07-01` e a melhor fonte para restaurar `OpenAI - Codex` e as linhas GPT/Codex ausentes no catalogo atual.
+- O `catalogo 2026-07-01` e a melhor fonte para restaurar `ChatGPT - Codex` e as linhas GPT/Codex ausentes no catalogo atual.
 - O banco `newapi` live atual permanece a fonte de verdade para `users`, `tokens`, `logs`, configuracoes recentes e o estado operacional ja corrigido de `embedding-gte-v1`.
 - O dump `/home/ubuntu/.backups/router-ai-atius-incident-20260703T231027-0300/newapi-before.fix.dump` fica reservado para rollback e comparacao, nao para replay cego sobre o banco live.
 
 ## Transformacoes obrigatorias
 
-- Restaurar `OpenAI - Codex` e as linhas GPT/Codex permitidas do snapshot de 2026-07-01.
+- Restaurar `ChatGPT - Codex` e as linhas GPT/Codex permitidas do snapshot de 2026-07-01.
 - Restaurar `deepseek-v4-flash` e `deepseek-v4-pro`.
 - Restaurar MiniMax de forma consolidada, mas com canal e modelos finais desabilitados.
 - Preservar `embedding-gte-v1` como alias publico governado.
@@ -81,7 +81,7 @@ Sem esses artefatos, nenhuma restauracao, rename ou repoint de runtime pode come
 
 ## Validacao final
 
-- `OpenAI - Codex` volta a existir no catalogo ativo.
+- `ChatGPT - Codex` volta a existir no catalogo ativo.
 - `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` e `gpt-5.3-codex-spark` aparecem novamente.
 - `gpt-5.4-1m` e `gpt-5.5-1m` seguem ausentes.
 - `text-embedding-3-small` e `text-embedding-3-large` seguem ausentes.

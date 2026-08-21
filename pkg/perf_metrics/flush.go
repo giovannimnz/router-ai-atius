@@ -10,6 +10,8 @@ import (
 	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
 )
 
+var upsertPerfMetric = model.UpsertPerfMetric
+
 func flushLoop() {
 	for {
 		interval := perf_metrics_setting.GetFlushIntervalMinutes()
@@ -24,21 +26,35 @@ func flushLoop() {
 }
 
 func flushCompletedBuckets() {
+	flushBuckets(false)
+}
+
+// FlushAllNow persists every in-memory bucket, including the current bucket.
+// Use this during graceful shutdown to avoid losing recent samples on restart.
+func FlushAllNow() {
+	flushBuckets(true)
+}
+
+func flushBuckets(includeCurrent bool) {
 	currentBucket := bucketStart(time.Now().Unix())
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
-		if k.bucketTs >= currentBucket {
+		if !includeCurrent && k.bucketTs >= currentBucket {
 			return true
 		}
 
 		bucket := value.(*atomicBucket)
 		drained := bucket.drain()
 		if drained.requestCount == 0 {
+			if includeCurrent {
+				hotBuckets.Delete(key)
+				return true
+			}
 			deleteOldEmptyBucket(k, key)
 			return true
 		}
 
-		err := model.UpsertPerfMetric(&model.PerfMetric{
+		err := upsertPerfMetric(&model.PerfMetric{
 			ModelName:      k.model,
 			Group:          k.group,
 			BucketTs:       k.bucketTs,
@@ -56,6 +72,10 @@ func flushCompletedBuckets() {
 			return true
 		}
 
+		if includeCurrent {
+			hotBuckets.Delete(key)
+			return true
+		}
 		deleteOldEmptyBucket(k, key)
 		return true
 	})

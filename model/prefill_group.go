@@ -89,6 +89,11 @@ func (g *PrefillGroup) Insert() error {
 	now := common.GetTimestamp()
 	g.CreatedTime = now
 	g.UpdatedTime = now
+	if g.Type == "endpoint" {
+		if normalized, changed := normalizeEndpointPrefillItems(g.Items); changed {
+			g.Items = normalized
+		}
+	}
 	return DB.Create(g).Error
 }
 
@@ -105,6 +110,11 @@ func IsPrefillGroupNameDuplicated(id int, name string) (bool, error) {
 // Update 更新组
 func (g *PrefillGroup) Update() error {
 	g.UpdatedTime = common.GetTimestamp()
+	if g.Type == "endpoint" {
+		if normalized, changed := normalizeEndpointPrefillItems(g.Items); changed {
+			g.Items = normalized
+		}
+	}
 	return DB.Save(g).Error
 }
 

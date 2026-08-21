@@ -48,3 +48,23 @@ func TestGetCodexChannelCredentialReturnsSanitizedMetadata(t *testing.T) {
 	assert.Equal(t, "acct-test", response.Data.AccountID)
 	assert.Equal(t, "token_invalidated", response.Data.LastUpstreamAuthError)
 }
+
+func TestLegacyCodexPKCEEndpointsAreGone(t *testing.T) {
+	for name, handler := range map[string]gin.HandlerFunc{
+		"generic start":  StartCodexOAuth,
+		"channel start":  StartCodexOAuthForChannel,
+		"generic finish": CompleteCodexOAuth,
+		"channel finish": CompleteCodexOAuthForChannel,
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/legacy-codex-pkce", nil)
+
+			handler(ctx)
+
+			assert.Equal(t, http.StatusGone, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), "codex_pkce_disabled")
+		})
+	}
+}

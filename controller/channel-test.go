@@ -111,6 +111,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
+	effectiveStream := resolveChannelTestStream(channel, testModel, endpointType, isStream)
 
 	requestPath := "/v1/chat/completions"
 
@@ -232,7 +233,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 
-	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	request := buildTestRequest(testModel, endpointType, channel, effectiveStream)
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -466,7 +467,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: respErr,
 		}
 	}
-	usage, usageErr := coerceTestUsage(usageA, isStream, info.GetEstimatePromptTokens())
+	usage, usageErr := coerceTestUsage(usageA, effectiveStream, info.GetEstimatePromptTokens())
 	if usageErr != nil {
 		return testResult{
 			context:     c,
@@ -475,7 +476,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 	result := w.Result()
-	respBody, err := readTestResponseBody(result.Body, isStream)
+	respBody, err := readTestResponseBody(result.Body, effectiveStream)
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -483,7 +484,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError),
 		}
 	}
-	if bodyErr := validateTestResponseBody(respBody, isStream); bodyErr != nil {
+	if bodyErr := validateTestResponseBody(respBody, effectiveStream); bodyErr != nil {
 		return testResult{
 			context:     c,
 			localErr:    bodyErr,
@@ -661,6 +662,10 @@ func validateTestResponseBody(respBody []byte, isStream bool) error {
 
 func shouldUseStreamForAutomaticChannelTest(channel *model.Channel) bool {
 	return shouldUseStreamForChannelTest(channel, "", "")
+}
+
+func resolveChannelTestStream(channel *model.Channel, modelName string, endpointType string, requested bool) bool {
+	return requested || shouldUseStreamForChannelTest(channel, modelName, endpointType)
 }
 
 func shouldUseStreamForChannelTest(channel *model.Channel, modelName string, endpointType string) bool {

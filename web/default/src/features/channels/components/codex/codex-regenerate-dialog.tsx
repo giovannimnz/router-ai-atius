@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+/* eslint-disable react-refresh/only-export-components */
 import { ExternalLink, Loader2 } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -29,125 +30,278 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
-
 import type { CodexDeviceAuthorization } from '../../types'
+
+export interface CodexDevicePollOutcome {
+  status: 'pending' | 'completed' | 'terminal' | 'cancelled' | 'expired'
+  retryAfterMs?: number
+  error?: unknown
+}
 
 interface CodexRegenerateDialogProps {
   open: boolean
   channelName: string
   deviceAuthorization?: CodexDeviceAuthorization
+  deviceStartError?: string
   isStarting: boolean
-  onOpenChange: (open: boolean) => void
-  onPollDevice: () => Promise<'pending' | 'completed'>
-  onStartBrowserFallback: () => Promise<string>
-  onComplete: (input: string) => Promise<boolean>
+  isCancelling: boolean
+  onOpenChange: (open: boolean) => void | Promise<void>
+  onExpireDevice: () => Promise<void>
+  onPollDevice: (signal: AbortSignal) => Promise<CodexDevicePollOutcome>
+  onRestartDevice: () => Promise<void>
+}
+
+export interface CodexDevicePollingScheduler {
+  now: () => number
+  setTimeout: (callback: () => void | Promise<void>, delayMs: number) => number
+  clearTimeout: (timerId: number) => void
+}
+
+interface StartCodexDevicePollingOptions {
+  expiresAt: string
+  intervalMs: number
+  poll: (signal: AbortSignal) => Promise<CodexDevicePollOutcome>
+  onCompleted: () => void
+  onExpired: () => void
+  onError: (error: unknown) => void
+  onPollingChange: (polling: boolean) => void
+  scheduler?: CodexDevicePollingScheduler
+}
+
+const browserPollingScheduler: CodexDevicePollingScheduler = {
+  now: () => Date.now(),
+  setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+  clearTimeout: (timerId) => window.clearTimeout(timerId),
+}
+
+const CODEX_AUTHORIZATION_ORIGIN = 'https://auth.openai.com'
+
+export function getTrustedCodexAuthorizationUrl(
+  candidate: string
+): string | null {
+  try {
+    const url = new URL(candidate)
+    if (
+      url.origin !== CODEX_AUTHORIZATION_ORIGIN ||
+      url.pathname !== '/codex/device' ||
+      url.username ||
+      url.password
+    ) {
+      return null
+    }
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+export function startCodexDevicePolling({
+  expiresAt,
+  intervalMs,
+  poll,
+  onCompleted,
+  onExpired,
+  onError,
+  onPollingChange,
+  scheduler = browserPollingScheduler,
+}: StartCodexDevicePollingOptions) {
+  const expiresAtMs = Date.parse(expiresAt)
+  let active = true
+  let pollTimerId: number | undefined
+  let expiryTimerId: number | undefined
+  let pollController: AbortController | undefined
+
+  const clearTimers = () => {
+    if (pollTimerId !== undefined) scheduler.clearTimeout(pollTimerId)
+    if (expiryTimerId !== undefined) scheduler.clearTimeout(expiryTimerId)
+    pollTimerId = undefined
+    expiryTimerId = undefined
+  }
+
+  const stop = () => {
+    if (!active) return
+    active = false
+    clearTimers()
+    pollController?.abort()
+    pollController = undefined
+    onPollingChange(false)
+  }
+
+  const expire = () => {
+    if (!active) return
+    stop()
+    onExpired()
+  }
+
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= scheduler.now()) {
+    expire()
+    return stop
+  }
+
+  const pollOnce = async () => {
+    if (!active) return
+    pollController = new AbortController()
+    try {
+      const outcome = await poll(pollController.signal)
+      if (!active) return
+      if (outcome.status === 'completed') {
+        stop()
+        onCompleted()
+        return
+      }
+      if (
+        outcome.status === 'terminal' ||
+        outcome.status === 'cancelled' ||
+        outcome.status === 'expired'
+      ) {
+        stop()
+        onError(
+          outcome.error ?? new Error(`device authorization ${outcome.status}`)
+        )
+        return
+      }
+      pollTimerId = scheduler.setTimeout(
+        pollOnce,
+        Math.max(1, outcome.retryAfterMs ?? intervalMs)
+      )
+    } catch (error) {
+      if (!active) return
+      pollTimerId = scheduler.setTimeout(pollOnce, Math.max(1, intervalMs))
+    } finally {
+      pollController = undefined
+    }
+  }
+
+  onPollingChange(true)
+  expiryTimerId = scheduler.setTimeout(expire, expiresAtMs - scheduler.now())
+  pollTimerId = scheduler.setTimeout(pollOnce, Math.max(1, intervalMs))
+
+  return stop
+}
+
+export function CodexDeviceAuthorizationDetails({
+  deviceAuthorization,
+  deviceFlowError,
+  isPolling,
+  onRestartDevice,
+  translate,
+}: {
+  deviceAuthorization: CodexDeviceAuthorization
+  deviceFlowError: string
+  isPolling: boolean
+  onRestartDevice: () => void | Promise<void>
+  translate: (key: string) => string
+}) {
+  const verificationUrl = getTrustedCodexAuthorizationUrl(
+    deviceAuthorization.verification_url
+  )
+
+  return (
+    <div className='space-y-3 rounded-md border p-4'>
+      <div>
+        <p className='text-sm font-medium'>{translate('Device login code')}</p>
+        <code className='mt-1 block text-2xl font-semibold tracking-widest'>
+          {deviceAuthorization.user_code}
+        </code>
+        <p className='text-warning mt-2 text-xs font-medium'>
+          {translate(
+            'Continue only if you started this login on this screen. Enter the code only at auth.openai.com and never share it.'
+          )}
+        </p>
+      </div>
+      {verificationUrl ? (
+        <Button
+          render={
+            <a
+              href={verificationUrl}
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
+        >
+          {translate('Open device login')}
+          <ExternalLink className='ml-2 h-4 w-4' />
+        </Button>
+      ) : (
+        <p className='text-destructive text-sm' role='alert'>
+          {translate('The authorization URL is not secure')}
+        </p>
+      )}
+      {deviceFlowError ? (
+        <div className='space-y-2'>
+          <p className='text-destructive text-sm' role='alert'>
+            {deviceFlowError}
+          </p>
+          <Button type='button' variant='outline' onClick={onRestartDevice}>
+            {translate('Restart device authorization')}
+          </Button>
+        </div>
+      ) : (
+        <p className='text-muted-foreground text-xs'>
+          {isPolling
+            ? translate('Waiting for OpenAI authorization...')
+            : translate('This window will detect authorization automatically.')}
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function CodexRegenerateDialog({
   open,
   channelName,
   deviceAuthorization,
+  deviceStartError,
   isStarting,
+  isCancelling,
   onOpenChange,
+  onExpireDevice,
   onPollDevice,
-  onStartBrowserFallback,
-  onComplete,
+  onRestartDevice,
 }: CodexRegenerateDialogProps) {
   const { t } = useTranslation()
-  const [input, setInput] = useState('')
-  const [isCompleting, setIsCompleting] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
-  const [isStartingFallback, setIsStartingFallback] = useState(false)
-  const [browserAuthorizeUrl, setBrowserAuthorizeUrl] = useState('')
-  const [flowError, setFlowError] = useState('')
+  const [deviceFlowError, setDeviceFlowError] = useState('')
 
   useEffect(() => {
-    if (!open || !deviceAuthorization || browserAuthorizeUrl) return
-    let active = true
-    let inFlight = false
-    const poll = async () => {
-      if (!active || inFlight) return
-      inFlight = true
-      setIsPolling(true)
-      try {
-        const status = await onPollDevice()
-        if (active && status === 'completed') {
-          setInput('')
-          setBrowserAuthorizeUrl('')
-          setFlowError('')
-          onOpenChange(false)
-        }
-      } catch (error) {
-        if (active) {
-          setFlowError(
+    if (!open || !deviceAuthorization) return
+    setDeviceFlowError('')
+    return startCodexDevicePolling({
+      expiresAt: deviceAuthorization.expires_at,
+      intervalMs: Math.max(2, deviceAuthorization.interval_seconds) * 1000,
+      poll: onPollDevice,
+      onCompleted: () => {
+        setDeviceFlowError('')
+        onOpenChange(false)
+      },
+      onExpired: () => {
+        void onExpireDevice().finally(() => {
+          setDeviceFlowError(t('Device authorization expired. Start again.'))
+        })
+      },
+      onError: (error) => {
+        void onExpireDevice().finally(() => {
+          setDeviceFlowError(
             error instanceof Error
               ? error.message
               : t('Device authorization polling failed')
           )
-        }
-      } finally {
-        inFlight = false
-        if (active) setIsPolling(false)
-      }
-    }
-    const interval = window.setInterval(
-      poll,
-      Math.max(2, deviceAuthorization.interval_seconds) * 1000
-    )
-    return () => {
-      active = false
-      window.clearInterval(interval)
-    }
-  }, [
-    browserAuthorizeUrl,
-    deviceAuthorization,
-    onOpenChange,
-    onPollDevice,
-    open,
-    t,
-  ])
+        })
+      },
+      onPollingChange: setIsPolling,
+    })
+  }, [deviceAuthorization, onOpenChange, onExpireDevice, onPollDevice, open, t])
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && !isCompleting) {
-      setInput('')
-      setBrowserAuthorizeUrl('')
-      setFlowError('')
+  const handleOpenChange = async (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setDeviceFlowError('')
     }
-    onOpenChange(nextOpen)
+    await onOpenChange(nextOpen)
   }
 
-  const handleStartBrowserFallback = async () => {
-    setFlowError('')
-    setIsStartingFallback(true)
-    try {
-      setBrowserAuthorizeUrl(await onStartBrowserFallback())
-    } catch (error) {
-      setFlowError(
-        error instanceof Error
-          ? error.message
-          : t('Failed to start browser authorization')
-      )
-    } finally {
-      setIsStartingFallback(false)
-    }
-  }
-
-  const handleComplete = async () => {
-    const transientInput = input.trim()
-    if (!transientInput) return
-
-    setIsCompleting(true)
-    try {
-      if (await onComplete(transientInput)) {
-        setInput('')
-        setBrowserAuthorizeUrl('')
-        setFlowError('')
-        onOpenChange(false)
-      }
-    } finally {
-      setIsCompleting(false)
-    }
+  const handleRestartDevice = async () => {
+    setDeviceFlowError('')
+    await onRestartDevice()
   }
 
   let deviceAuthorizationContent: ReactNode = null
@@ -158,33 +312,27 @@ export function CodexRegenerateDialog({
         {t('Starting device authorization...')}
       </div>
     )
-  } else if (deviceAuthorization) {
+  } else if (!deviceAuthorization) {
     deviceAuthorizationContent = (
       <div className='space-y-3 rounded-md border p-4'>
-        <div>
-          <p className='text-sm font-medium'>{t('Device login code')}</p>
-          <code className='mt-1 block text-2xl font-semibold tracking-widest'>
-            {deviceAuthorization.user_code}
-          </code>
-        </div>
-        <Button
-          render={
-            <a
-              href={deviceAuthorization.verification_url}
-              target='_blank'
-              rel='noopener noreferrer'
-            />
-          }
-        >
-          {t('Open device login')}
-          <ExternalLink className='ml-2 h-4 w-4' />
-        </Button>
-        <p className='text-muted-foreground text-xs'>
-          {isPolling
-            ? t('Waiting for OpenAI authorization...')
-            : t('This window will detect authorization automatically.')}
+        <p className='text-destructive text-sm' role='alert'>
+          {deviceStartError ||
+            t('Device authorization could not be started. Start again.')}
         </p>
+        <Button type='button' onClick={handleRestartDevice}>
+          {t('Restart device authorization')}
+        </Button>
       </div>
+    )
+  } else if (deviceAuthorization) {
+    deviceAuthorizationContent = (
+      <CodexDeviceAuthorizationDetails
+        deviceAuthorization={deviceAuthorization}
+        deviceFlowError={deviceFlowError}
+        isPolling={isPolling}
+        onRestartDevice={handleRestartDevice}
+        translate={t}
+      />
     )
   }
 
@@ -204,85 +352,14 @@ export function CodexRegenerateDialog({
         </DialogHeader>
 
         {deviceAuthorizationContent}
-
-        <div className='space-y-3 border-t pt-4'>
-          <div>
-            <p className='text-sm font-medium'>
-              {t('Manual browser fallback')}
-            </p>
-            <p className='text-muted-foreground text-xs'>
-              {t(
-                'Use this only if device login is unavailable. The callback field remains accessible without popups.'
-              )}
-            </p>
-          </div>
-          {!browserAuthorizeUrl ? (
-            <Button
-              type='button'
-              variant='outline'
-              onClick={handleStartBrowserFallback}
-              disabled={isStartingFallback}
-            >
-              {isStartingFallback && (
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-              )}
-              {t('Prepare browser fallback')}
-            </Button>
-          ) : (
-            <Button
-              variant='outline'
-              render={
-                <a
-                  href={browserAuthorizeUrl}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
-              }
-            >
-              {t('Open browser authorization')}
-              <ExternalLink className='ml-2 h-4 w-4' />
-            </Button>
-          )}
-          <label htmlFor='codex-oauth-callback' className='text-sm font-medium'>
-            {t('Authorization callback')}
-          </label>
-          <Textarea
-            id='codex-oauth-callback'
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder={t(
-              'Paste the final callback URL or the code#state pair.'
-            )}
-            rows={4}
-            autoComplete='off'
-            spellCheck={false}
-            disabled={isCompleting}
-          />
-          <p className='text-muted-foreground text-xs'>
-            {t('Tokens are never displayed on this screen.')}
-          </p>
-          {flowError && (
-            <p className='text-destructive text-sm' role='alert'>
-              {flowError}
-            </p>
-          )}
-        </div>
         <DialogFooter>
           <Button
             type='button'
             variant='outline'
-            onClick={() => handleOpenChange(false)}
-            disabled={isCompleting}
+            disabled={isCancelling}
+            onClick={() => void handleOpenChange(false)}
           >
             {t('Cancel')}
-          </Button>
-          <Button
-            type='button'
-            onClick={handleComplete}
-            disabled={!input.trim() || isCompleting}
-          >
-            {isCompleting && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-            {t('Complete regeneration')}
           </Button>
         </DialogFooter>
       </DialogContent>

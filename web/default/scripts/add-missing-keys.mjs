@@ -8,13 +8,53 @@ function stableStringify(obj) {
 }
 
 const newKeys = {
-  en: {},
-  zh: {},
-  fr: {},
-  ja: {},
-  ru: {},
-  vi: {},
+  en: {
+    'Device authorization could not be started. Start again.':
+      'Device authorization could not be started. Start again.',
+    'Device authorization expired. Start again.':
+      'Device authorization expired. Start again.',
+    'Restart device authorization': 'Restart device authorization',
+  },
+  zh: {
+    'Device authorization could not be started. Start again.':
+      '无法启动设备授权。请重新开始。',
+    'Device authorization expired. Start again.': '设备授权已过期。请重新开始。',
+    'Restart device authorization': '重新启动设备授权',
+  },
+  fr: {
+    'Device authorization could not be started. Start again.':
+      'Impossible de démarrer l’autorisation de l’appareil. Recommencez.',
+    'Device authorization expired. Start again.':
+      'L’autorisation de l’appareil a expiré. Recommencez.',
+    'Restart device authorization': 'Redémarrer l’autorisation de l’appareil',
+  },
+  ja: {
+    'Device authorization could not be started. Start again.':
+      'デバイス認可を開始できませんでした。もう一度開始してください。',
+    'Device authorization expired. Start again.':
+      'デバイス認可の有効期限が切れました。もう一度開始してください。',
+    'Restart device authorization': 'デバイス認可を再開',
+  },
+  ru: {
+    'Device authorization could not be started. Start again.':
+      'Не удалось запустить авторизацию устройства. Начните снова.',
+    'Device authorization expired. Start again.':
+      'Срок действия авторизации устройства истёк. Начните снова.',
+    'Restart device authorization': 'Перезапустить авторизацию устройства',
+  },
+  vi: {
+    'Device authorization could not be started. Start again.':
+      'Không thể bắt đầu ủy quyền thiết bị. Hãy bắt đầu lại.',
+    'Device authorization expired. Start again.':
+      'Ủy quyền thiết bị đã hết hạn. Hãy bắt đầu lại.',
+    'Restart device authorization': 'Khởi động lại ủy quyền thiết bị',
+  },
   pt: {
+    'Device authorization could not be started. Start again.':
+      'Não foi possível iniciar a autorização do dispositivo. Inicie novamente.',
+    'Device authorization expired. Start again.':
+      'A autorização do dispositivo expirou. Inicie novamente.',
+    'Restart device authorization': 'Reiniciar autorização do dispositivo',
     'Back to Dashboard': 'Voltar ao dashboard',
     'Cost = model price × that one ratio. Nothing else from the group settings enters the formula.':
       'Custo = preço do modelo × aquele único multiplicador. Nada mais das configurações do grupo entra na fórmula.',

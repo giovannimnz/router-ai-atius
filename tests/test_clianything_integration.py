@@ -37,7 +37,7 @@ def safe_env() -> dict[str, str]:
     return env
 
 
-class CLIAnythingIntegrationTests(unittest.TestCase):
+class CLIAnythingPodmanIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not CLI.exists():
@@ -60,7 +60,11 @@ class CLIAnythingIntegrationTests(unittest.TestCase):
                 "-t",
                 "-A",
                 "-c",
-                "select 1",
+                "select ("
+                "to_regclass('public.channels') is not null and "
+                "to_regclass('public.models') is not null and "
+                "to_regclass('public.abilities') is not null"
+                ")::int",
             ],
             cwd=REPO_ROOT,
             text=True,
@@ -73,11 +77,11 @@ class CLIAnythingIntegrationTests(unittest.TestCase):
         if probe.returncode != 0 or probe.stdout.strip() != "1":
             detail = (probe.stderr or probe.stdout).strip().splitlines()[:1]
             suffix = f": {detail[0]}" if detail else ""
-            raise unittest.SkipTest(f"postgres container unavailable{suffix}")
+            raise unittest.SkipTest(f"Podman backend is not prepared with the canonical router schema{suffix}")
 
     def run_cli(self, *args: str, timeout: float = TIMEOUT) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [str(CLI), *args],
+            [str(CLI), *args, "--backend", "podman"],
             cwd=REPO_ROOT,
             text=True,
             stdout=subprocess.PIPE,
@@ -114,6 +118,7 @@ class CLIAnythingIntegrationTests(unittest.TestCase):
         self.assert_success(proc)
         self.assertIn("pod", proc.stdout)
         self.assertIn("containers", proc.stdout)
+        self.assertIn("atius-ai-router", proc.stdout)
         self.assertIn("db", proc.stdout)
         self.assertRegex(proc.stdout, r"\b(ok|fail)\b")
         self.assertNotRegex(proc.stdout + proc.stderr, r"Bearer\s+[A-Za-z0-9._~+/=-]+")
@@ -215,6 +220,36 @@ class CLIAnythingIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 2)
         self.assertIn("Missing ATIUS_ROUTER_TOKEN", proc.stderr)
+
+
+@unittest.skipUnless(
+    os.environ.get("CLIANYTHING_RUN_K3S_LIVE_TEST") == "1",
+    "set CLIANYTHING_RUN_K3S_LIVE_TEST=1 for the real PostgreSQL safety gate",
+)
+class CLIAnythingK3sLiveSafetyTests(unittest.TestCase):
+    def run_cli(self, sql: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(CLI), "query", "--backend", "k3s", "--read-only", sql, "--format", "raw"],
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=TIMEOUT,
+            env=safe_env(),
+            check=False,
+        )
+
+    def test_real_postgresql_proves_read_only_session_and_fixed_search_path(self):
+        transaction = self.run_cli("show transaction_read_only")
+        search_path = self.run_cli("show search_path")
+        count = self.run_cli("select pg_catalog.count(*) from pg_catalog.pg_class")
+
+        self.assertEqual(transaction.returncode, 0, transaction.stderr)
+        self.assertEqual(transaction.stdout.strip(), "on")
+        self.assertEqual(search_path.returncode, 0, search_path.stderr)
+        self.assertEqual(search_path.stdout.strip(), "pg_catalog")
+        self.assertEqual(count.returncode, 0, count.stderr)
+        self.assertRegex(count.stdout.strip(), r"^[0-9]+$")
 
 
 if __name__ == "__main__":

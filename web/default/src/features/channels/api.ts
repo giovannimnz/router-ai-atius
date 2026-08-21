@@ -27,9 +27,8 @@ import type {
   ChannelBalanceResponse,
   CodexCredentialProbeResponse,
   CodexCredentialRefreshResponse,
-  CodexCredentialRegenerationCompleteResponse,
-  CodexCredentialRegenerationStartResponse,
   CodexCredentialResponse,
+  CodexDeviceAuthorizationCancelResponse,
   CodexDeviceAuthorizationPollResponse,
   CodexDeviceAuthorizationStartResponse,
   ChannelOpsResponse,
@@ -335,17 +334,6 @@ export async function probeCodexCredential(
   return res.data
 }
 
-export async function startCodexCredentialRegeneration(
-  channelId: number
-): Promise<CodexCredentialRegenerationStartResponse> {
-  const res = await api.post(
-    `/api/channel/${channelId}/codex/regenerate/start`,
-    {},
-    channelActionConfig()
-  )
-  return res.data
-}
-
 export async function startCodexDeviceAuthorization(
   channelId: number
 ): Promise<CodexDeviceAuthorizationStartResponse> {
@@ -358,23 +346,23 @@ export async function startCodexDeviceAuthorization(
 }
 
 export async function pollCodexDeviceAuthorization(
-  channelId: number
+  channelId: number,
+  signal: AbortSignal
 ): Promise<CodexDeviceAuthorizationPollResponse> {
   const res = await api.post(
     `/api/channel/${channelId}/codex/regenerate/device/poll`,
     {},
-    channelActionConfig()
+    channelActionConfig({ signal })
   )
   return res.data
 }
 
-export async function completeCodexCredentialRegeneration(
-  channelId: number,
-  input: string
-): Promise<CodexCredentialRegenerationCompleteResponse> {
+export async function cancelCodexDeviceAuthorization(
+  channelId: number
+): Promise<CodexDeviceAuthorizationCancelResponse> {
   const res = await api.post(
-    `/api/channel/${channelId}/codex/regenerate/complete`,
-    { input },
+    `/api/channel/${channelId}/codex/regenerate/device/cancel`,
+    {},
     channelActionConfig()
   )
   return res.data

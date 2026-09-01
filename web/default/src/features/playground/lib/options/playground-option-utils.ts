@@ -18,6 +18,53 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { GroupOption, ModelOption } from '../../types'
 
+function supportsParameter(model: ModelOption | null, parameter: string): boolean {
+  if (!model?.supportedParameters || model.supportedParameters.length === 0) {
+    return true
+  }
+
+  return model.supportedParameters.some(
+    (value) => value.toLowerCase() === parameter.toLowerCase()
+  )
+}
+
+export function getModelOption(
+  models: ModelOption[],
+  currentModel: string
+): ModelOption | null {
+  return models.find((model) => model.value === currentModel) ?? null
+}
+
+export function getEffectiveParameterEnabled(
+  parameterEnabled: Record<
+    | 'temperature'
+    | 'top_p'
+    | 'max_tokens'
+    | 'frequency_penalty'
+    | 'presence_penalty'
+    | 'seed',
+    boolean
+  >,
+  model: ModelOption | null
+) {
+  return {
+    temperature:
+      parameterEnabled.temperature && supportsParameter(model, 'temperature'),
+    top_p: parameterEnabled.top_p && supportsParameter(model, 'top_p'),
+    max_tokens:
+      parameterEnabled.max_tokens &&
+      (supportsParameter(model, 'max_tokens') ||
+        supportsParameter(model, 'max_completion_tokens')),
+    frequency_penalty:
+      parameterEnabled.frequency_penalty &&
+      supportsParameter(model, 'frequency_penalty'),
+    presence_penalty:
+      parameterEnabled.presence_penalty &&
+      supportsParameter(model, 'presence_penalty'),
+    seed: parameterEnabled.seed && supportsParameter(model, 'seed'),
+  }
+}
+
 export function getModelFallback(
   models: ModelOption[],
   currentModel: string

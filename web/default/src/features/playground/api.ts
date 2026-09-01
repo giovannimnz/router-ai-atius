@@ -26,6 +26,46 @@ import type {
   GroupOption,
 } from './types'
 
+type UserModelRecord = {
+  id?: string
+  name?: string
+  supported_parameters?: unknown
+}
+
+function parseSupportedParameters(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const supportedParameters = value
+    .filter(
+      (item): item is string => typeof item === 'string' && item.trim() !== ''
+    )
+    .map((item) => item.trim().toLowerCase())
+
+  return supportedParameters.length > 0 ? supportedParameters : undefined
+}
+
+function toModelOption(entry: string | UserModelRecord): ModelOption | null {
+  if (typeof entry === 'string') {
+    return {
+      label: entry,
+      value: entry,
+    }
+  }
+
+  const value = entry.id?.trim() || entry.name?.trim()
+  if (!value) {
+    return null
+  }
+
+  return {
+    label: entry.name?.trim() || value,
+    value,
+    supportedParameters: parseSupportedParameters(entry.supported_parameters),
+  }
+}
+
 /**
  * Send chat completion request (non-streaming)
  */
@@ -53,10 +93,10 @@ export async function getUserModels(group: string): Promise<ModelOption[]> {
     return []
   }
 
-  return data.data.map((model: string) => ({
-    label: model,
-    value: model,
-  }))
+  const modelEntries = data.data as Array<string | UserModelRecord>
+  const modelOptions = modelEntries.map((entry) => toModelOption(entry))
+
+  return modelOptions.filter((entry): entry is ModelOption => entry !== null)
 }
 
 /**

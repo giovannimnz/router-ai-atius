@@ -141,6 +141,7 @@ export interface ParameterEnabled {
 export interface ModelOption {
   label: string
   value: string
+  supportedParameters?: string[]
 }
 
 export interface GroupOption {

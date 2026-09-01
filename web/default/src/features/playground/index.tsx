@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
+import { getEffectiveParameterEnabled, getModelOption } from './lib'
 import {
   useChatHandler,
   usePlaygroundConversation,
@@ -40,9 +41,15 @@ export function Playground() {
     clearMessages,
   } = usePlaygroundState()
 
+  const selectedModel = getModelOption(models, config.model)
+  const effectiveParameterEnabled = getEffectiveParameterEnabled(
+    parameterEnabled,
+    selectedModel
+  )
+
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
-    parameterEnabled,
+    parameterEnabled: effectiveParameterEnabled,
     onMessageUpdate: updateMessages,
   })
 

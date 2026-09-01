@@ -19,10 +19,14 @@ import (
 
 func TestConvertOpenAIResponsesRequestNormalizesCodexUpstreamContract(t *testing.T) {
 	clientStream := false
+	temperature := 0.7
+	topP := 0.95
 	converted, err := (&Adaptor{}).ConvertOpenAIResponsesRequest(nil, nil, dto.OpenAIResponsesRequest{
-		Model:  "gpt-5.6-sol",
-		Input:  []byte(`"Reply only OK"`),
-		Stream: &clientStream,
+		Model:       "gpt-5.6-sol",
+		Input:       []byte(`"Reply only OK"`),
+		Stream:      &clientStream,
+		Temperature: &temperature,
+		TopP:        &topP,
 	})
 	require.NoError(t, err)
 
@@ -31,6 +35,8 @@ func TestConvertOpenAIResponsesRequestNormalizesCodexUpstreamContract(t *testing
 	require.NotNil(t, request.Stream)
 	assert.True(t, *request.Stream)
 	assert.JSONEq(t, `false`, string(request.Store))
+	assert.Nil(t, request.Temperature)
+	assert.Nil(t, request.TopP)
 
 	var input []map[string]any
 	require.NoError(t, common.Unmarshal(request.Input, &input))

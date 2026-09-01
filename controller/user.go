@@ -584,27 +584,23 @@ func GetUserModels(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
 				"message": "",
-				"data":    []string{},
+				"data":    []dto.OpenAIModels{},
 			})
 			return
 		}
+		common.SetContextKey(c, constant.ContextKeyTokenGroup, group)
+	}
 
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "",
-			"data":    model.GetGroupEnabledModels(group),
-		})
+	catalogEntries, err := visibleModelCatalogEntries(c)
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
-
-	var models []string
-	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
-			if !common.StringsContains(models, g) {
-				models = append(models, g)
-			}
-		}
+	models := make([]dto.OpenAIModels, 0, len(catalogEntries))
+	for _, entry := range catalogEntries {
+		models = append(models, buildOpenAIModelFromCatalog(entry))
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

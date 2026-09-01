@@ -32,6 +32,20 @@ declare module 'axios' {
 
 export type ApiRequestConfig = AxiosRequestConfig
 
+type UserModelSummary = {
+  id?: string
+  name?: string
+  supported_parameters?: string[]
+}
+
+function toUserModelName(entry: string | UserModelSummary): string | null {
+  if (typeof entry === 'string') {
+    return entry
+  }
+
+  return entry.id?.trim() || entry.name?.trim() || null
+}
+
 // ============================================================================
 // Axios Instance Configuration
 // ============================================================================
@@ -193,7 +207,25 @@ export async function getUserModels(): Promise<{
   data?: string[]
 }> {
   const res = await api.get('/api/user/models')
-  return res.data
+  const payload = res.data as {
+    success: boolean
+    message?: string
+    data?: Array<string | UserModelSummary>
+  }
+
+  if (!Array.isArray(payload.data)) {
+    return {
+      success: payload.success,
+      message: payload.message,
+    }
+  }
+
+  return {
+    ...payload,
+    data: payload.data
+      .map((entry) => toUserModelName(entry))
+      .filter((entry): entry is string => entry !== null),
+  }
 }
 
 // Get user groups with descriptions and ratios

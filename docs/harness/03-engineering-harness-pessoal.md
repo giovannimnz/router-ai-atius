@@ -1,292 +1,204 @@
-# Engineering Harness Pessoal
+# Engineering Harness Pessoal — Especificação Arquitetural e Estudo de Viabilidade
 
-## Objetivo
+## 1. Visão Geral & Filosofia de Engenharia
 
-Criar um Harness pessoal e genérico para desenvolvimento de software, separado do QA Automation Harness corporativo.
+O **Engineering Harness Pessoal** é um ambiente autônomo de desenvolvimento de software, concebido para acelerar a criação, manutenção e evolução de ferramentas, produtos e projetos pessoais com máxima velocidade e alavancagem de IA.
 
-Este projeto poderá ser usado para:
+Ao contrário de soluções corporativas que priorizam comitês de governança, restrições contratuais e políticas defensivas, o Engineering Harness Pessoal é orientado a:
+1. **Velocidade Extrema & Autonomia (Full YOLO Mode)**: Execução direta sem telas de confirmação burocráticas, com automação ponta a ponta;
+2. **Dogfooding Radical**: O harness é utilizado para desenvolver, testar e refatorar a sua própria base de código desde o primeiro dia de vida;
+3. **Agnosticismo de Agentes**: Orquestração intercambiável dos melhores runtimes do mercado (Antigravity `agy`, Claude Code, Codex CLI, OpenCode);
+4. **Memória de Longo Prazo e Auto-Evolução**: Aprendizado cumulativo via **GBrain** pessoal e consolidação automática de padrões de arquitetura (**Architecture Dream**);
+5. **Isolamento Absoluto do Mundo Corporativo**: Separação física e lógica estrita contra qualquer vazamento de credenciais, repositórios ou dados entre vida pessoal e empresarial.
 
-- desenvolver o próprio Harness;
-- desenvolver ferramentas;
-- desenvolver integrações;
-- trabalhar em projetos pessoais;
-- experimentar diferentes agentes/runtimes;
-- criar e evoluir skills de engenharia;
-- aplicar dogfooding desde o início.
+---
 
-## Relação com o QA Harness
-
-Os dois projetos podem compartilhar conceitos e eventualmente bibliotecas, porém são produtos distintos.
+## 2. Princípios de Isolamento e Separação Pessoal vs. Corporativo
 
 ```text
-Engineering Harness
-  = pessoal
-  = genérico
-  = experimental
-  = múltiplos domínios
-
-QA Automation Harness
-  = corporativo
-  = focado em QA
-  = Playwright/API/pipeline
-  = governança empresarial
+┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
+│     QA Harness Corporativo           │       │    Engineering Harness Pessoal       │
+├──────────────────────────────────────┤       ├──────────────────────────────────────┤
+│ - Escopo: Empresas & Contratos       │       │ - Escopo: Projetos Pessoais & Lab    │
+│ - Governança: InfoSec, SOC2, CISO    │       │ - Governança: Autonomia Ágil         │
+│ - Secrets: Vaults Empresariais       │       │ - Secrets: HashiCorp Vault Pessoal   │
+│ - Memória: GBrain Corporativo        │       │ - Memória: GBrain Local / Obsidian   │
+│ - Runtime: Claude Code Homologado    │       │ - Runtime: agy / Claude / Codex YOLO │
+└──────────────────────────────────────┘       └──────────────────────────────────────┘
+                  ▲                                               ▲
+                  │                                               │
+                  └────────────[ BARREIRA HERMÉTICA ]─────────────┘
+                     - Sem compartilhamento de memória
+                     - Sem reuso de chaves ou sessões
+                     - Sem contaminação de repositórios
 ```
 
-Não misturar memória, credenciais, políticas ou projetos dos dois ambientes.
+### Regras de Ouro de Segurança:
+- **Zero Cross-Contamination**: O Engineering Harness nunca consulta nem armazena nós de grafos com IDs ou tags de clientes corporativos.
+- **Sessões Isoladas de Terminal**: Execução sob contas locais e ambientes Virtuais (Python uv, Bun, Podman) segregados.
+- **Armazenamento de Notas**: Toda documentação gerada pelo Engineering Harness é arquivada no cofre pessoal do Obsidian (`~/GitHub/obsidian-vault/AiSecondBrain`).
 
-## Core genérico
+---
 
-O Engineering Harness deve ser baseado em profiles.
+## 3. Arquitetura em Monorepo Modular
 
-Exemplo:
+O projeto adota estrutura de monorepo gerenciado por **Bun** ou **pnpm workspaces**, garantindo reutilização de bibliotecas compartilhadas com fronteiras estritas de pacotes:
 
 ```text
-core/
-  runtime/
-  workflows/
-  skills/
-  memory/
-  dreaming/
-  policies/
-  ui/
-
-profiles/
-  software-engineering/
-  qa/
-  devops/
-  ai-integration/
-  research/
+engineering-harness/
+├── apps/
+│   ├── cli/                    # CLI de terminal ultra-responsivo para fluxo diário
+│   └── desktop/                # Shell Electron / Tauri para cockpit visual e grafos
+├── packages/
+│   ├── core/                   # Orquestrador central e máquina de estados de workflows
+│   ├── runtime-sdk/            # Contrato comum de agentes com streaming e IPC
+│   ├── skill-engine/           # Carregador, validador e executor de skills versionadas
+│   ├── memory-sdk/             # Cliente de integração com GBrain e Second Brain
+│   ├── dream-engine/           # Motores de consolidação (Memory, Skill, Architecture)
+│   └── ui-components/          # Componentes visuais compartilhados (React 19 / Tailwind)
+├── adapters/
+│   ├── antigravity/            # Adapter para runtime oficial agy
+│   ├── claude-code/            # Adapter para Claude Code CLI headless
+│   └── codex/                  # Adapter para OpenAI Codex CLI
+└── profiles/
+    ├── software-engineering/   # Refatorações, scaffolding, PRs e git worktrees
+    ├── devops/                 # Infra local, Podman, cgroups, systemd, WireGuard
+    ├── ai-integration/         # Provedores de modelos, proxies, SSE, tool-calling
+    └── research/               # Síntese bibliográfica, experimentação e spikes
 ```
 
-QA pode existir como profile pessoal, mas isso não transforma este projeto no QA Harness corporativo.
+---
 
-## Dogfooding
+## 4. O Sistema de Runtimes Multi-Agente
 
-Princípio registrado:
+O módulo `runtime-sdk` fornece a abstração necessária para despachar tarefas para o melhor modelo disponível de acordo com a característica da demanda:
 
-> Usar o próprio Engineering Harness para desenvolver e evoluir o próprio Engineering Harness.
+```typescript
+export type AgentType = 'antigravity' | 'claude-code' | 'codex' | 'opencode';
 
-Exemplos:
+export interface RuntimeCapabilities {
+  supportsCodeExecution: boolean;
+  supportsHeadlessStreaming: boolean;
+  supportsSubagentSpawning: boolean;
+  supportsMcpTools: boolean;
+  preferredWorkload: 'coding' | 'refactor' | 'architecture' | 'debugging';
+}
 
-- criar adapter novo;
-- detectar padrão recorrente;
-- gerar uma nova skill;
-- validar uma nova skill;
-- atualizar workflow;
-- testar migração;
-- registrar decisão arquitetural;
-- consolidar conhecimento via Dream Mode.
+export interface ExecutionContext {
+  taskDescription: string;
+  cwd: string;
+  yoloMode: boolean;
+  activeProfile: string;
+  allowedTools: string[];
+  systemInstructions?: string;
+}
 
-## Runtime Adapter
-
-Mesmo conceito do QA Harness:
-
-```ts
-interface AgentRuntime {
-  capabilities(): Promise<RuntimeCapabilities>;
-  startSession(input: SessionInput): Promise<SessionHandle>;
-  send(session: SessionHandle, event: HarnessEvent): Promise<RuntimeEventStream>;
-  resume(sessionId: string): Promise<SessionHandle>;
-  cancel(sessionId: string): Promise<void>;
+export interface AgentRuntime {
+  id: AgentType;
+  getCapabilities(): Promise<RuntimeCapabilities>;
+  execute(ctx: ExecutionContext): Promise<AsyncIterable<ExecutionEvent>>;
+  abort(executionId: string): Promise<void>;
 }
 ```
 
-Runtimes possíveis:
+### 4.1 Características de Cada Runtime Integrado:
+- **Antigravity (`agy`)**: Motor primário para tarefas complexas de coding e automação em ambiente local. Utiliza o binário oficial em modo headless com flags `--dangerously-skip-permissions` para execução autônoma contínua.
+- **Claude Code**: Excepcional para raciocínio analítico, leitura abrangente de repositórios e refatorações cirúrgicas de código TypeScript/Go.
+- **Codex CLI**: Ideal para automações de infraestrutura e tarefas rápidas de terminal sob o wrapper `codex --yolo`.
+- **OpenCode / Ollama Local**: Motor de fallback offline para operações locais que não dependem de conexão externa.
+
+---
+
+## 5. Dogfooding & O Ciclo de Auto-Evolução Controlada
+
+Um diferencial estrutural do Engineering Harness é a sua capacidade de propor melhorias em sua própria arquitetura:
 
 ```text
-Antigravity / agy
-Claude Code
-Codex
-OpenCode
-outros
+ ┌───────────────────────────────────────────────────────────┐
+ │               Ciclo de Auto-Evolução                      │
+ └─────────────────────────────┬─────────────────────────────┘
+                               │
+                               ▼
+ ┌───────────────────────────────────────────────────────────┐
+ │ 1. Detecção de Atrito ou Oportunidade                      │
+ │    - Análise de repetição de comandos ou erros frequentes │
+ └─────────────────────────────┬─────────────────────────────┘
+                               │
+                               ▼
+ ┌───────────────────────────────────────────────────────────┐
+ │ 2. Formulação de Proposta de Mudança                      │
+ │    - Criação de RFC e branch isolada auto-evolve/*        │
+ └─────────────────────────────┬─────────────────────────────┘
+                               │
+                               ▼
+ ┌───────────────────────────────────────────────────────────┐
+ │ 3. Implementação e Bateria de Testes                      │
+ │    - Typecheck, ESLint, testes de unidade e benchmarks    │
+ └─────────────────────────────┬─────────────────────────────┘
+                               │
+                               ▼
+ ┌───────────────────────────────────────────────────────────┐
+ │ 4. Gate Humano de Promoção (1 Clique / 1 Comando)         │
+ │    - Exibição do diff sintético para aprovação final      │
+ └───────────────────────────────────────────────────────────┘
 ```
 
-## Electron + Node
+### Regras do Auto-Upgrade Seguro:
+1. O agente **nunca** comita alterações em si mesmo diretamente na branch `main`;
+2. As mudanças são desenvolvidas em uma worktree ou branch efêmera;
+3. Antes de ser apresentada ao desenvolvedor, a versão atualizada roda uma suíte de testes de auto-validação comprovando que nenhuma funcionalidade existente quebrou;
+4. Um comando simples de CLI (`eng-harness self-upgrade apply`) realiza o fast-forward merge e reinicia o serviço/processo suavemente.
 
-Direção inicial:
+---
 
-- Node.js para orchestration/core;
-- Electron como desktop shell;
-- IPC bem definido;
-- workers para tarefas longas;
-- CLI compartilhando o mesmo core.
+## 6. Architecture Dream & Memória Operacional
 
-Arquitetura:
+Além dos ciclos de consolidação de memória de fatos e de skills, o Engineering Harness introduz o **Architecture Dream**:
 
-```text
-Electron UI
-   |
-   v
-Harness Core
-   |
-   +--> Runtime Adapters
-   +--> Skill Engine
-   +--> Memory Engine
-   +--> Dream Engine
-   +--> Workflow Engine
-```
+### 6.1 Objetivos do Architecture Dream
+- **Detecção de Código Duplicado Entre Repositórios**: Analisa projetos distintos mantidos no workspace e identifica helpers ou funções utilitárias que foram reinventadas, propondo sua extração para um pacote no monorepo.
+- **Identificação de Débito Técnico Recorrente**: Identifica arquivos que sofreram múltiplos hotfixes sucessivos, sugerindo refatorações estruturais ou padrões de projeto mais adequados.
+- **Sincronização com o Second Brain**: Gera registros arquiteturais canônicos em formato Markdown no Obsidian (`AiSecondBrain/Architectural-Decisions/`), mantendo o mapa mental sempre alinhado com a realidade do código.
 
-## Modo CLI
+---
 
-Muito importante não acoplar tudo ao Electron.
+## 7. Interfaces de Usuário: CLI Primário + Cockpit Desktop
 
-Exemplo:
+A arquitetura garante que a produtividade nunca fique refém de uma interface gráfica pesada:
 
+### 7.1 CLI First (Terminal diário)
+O CLI é construído com Node.js nativo ou Bun binary standalone para inicialização instantânea (< 30ms):
 ```bash
-eng-harness run
-eng-harness plan
-eng-harness skills
-eng-harness memory
-eng-harness dream
-eng-harness runtime list
+# Execução direta de tarefa com o perfil padrão de engenharia
+eng-harness run "Refatorar middleware de autenticação para suportar passkeys"
+
+# Planejamento estruturado sem alterar arquivos imediatamente
+eng-harness plan "Migrar banco de dados SQLite para PostgreSQL"
+
+# Gestão de skills do ecossistema
+eng-harness skills list
+eng-harness skills create "docker.multi-stage-optimization"
+
+# Disparo manual de ciclo de consolidação
+eng-harness dream architecture --scope "containers/router-ai-atius"
 ```
 
-Isso permite:
+### 7.2 Cockpit Desktop (Electron / React 19)
+Para análises visuais profundas e acompanhamento de execuções longas:
+- **Grafo do Second Brain & Memória**: Navegação interativa nas entidades, conexões e decisões salvas no GBrain;
+- **Painel de Runtimes Ativos**: Métricas em tempo real de latência, tokens gerados e saúde de cada agente;
+- **Timeline de Auto-Evolução**: Histórico visual de todas as melhorias sugeridas e aplicadas no harness;
+- **Central de Skills**: Editor visual de skills com validação de schema e testes integrados.
 
-- automações;
-- CI;
-- VM;
-- execução remota;
-- cron;
-- pipelines.
+---
 
-## Memória
+## 8. Plano de Execução e Roadmap em Milestones
 
-Usar a mesma separação conceitual:
-
-- memória declarativa;
-- skills operacionais;
-- decisões arquiteturais;
-- histórico de execução;
-- evidências.
-
-GBrain pode funcionar como backend de memória.
-
-## Skills
-
-Skills devem ser reutilizáveis e versionadas.
-
-Exemplos:
-
-```text
-node.create-runtime-adapter
-electron.secure-ipc
-typescript.refactor-service
-github.prepare-pr
-docker.optimize-image
-podman.rootless-runtime
-api.openai-compatible-adapter
-```
-
-## Dream Mode
-
-Dois ciclos principais:
-
-```text
-Memory Dream
-Skill Dream
-```
-
-O Skill Dream deve aprender com execução real.
-
-Possível extensão pessoal:
-
-```text
-Architecture Dream
-```
-
-Responsável por analisar:
-
-- decisões repetidas;
-- tech debt;
-- padrões arquiteturais;
-- componentes duplicados;
-- oportunidades de abstração;
-- bibliotecas que podem virar módulos comuns.
-
-## Lifecycle de conhecimento
-
-```text
-raw
- -> candidate
- -> validated
- -> canonical
- -> superseded
- -> archived
-```
-
-## Auto-evolução controlada
-
-O Harness pode sugerir alterações em si mesmo, mas não deve aplicar mudanças estruturais críticas automaticamente sem gate.
-
-Exemplo:
-
-```text
-observação
- -> proposta
- -> implementação em branch
- -> testes
- -> benchmark
- -> revisão
- -> promoção
-```
-
-## Separação entre dados pessoais e corporativos
-
-Regra forte:
-
-- não compartilhar memória corporativa com o Engineering Harness;
-- não sincronizar repositórios corporativos sem autorização;
-- não reutilizar secrets;
-- não importar automaticamente policies internas;
-- não assumir que um runtime permitido no ambiente pessoal é permitido na empresa.
-
-## Possível arquitetura de monorepo
-
-```text
-apps/
-  desktop/
-  cli/
-
-packages/
-  core/
-  runtime-sdk/
-  workflow-engine/
-  memory-sdk/
-  skill-engine/
-  dream-engine/
-  ui-components/
-
-adapters/
-  antigravity/
-  claude-code/
-  codex/
-
-profiles/
-  software-engineering/
-  qa/
-  devops/
-```
-
-## Prioridade inicial
-
-Primeiro entregar um núcleo pequeno:
-
-1. CLI.
-2. Runtime Adapter.
-3. Um runtime funcional.
-4. Skill registry.
-5. GBrain integration.
-6. Workflow engine.
-7. Dream Mode básico.
-8. Electron UI.
-9. Grafo/Wiki.
-10. Auto-evolução controlada.
-
-## Decisão canônica registrada
-
-O Engineering Harness é pessoal e genérico.
-
-O QA Automation Harness permanece um projeto corporativo distinto.
-
-Ambos podem compartilhar conceitos e bibliotecas, mas não devem compartilhar automaticamente dados, memória, secrets ou governança.
+| Milestone | Objetivo Técnico | Entregáveis | Critério de Aceitação |
+| :--- | :--- | :--- | :--- |
+| **M1: CLI Core & Antigravity Adapter** | Estrutura base de monorepo e execução do `agy` headless via CLI. | `apps/cli`, `packages/core`, `adapters/antigravity`. | CLI executa tarefa simples de refatoração ponta a ponta sem falhas. |
+| **M2: Skill Engine & Integração GBrain** | Registry de skills versionadas e persistência de memória no GBrain. | `packages/skill-engine`, `packages/memory-sdk`. | Agente consulta e executa skill pré-definida e registra aprendizado na memória. |
+| **M3: Suporte Multi-Agente (Claude + Codex)** | Implementação dos adapters para Claude Code e Codex CLI. | `adapters/claude-code`, `adapters/codex`. | Capacidade de alternar o agente executor via flag `--runtime=claude-code`. |
+| **M4: Self-Improvement Loop & Architecture Dream** | Criação do mecanismo de auto-evolução e análise transversal de código. | `packages/dream-engine` com rotinas de análise estática. | Harness detecta duplicação de código real e abre branch com proposta de abstração. |
+| **M5: Desktop Cockpit Shell** | Interface gráfica rica em Electron com visualizador de grafos e métricas. | `apps/desktop` com React 19, Tailwind CSS e Base UI. | Usuário navega pelo grafo de conhecimento e acompanha execuções em tempo real. |
+| **M6: Dogfooding Contínuo & Ecossistema de Skills** | Operação diária completa usando o harness como motor principal de trabalho. | Suíte de 30+ skills canônicas cobrindo stack Go, React, Podman e TypeScript. | 100% dos novos desenvolvimentos de ferramentas pessoais geridos pelo harness. |

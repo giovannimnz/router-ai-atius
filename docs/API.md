@@ -239,7 +239,7 @@ Resposta OpenAI-compatible:
 }
 ```
 
-`embedding-gte-v1` e o modelo default governado em `service/embeddinggovernor`. O relay aplica fail-closed antes do dispatch upstream quando esse modelo recebe mais de 4 itens em `input`. O header opcional `X-Embedding-Workload` pode classificar a chamada como `batch`, `bulk`, `interactive` ou `realtime`; isso altera a fila operacional, nao o nome publico do modelo.
+`embedding-gte-v1` e o modelo default governado em `service/embeddinggovernor`. Cada dispatch upstream fica limitado a 4 itens; arrays publicos maiores sao sub-batched em chunks de ate 4 e recompostos com indices e `usage` consistentes, sem resposta parcial quando um chunk falha. O header opcional `X-Embedding-Workload` pode classificar a chamada como `batch`, `bulk`, `interactive` ou `realtime`; isso altera a fila operacional, nao o nome publico do modelo nem o limite por dispatch.
 
 ### Admin Envelope
 

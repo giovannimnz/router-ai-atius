@@ -364,12 +364,6 @@ func (g *Governor) Acquire(ctx context.Context, req Request) (*Lease, *Reject) {
 			g.decrementWaiterLocked(batch)
 			return nil, reject
 		}
-		if wait := g.cooldownWaitLocked(g.clock()); wait > 0 {
-			g.mu.Unlock()
-			waitForCooldown(ctx, wait)
-			g.mu.Lock()
-			continue
-		}
 		if g.canStartLocked(batch) {
 			g.decrementWaiterLocked(batch)
 			g.running++
@@ -1180,25 +1174,6 @@ func (g *Governor) decrementWaiterLocked(batch bool) {
 	}
 }
 
-func (g *Governor) cooldownWaitLocked(now time.Time) time.Duration {
-	if g.cooldownUntil.IsZero() || !now.Before(g.cooldownUntil) {
-		return 0
-	}
-	return g.cooldownUntil.Sub(now)
-}
-
-func waitForCooldown(ctx context.Context, wait time.Duration) {
-	if wait <= 0 {
-		return
-	}
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-	case <-timer.C:
-	}
-}
-
 func rejectFromContext(err error, timeout time.Duration) *Reject {
 	if err == context.Canceled {
 		return &Reject{
@@ -1288,7 +1263,7 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.HealthProbeInterval < defaultHealthProbeInterval {
 		cfg.HealthProbeInterval = defaultHealthProbeInterval
 	}
-	if cfg.HealthBadWindowThreshold < 1 {
+	if cfg.HealthBadWindowThreshold < defaultHealthBadWindowThreshold {
 		cfg.HealthBadWindowThreshold = defaultHealthBadWindowThreshold
 	}
 	if cfg.HealthSlowDuration <= 0 {

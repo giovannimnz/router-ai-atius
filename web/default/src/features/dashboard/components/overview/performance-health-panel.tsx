@@ -30,29 +30,11 @@ import {
   getSuccessRateDotClass,
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
-import type { PerfModelSummary } from '@/features/performance-metrics/types'
+import { buildPerformanceSummary } from '@/features/performance-metrics/lib/summary'
 import { cn } from '@/lib/utils'
 
 const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 6
-
-type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
-
-function simpleAverage(
-  rows: PerfModelSummary[],
-  metric: WeightedMetric,
-  isValid: (value: number) => boolean
-): number {
-  let total = 0
-  let count = 0
-  for (const row of rows) {
-    const value = Number(row[metric])
-    if (!isValid(value)) continue
-    total += value
-    count++
-  }
-  return count > 0 ? total / count : NaN
-}
 
 export function PerformanceHealthPanel() {
   const { t } = useTranslation()
@@ -68,23 +50,7 @@ export function PerformanceHealthPanel() {
     [metricsQuery.data]
   )
 
-  const summary = useMemo(() => {
-    return {
-      avgLatencyMs: Math.round(
-        simpleAverage(
-          models,
-          'avg_latency_ms',
-          (v) => Number.isFinite(v) && v > 0
-        )
-      ),
-      avgTps: simpleAverage(
-        models,
-        'avg_tps',
-        (v) => Number.isFinite(v) && v > 0
-      ),
-      successRate: simpleAverage(models, 'success_rate', Number.isFinite),
-    }
-  }, [models])
+  const summary = useMemo(() => buildPerformanceSummary(models), [models])
 
   const topModels = useMemo(() => models.slice(0, TOP_MODEL_LIMIT), [models])
   const loading = metricsQuery.isLoading

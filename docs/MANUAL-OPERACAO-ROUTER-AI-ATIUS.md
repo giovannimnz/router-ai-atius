@@ -196,12 +196,12 @@ Estado atualizado em 2026-07-05:
   1. `X-Embedding-Workload: batch|bulk|interactive|realtime`;
   2. thresholds locais derivados do request (`InputCount >= 2` ou `InputChars >= 12000`).
 - Nao exponha um alias publico `*-batch`: sem alias publico batch; batch e uma classe operacional interna do mesmo modelo `embedding-gte-v1`.
-- arrays governados de `embedding-gte-v1` acima de `4` itens fazem fail-closed no relay antes do acquire do governor ou dispatch upstream. O header `interactive` nao bypassa esse cap, porque o TEI local nao tem caminho seguro de recomposicao transparente de resposta para batches maiores.
+- Cada chamada upstream de `embedding-gte-v1` continua limitada a `4` itens. Arrays publicos maiores sao divididos em chunks de no maximo `4`, passam individualmente pelo governor e sao recompostos com indices contiguos e `usage` somado; qualquer chunk que falhar encerra o request sem devolver resultado parcial. O header `interactive` altera somente a classe operacional e nao bypassa esse cap upstream.
 - O reranker usa `X-Rerank-Workload` e compartilha o mesmo governor. O canal Advanced Custom converte `POST /v1/rerank` de `query`/`documents` para o contrato TEI `query`/`texts`, depois converte `score` para `results[].relevance_score`.
 - Requests de `reranker-gte-v1` acima de `20` documentos fazem fail-closed antes do acquire ou dispatch. O relay reaplica `top_n` e `return_documents`, sem expor o contrato nativo do TEI.
 - Feedback adaptativo agora fica separado entre interativo e batch. O governor mantem EWMA/counters distintos para cada classe, para que catch-up lento nao envenene a reabertura interativa.
 - Classificacao de falha tambem ficou mais estrita. So pressao real reduz concorrencia: `429`, `5xx`, falha de transporte/timeout ou request acima do slow threshold da propria classe. Erros comuns de cliente `4xx` nao reduzem concorrencia por si sós.
-- Em pressao real, o governor reduz para `min=1` e entra em cooldown. Durante o cooldown, novos despachos governados ficam segurados na fila ate expirar ou ate o timeout do request; a reabertura e gradual por janela de sucesso e por demanda interativa saudavel.
+- Em pressao real, o governor reduz para `min=1` e entra em cooldown de scale-up. O slot minimo permanece half-open para provar recuperacao sem transformar uma falha transitoria em cascata de `queue_timeout`; health realmente ruim continua fechando admissao com `embedding_governor_upstream_unhealthy`. A reabertura acima do minimo permanece gradual por janela de sucesso e demanda interativa saudavel.
 - Guardrail de health do TEI agora existe, mas e advisory, read-only e disabled-by-default. Ele so liga quando `EMBEDDING_GOVERNOR_HEALTH_PROBE_ENABLED=true` e `EMBEDDING_GOVERNOR_HEALTH_PROBE_URL` apontam para um endpoint HTTP/HTTPS sem auth extra. O probe faz apenas `GET`, nao envia token/header secreto e nao controla deploy/restart.
 - Uma unica amostra ruim de `/health` nao reduz concorrencia e nao arma cooldown. O governor apenas incrementa `health_bad_windows`.
 - Apos `3` janelas ruins consecutivas (default minimo), o governor bloqueia scale-up. Cada janela ruim adicional pode reduzir a concorrencia em `1` ate `min=1`. Uma amostra saudavel reseta o contador de janelas ruins.
@@ -273,7 +273,7 @@ Significado operacional dos envs novos:
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_URL=`: endpoint read-only do TEI. Se vazio, invalido ou exigir auth por URL, o probe fica desabilitado.
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_TIMEOUT=30s`: timeout minimo seguro. Timeouts menores que isso ficam normalizados para `30s`.
 - `EMBEDDING_GOVERNOR_HEALTH_PROBE_INTERVAL=30s`: cadencia default entre probes. Tambem e normalizada para pelo menos `30s`.
-- `EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3`: minima quantidade de janelas ruins consecutivas antes de bloquear scale-up e comecar a descer gradualmente.
+- `EMBEDDING_GOVERNOR_HEALTH_BAD_WINDOW_THRESHOLD=3`: minima quantidade de janelas ruins consecutivas antes de bloquear scale-up e comecar a descer gradualmente; valores menores sao normalizados para `3` no runtime.
 - `EMBEDDING_GOVERNOR_HEALTH_SLOW_DURATION=10s`: resposta `200` acima disso conta como janela ruim, mas ainda sem cooldown imediato.
 - `EMBEDDING_GOVERNOR_CAPACITY_PROBE_ENABLED=false`: default seguro. Sem isso, o governor nao consulta endpoint de capacidade.
 - `EMBEDDING_GOVERNOR_CAPACITY_PROBE_URL=`: endpoint read-only interno de capacidade dos pods TEI. Se vazio, invalido ou exigir auth por URL, o probe fica desabilitado.

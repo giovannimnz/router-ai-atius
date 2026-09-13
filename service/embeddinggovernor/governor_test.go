@@ -432,10 +432,12 @@ func TestHealthGuardrailRejectsAdmissionAndRecovers(t *testing.T) {
 	g := newGovernor(testConfigWith(func(cfg *Config) {
 		cfg.HealthProbeEnabled = true
 		cfg.HealthProbeURL = "http://tei.local/health"
-		cfg.HealthBadWindowThreshold = 1
+		cfg.HealthBadWindowThreshold = 3
 	}), false)
 
-	g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	for range 3 {
+		g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	}
 	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
 	require.Nil(t, lease)
 	require.NotNil(t, reject)
@@ -456,7 +458,7 @@ func TestHealthGuardrailReleasesQueuedRequestWithFastReject(t *testing.T) {
 		cfg.MaxConcurrency = 1
 		cfg.HealthProbeEnabled = true
 		cfg.HealthProbeURL = "http://tei.local/health"
-		cfg.HealthBadWindowThreshold = 1
+		cfg.HealthBadWindowThreshold = 3
 	}), false)
 
 	first, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
@@ -474,7 +476,9 @@ func TestHealthGuardrailReleasesQueuedRequestWithFastReject(t *testing.T) {
 		return g.Snapshot().WaitingInteractive == 1
 	}, time.Second, 10*time.Millisecond)
 
-	g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	for range 3 {
+		g.observeHealthSample(http.StatusServiceUnavailable, time.Millisecond, nil)
+	}
 	require.Nil(t, <-waiting)
 	reject = <-waitingReject
 	require.NotNil(t, reject)
@@ -499,7 +503,7 @@ func TestLoadConfigNormalizesHealthProbeSettings(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:9999/health", cfg.HealthProbeURL)
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeTimeout)
 	assert.Equal(t, 30*time.Second, cfg.HealthProbeInterval)
-	assert.Equal(t, 1, cfg.HealthBadWindowThreshold)
+	assert.Equal(t, 3, cfg.HealthBadWindowThreshold)
 	assert.Equal(t, 10*time.Second, cfg.HealthSlowDuration)
 }
 
@@ -991,24 +995,48 @@ func TestInteractiveDemandCanScaleFromOneWhenHealthy(t *testing.T) {
 	second.Finish(true, http.StatusOK, time.Millisecond)
 }
 
-func TestGovernorHoldsRequestsDuringCooldownBeforeReopening(t *testing.T) {
+func TestGovernorKeepsMinimumConcurrencyOpenDuringCooldown(t *testing.T) {
 	g := New(testConfigWith(func(cfg *Config) {
 		cfg.InitialConcurrency = 2
 		cfg.MaxConcurrency = 3
 		cfg.MinConcurrency = 1
-		cfg.Cooldown = 30 * time.Millisecond
-		cfg.InteractiveTimeout = 200 * time.Millisecond
+		cfg.Cooldown = time.Hour
+		cfg.InteractiveTimeout = 50 * time.Millisecond
 	}))
 
 	finishSequential(t, g, false, http.StatusInternalServerError)
 
-	startedAt := time.Now()
-	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	lease, reject := g.Acquire(ctx, Request{Model: "embedding-gte-v1"})
 	require.Nil(t, reject)
 	require.NotNil(t, lease)
-	assert.GreaterOrEqual(t, time.Since(startedAt), 25*time.Millisecond)
+	assert.Equal(t, 1, g.Snapshot().CurrentConcurrency)
 
 	lease.Finish(true, http.StatusOK, time.Millisecond)
+}
+
+func TestRerankerPressureDoesNotCooldownBlockEmbedding(t *testing.T) {
+	g := New(testConfigWith(func(cfg *Config) {
+		cfg.InitialConcurrency = 2
+		cfg.MaxConcurrency = 3
+		cfg.MinConcurrency = 1
+		cfg.Cooldown = time.Hour
+		cfg.InteractiveTimeout = 50 * time.Millisecond
+	}))
+
+	reranker, reject := g.Acquire(context.Background(), Request{Model: "reranker-gte-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, reranker)
+	reranker.Finish(false, http.StatusInternalServerError, 2*time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	embedding, reject := g.Acquire(ctx, Request{Model: "embedding-gte-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, embedding)
+	assert.Equal(t, 1, g.Snapshot().CurrentConcurrency)
+	embedding.Finish(true, http.StatusOK, time.Millisecond)
 }
 
 func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
@@ -1033,12 +1061,11 @@ func TestGovernorReducesOnFailureAndReopensAfterCooldown(t *testing.T) {
 	assert.Equal(t, 1, snapshot.CurrentConcurrency)
 	assert.True(t, snapshot.CooldownUntil.After(now))
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-	lease, reject := g.Acquire(ctx, Request{Model: "embedding-gte-v1"})
-	require.Nil(t, lease)
-	require.NotNil(t, reject)
-	assert.Equal(t, "embedding_governor_queue_timeout", reject.Code)
+	lease, reject := g.Acquire(context.Background(), Request{Model: "embedding-gte-v1"})
+	require.Nil(t, reject)
+	require.NotNil(t, lease)
+	lease.Finish(true, http.StatusOK, time.Millisecond)
+	assert.Equal(t, 1, g.Snapshot().CurrentConcurrency)
 
 	now = now.Add(time.Minute + time.Nanosecond)
 	finishSequential(t, g, true, http.StatusOK)

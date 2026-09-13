@@ -56,3 +56,13 @@ da falha.
 - Imagem: `localhost/router-ai-atius:prod-20260821-gpt54-mini-auth-sync`.
 - Image ID: `ae5839459fea595aa4d8ebc7aded6c8006251a529bfa039aa76741a24e1365c8`.
 - Rollback: `localhost/router-ai-atius:rollback-pre-gpt54-mini-auth-sync-20260821`.
+
+## Revalidacao 2026-08-22
+
+- Imagem promovida automaticamente: `localhost/router-ai-atius:main-80213e10d`,
+  ID `1166573ec85dd9df1a70a44fd4fa8de6636cef6000db10f3a2ce8cea3e29f70e`.
+- Binario da imagem contem o marcador backend `external_file`.
+- Path e timer permaneceram ativos e executando `action=noop`.
+- `/v1/messages` com `gpt-5.4-mini`: HTTP 200.
+- Estado acumulado desde o fix: 12 sucessos e zero erros.
+- Janela de 24h: 12/17, 70,59%; bucket mais recente: 1/1, 100%.

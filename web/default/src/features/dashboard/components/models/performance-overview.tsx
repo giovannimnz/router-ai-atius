@@ -30,57 +30,12 @@ import {
   getSuccessRateDotClass,
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
+import { buildPerformanceSummary } from '@/features/performance-metrics/lib/summary'
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
 const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 6
-
-type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
-
-type PerformanceSummary = {
-  totalRequests: number
-  avgLatencyMs: number
-  avgTps: number
-  successRate: number
-}
-
-function simpleAverage(
-  rows: PerfModelSummary[],
-  metric: WeightedMetric,
-  isValid: (value: number) => boolean
-): number {
-  let total = 0
-  let count = 0
-
-  for (const row of rows) {
-    const value = Number(row[metric])
-    if (!isValid(value)) continue
-    total += value
-    count++
-  }
-
-  return count > 0 ? total / count : NaN
-}
-
-function buildPerformanceSummary(rows: PerfModelSummary[]): PerformanceSummary {
-  return {
-    totalRequests: rows.length,
-    avgLatencyMs: Math.round(
-      simpleAverage(
-        rows,
-        'avg_latency_ms',
-        (value) => Number.isFinite(value) && value > 0
-      )
-    ),
-    avgTps: simpleAverage(
-      rows,
-      'avg_tps',
-      (value) => Number.isFinite(value) && value > 0
-    ),
-    successRate: simpleAverage(rows, 'success_rate', Number.isFinite),
-  }
-}
 
 export function PerformanceOverview() {
   const { t } = useTranslation()

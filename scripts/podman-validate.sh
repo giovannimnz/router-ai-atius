@@ -40,7 +40,7 @@ echo "  OK"
 
 # Step 2: verify required services are present
 echo "[validate] step 2/4: check required services"
-REQUIRED=(new-api model-detailed postgres redis)
+REQUIRED=(router-ai-atius postgres redis)
 SERVICES=$(python3 -c "import yaml; print(' '.join(yaml.safe_load(open('podman-compose.yml'))['services'].keys()))")
 echo "  services found: $SERVICES"
 for r in "${REQUIRED[@]}"; do
@@ -63,17 +63,21 @@ ENV_FILE=$(mktemp)
 trap "rm -f $ENV_FILE" EXIT
 echo "POSTGRES_PASSWORD=validate-me" >> "$ENV_FILE"
 echo "REDIS_PASSWORD=validate-me" >> "$ENV_FILE"
-if command -v docker >/dev/null 2>&1; then
+if command -v podman-compose >/dev/null 2>&1; then
+  if env POSTGRES_PASSWORD=validate-me REDIS_PASSWORD=validate-me podman-compose -f podman-compose.yml config --quiet 2>/dev/null; then
+    echo "  ✓ podman-compose spec renders cleanly"
+  else
+    echo "  ERROR: podman-compose config failed"
+    env POSTGRES_PASSWORD=validate-me REDIS_PASSWORD=validate-me podman-compose -f podman-compose.yml config 2>&1 | head -20
+    exit 2
+  fi
+elif command -v docker >/dev/null 2>&1; then
   if docker compose --env-file "$ENV_FILE" -f podman-compose.yml config --quiet 2>/dev/null; then
     echo "  ✓ compose spec renders cleanly (with --env-file)"
   else
     echo "  ERROR: docker compose config failed even with env file"
     docker compose --env-file "$ENV_FILE" -f podman-compose.yml config 2>&1 | head -20
     exit 2
-  fi
-elif command -v podman-compose >/dev/null 2>&1; then
-  if env POSTGRES_PASSWORD=validate-me REDIS_PASSWORD=validate-me podman-compose -f podman-compose.yml config --quiet 2>/dev/null; then
-    echo "  ✓ podman-compose spec renders cleanly"
   fi
 else
   echo "  SKIPPED (no docker compose or podman-compose installed; YAML parse was sufficient)"

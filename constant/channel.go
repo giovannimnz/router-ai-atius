@@ -57,6 +57,7 @@ const (
 	ChannelTypeCodex                = 57
 	ChannelTypeAdvancedCustom       = 58
 	ChannelTypeAtiusLocalEmbeddings = 59
+	ChannelTypeAntigravity          = 60
 	ChannelTypeDummy                // this one is only for count, do not add any channel after this
 
 )
@@ -190,6 +191,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeCodex:                "ChatGPT - Codex",
 	ChannelTypeAdvancedCustom:       "Advanced Custom",
 	ChannelTypeAtiusLocalEmbeddings: AtiusLocalChannelName,
+	ChannelTypeAntigravity:          "Google - Antigravity",
 }
 
 func IsAdvancedCustomChannelType(channelType int) bool {

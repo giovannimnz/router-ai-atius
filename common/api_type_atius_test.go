@@ -19,3 +19,14 @@ func TestAtiusLocalEmbeddingsUsesAdvancedCustomAPIType(t *testing.T) {
 func TestCodexChannelTypeUsesCanonicalProductionName(t *testing.T) {
 	assert.Equal(t, "ChatGPT - Codex", constant.GetChannelTypeName(constant.ChannelTypeCodex))
 }
+
+func TestAntigravityChannelTypeUsesAntigravityAPIType(t *testing.T) {
+	apiType, ok := ChannelType2APIType(constant.ChannelTypeAntigravity)
+
+	require.True(t, ok)
+	assert.Equal(t, constant.APITypeAntigravity, apiType)
+}
+
+func TestAntigravityChannelTypeUsesCanonicalProductionName(t *testing.T) {
+	assert.Equal(t, "Google - Antigravity", constant.GetChannelTypeName(constant.ChannelTypeAntigravity))
+}

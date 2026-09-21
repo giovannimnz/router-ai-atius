@@ -22,6 +22,9 @@ ACC2_PUBLIC_IP="137.131.140.20"
 ACC2_PORT="18082"
 ACC2_VOL="atius-agy-vol-acc2"
 
+LB_CONTAINER="atius-agy-lb"
+LB_PORT="18088"
+
 BASE_IMAGE="docker.io/library/golang:1.25-bookworm"
 AGY_BIN="$(command -v agy || echo "/home/ubuntu/.local/bin/agy")"
 DAEMON_SCRIPT="$SCRIPT_DIR/agy-daemon.py"
@@ -87,10 +90,35 @@ start_container() {
   echo "Container $name started."
 }
 
+start_lb() {
+  echo "==> Starting $LB_CONTAINER (Round-Robin Load Balancer) on port $LB_PORT..."
+  if podman container exists "$LB_CONTAINER" 2>/dev/null; then
+    echo "Stopping existing $LB_CONTAINER..."
+    podman stop -t 2 "$LB_CONTAINER" >/dev/null 2>&1 || true
+    podman rm -f "$LB_CONTAINER" >/dev/null 2>&1 || true
+  fi
+
+  taskset -c 0,1 podman run -d \
+    --name "$LB_CONTAINER" \
+    --restart unless-stopped \
+    --network=host \
+    -v "$DAEMON_SCRIPT:/usr/local/bin/agy-daemon.py:ro" \
+    -e "AGY_DAEMON_PORT=$LB_PORT" \
+    -e "AGY_ACCOUNT_LABEL=pool-load-balancer" \
+    -e "AGY_POOL_URLS=http://127.0.0.1:$ACC1_PORT,http://127.0.0.1:$ACC2_PORT" \
+    --cpus "0.2" \
+    --memory "256m" \
+    "$BASE_IMAGE" \
+    python3 /usr/local/bin/agy-daemon.py
+
+  echo "Container $LB_CONTAINER started on 127.0.0.1:$LB_PORT."
+}
+
 start_pool() {
   setup_volumes
   start_container "$ACC1_CONTAINER" "$ACC1_LOCAL_IP" "$ACC1_PORT" "$ACC1_VOL" "acc1-vpn-atius"
   start_container "$ACC2_CONTAINER" "$ACC2_LOCAL_IP" "$ACC2_PORT" "$ACC2_VOL" "acc2-home-proxy"
+  start_lb
   echo ""
   echo "Waiting 3 seconds for daemons to initialize..."
   sleep 3
@@ -99,7 +127,7 @@ start_pool() {
 
 stop_pool() {
   echo "==> Stopping agy pool containers..."
-  for name in "$ACC1_CONTAINER" "$ACC2_CONTAINER"; do
+  for name in "$LB_CONTAINER" "$ACC1_CONTAINER" "$ACC2_CONTAINER"; do
     if podman container exists "$name" 2>/dev/null; then
       echo "Stopping $name..."
       podman stop -t 5 "$name" || true
@@ -111,7 +139,7 @@ stop_pool() {
 
 status_pool() {
   echo "================================================================="
-  echo "  Atius Antigravity Pool Status (Multi-Account Egress)"
+  echo "  Atius Antigravity Pool Status (Multi-Account Egress + LB)"
   echo "================================================================="
   printf "%-18s | %-12s | %-16s | %-16s | %-10s\n" "Container" "Local Port" "Bind IP (Host)" "Public Egress IP" "Health"
   echo "-------------------|--------------|------------------|------------------|-----------"
@@ -122,7 +150,7 @@ status_pool() {
     local actual_egress="UNKNOWN"
 
     if podman container exists "$name" 2>/dev/null; then
-      if curl -s -m 2 "http://127.0.0.1:$port/health" | grep -q "ready"; then
+      if curl -s -m 2 "http://127.0.0.1:$port/health" | grep -qE '"(ok|ready)"'; then
         health="READY"
       else
         health="STARTING"
@@ -132,6 +160,15 @@ status_pool() {
 
     printf "%-18s | %-12s | %-16s | %-16s | %-10s\n" "$name" "$port" "$local_ip" "$actual_egress" "$health"
   done
+
+  # LB status
+  local lb_health="DOWN"
+  if podman container exists "$LB_CONTAINER" 2>/dev/null; then
+    if curl -s -m 2 "http://127.0.0.1:$LB_PORT/health" | grep -q '"status": "ok"'; then
+      lb_health="READY"
+    fi
+  fi
+  printf "%-18s | %-12s | %-16s | %-16s | %-10s\n" "$LB_CONTAINER" "$LB_PORT" "127.0.0.1 (host)" "acc1/acc2 (RR)" "$lb_health"
   echo "================================================================="
 }
 

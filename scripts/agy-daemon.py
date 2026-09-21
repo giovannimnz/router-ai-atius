@@ -15,6 +15,7 @@ Environment variables:
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -111,7 +112,9 @@ def _proxy_to_pool(handler: "AgyHandler", path: str, body: bytes | None, method:
             for key, val in resp.headers.items():
                 if key.lower() not in ("transfer-encoding", "connection"):
                     handler.send_header(key, val)
+            handler.send_header("Connection", "close")
             handler.end_headers()
+            handler.close_connection = True
             # Stream response bytes
             while True:
                 chunk = resp.read(4096)
@@ -134,6 +137,11 @@ def _proxy_to_pool(handler: "AgyHandler", path: str, body: bytes | None, method:
             sys.stdout.flush()
             _mark_pool_failure(url)
             continue  # try next
+
+    sys.stdout.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] All pool backends failed for {path}\n")
+    sys.stdout.flush()
+    handler.send_error(502, "All pool backends failed")
+    return False
 
 
 # --- Message Formatting ---
@@ -385,15 +393,30 @@ class AgyHandler(BaseHTTPRequestHandler):
                 },
             }
 
+            resp_bytes = json.dumps(resp_payload).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_bytes)))
+            self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(json.dumps(resp_payload).encode("utf-8"))
+            self.wfile.write(resp_bytes)
+            self.wfile.flush()
+            self.close_connection = True
 
 
 def main():
     mode = "load-balancer" if _pool_urls else "direct"
     server = HTTPServer(("0.0.0.0", PORT), AgyHandler)
+
+    def _sig_handler(signum, frame):
+        sys.stdout.write(f"\nReceived signal {signum}, shutting down agy-daemon...\n")
+        sys.stdout.flush()
+        # In a separate thread so serve_forever unblocks cleanly
+        threading.Thread(target=server.shutdown).start()
+
+    signal.signal(signal.SIGTERM, _sig_handler)
+    signal.signal(signal.SIGINT, _sig_handler)
+
     sys.stdout.write(
         f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] agy-daemon started on port {PORT} "
         f"account='{ACCOUNT_LABEL}' mode={mode}"
@@ -402,8 +425,7 @@ def main():
     sys.stdout.flush()
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
-        sys.stdout.write("\nShutting down agy-daemon.\n")
+    finally:
         server.server_close()
 
 

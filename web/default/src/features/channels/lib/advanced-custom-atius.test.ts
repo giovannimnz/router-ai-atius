@@ -34,6 +34,10 @@ describe('Atius Local channel preset', () => {
     assert.equal(CHANNEL_TYPES[57], 'ChatGPT - Codex')
   })
 
+  test('keeps the production Antigravity channel name canonical', () => {
+    assert.equal(CHANNEL_TYPES[60], 'Google - Antigravity')
+  })
+
   test('contains the validated embeddings and reranker routes', () => {
     const config = createAtiusLocalEmbeddingsConfig()
 

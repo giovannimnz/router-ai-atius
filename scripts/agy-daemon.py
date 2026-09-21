@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
 """
-Atius Antigravity Daemon (agy-daemon)
-Exposes an OpenAI-compatible /v1/chat/completions endpoint backed by official agy CLI.
-Runs inside isolated rootless Podman containers with dedicated egress IPs.
+agy-daemon.py — OpenAI-compatible HTTP wrapper around the agy CLI.
+
+Supports single-instance and multi-instance round-robin load balancing.
+
+Environment variables:
+  AGY_DAEMON_PORT    Listen port (default: 8080)
+  AGY_ACCOUNT_LABEL  Label for logs (default: default)
+  AGY_POOL_URLS      Comma-separated upstream agy-daemon URLs for LB mode.
+                     When set, this instance acts as a load-balancer proxy
+                     and does NOT spawn agy directly.
+                     Example: http://127.0.0.1:18081,http://127.0.0.1:18082
 """
 
 import json
 import os
+import subprocess
 import sys
+import threading
 import time
 import uuid
-import subprocess
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.request
+import urllib.error
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("AGY_DAEMON_PORT", "8080"))
 ACCOUNT_LABEL = os.environ.get("AGY_ACCOUNT_LABEL", "default")
-DEFAULT_MODEL = os.environ.get("AGY_DEFAULT_MODEL", "gemini-3.8-flash-high")
+DEFAULT_MODEL = "gemini-3.8-flash-high"
 
 SUPPORTED_MODELS = [
     "gemini-3.8-flash-high",
@@ -34,76 +45,170 @@ SUPPORTED_MODELS = [
     "gpt-oss-120b-medium",
 ]
 
+# --- Load Balancer State ---
+_pool_urls = [u.strip() for u in os.environ.get("AGY_POOL_URLS", "").split(",") if u.strip()]
+_pool_lock = threading.Lock()
+_pool_index = 0
+_pool_failures: dict[str, int] = {}  # url -> consecutive failures
+MAX_FAILURES = 3  # mark unhealthy after this many consecutive failures
 
-def format_messages_to_prompt(messages):
-    """Converts an OpenAI messages list into a coherent prompt string for agy."""
-    if not messages:
-        return ""
-    if len(messages) == 1 and messages[0].get("role") == "user":
-        content = messages[0].get("content", "")
-        if isinstance(content, list):
-            # Extract text parts
-            parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-            return "\n".join(parts)
-        return str(content)
 
-    formatted = []
+def _next_pool_url() -> str | None:
+    """Round-robin over healthy pool URLs."""
+    global _pool_index
+    if not _pool_urls:
+        return None
+    with _pool_lock:
+        start = _pool_index
+        for i in range(len(_pool_urls)):
+            idx = (start + i) % len(_pool_urls)
+            url = _pool_urls[idx]
+            if _pool_failures.get(url, 0) < MAX_FAILURES:
+                _pool_index = (idx + 1) % len(_pool_urls)
+                return url
+        # All unhealthy — reset and try first
+        for url in _pool_urls:
+            _pool_failures[url] = 0
+        _pool_index = 1 % len(_pool_urls)
+        return _pool_urls[0]
+
+
+def _mark_pool_failure(url: str) -> None:
+    with _pool_lock:
+        _pool_failures[url] = _pool_failures.get(url, 0) + 1
+        if _pool_failures[url] >= MAX_FAILURES:
+            sys.stdout.write(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] WARN: pool url {url} marked unhealthy "
+                f"after {MAX_FAILURES} failures\n"
+            )
+            sys.stdout.flush()
+
+
+def _mark_pool_success(url: str) -> None:
+    with _pool_lock:
+        _pool_failures[url] = 0
+
+
+def _proxy_to_pool(handler: "AgyHandler", path: str, body: bytes | None, method: str) -> bool:
+    """Proxy request to next pool URL with failover. Returns True if handled."""
+    tried: set[str] = set()
+    while True:
+        url = _next_pool_url()
+        if url is None or url in tried:
+            return False
+        tried.add(url)
+        target = url.rstrip("/") + path
+        try:
+            req = urllib.request.Request(
+                target,
+                data=body,
+                method=method,
+                headers={"Content-Type": "application/json"} if body else {},
+            )
+            resp = urllib.request.urlopen(req, timeout=300)
+            _mark_pool_success(url)
+            handler.send_response(resp.status)
+            for key, val in resp.headers.items():
+                if key.lower() not in ("transfer-encoding", "connection"):
+                    handler.send_header(key, val)
+            handler.end_headers()
+            # Stream response bytes
+            while True:
+                chunk = resp.read(4096)
+                if not chunk:
+                    break
+                handler.wfile.write(chunk)
+                handler.wfile.flush()
+            return True
+        except urllib.error.HTTPError as e:
+            _mark_pool_success(url)  # server responded, not a connection failure
+            handler.send_response(e.code)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(e.read())
+            return True
+        except Exception as e:
+            sys.stdout.write(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] pool {url} error: {e}\n"
+            )
+            sys.stdout.flush()
+            _mark_pool_failure(url)
+            continue  # try next
+
+
+# --- Message Formatting ---
+
+def format_messages_to_prompt(messages: list) -> str:
+    parts = []
     for msg in messages:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         if isinstance(content, list):
-            parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-            text = "\n".join(parts)
-        else:
-            text = str(content)
-
+            content = " ".join(
+                c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"
+            )
         if role == "system":
-            formatted.append(f"[System Instruction]\n{text}")
+            parts.append(f"[System]: {content}")
         elif role == "assistant":
-            formatted.append(f"[Assistant]\n{text}")
+            parts.append(f"[Assistant]: {content}")
         else:
-            formatted.append(f"[User]\n{text}")
+            parts.append(content)
+    return "\n".join(parts)
 
-    return "\n\n".join(formatted)
 
+# --- HTTP Handler ---
 
 class AgyHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        # Concise logging to stdout
-        sys.stdout.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{ACCOUNT_LABEL}] {format % args}\n")
+    def log_message(self, fmt, *args):
+        sys.stdout.write(
+            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{ACCOUNT_LABEL}] {fmt % args}\n"
+        )
         sys.stdout.flush()
 
     def do_GET(self):
-        if self.path in ("/health", "/v1/health", "/ready"):
+        if self.path == "/health":
+            # In LB mode check all pool members
+            if _pool_urls:
+                statuses = []
+                for url in _pool_urls:
+                    healthy = _pool_failures.get(url, 0) < MAX_FAILURES
+                    statuses.append({"url": url, "healthy": healthy})
+                body = json.dumps({
+                    "status": "ok",
+                    "mode": "load-balancer",
+                    "pool": statuses,
+                }).encode()
+            else:
+                body = json.dumps({
+                    "status": "ok",
+                    "account": ACCOUNT_LABEL,
+                    "mode": "direct",
+                }).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({
-                "status": "ready",
-                "account": ACCOUNT_LABEL,
-                "timestamp": int(time.time()),
-            }).encode("utf-8"))
-            return
+            self.wfile.write(body)
 
-        if self.path == "/v1/models":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            model_entries = [
-                {"id": m, "object": "model", "created": 1740000000, "owned_by": "google-antigravity"}
-                for m in SUPPORTED_MODELS
-            ]
-            self.wfile.write(json.dumps({
+        elif self.path == "/v1/models":
+            if _pool_urls and _proxy_to_pool(self, self.path, None, "GET"):
+                return
+            body = json.dumps({
                 "object": "list",
-                "data": model_entries
-            }).encode("utf-8"))
-            return
-
-        self.send_error(404, "Endpoint not found")
+                "data": [
+                    {"id": m, "object": "model", "owned_by": "google-antigravity"}
+                    for m in SUPPORTED_MODELS
+                ],
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_error(404, "Not found")
 
     def do_POST(self):
         if self.path != "/v1/chat/completions":
-            self.send_error(404, "Endpoint not found")
+            self.send_error(404, "Not found")
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
@@ -112,6 +217,13 @@ class AgyHandler(BaseHTTPRequestHandler):
             return
 
         body = self.rfile.read(content_length)
+
+        # Load-balancer mode: forward to pool
+        if _pool_urls:
+            _proxy_to_pool(self, self.path, body, "POST")
+            return
+
+        # Direct agy mode
         try:
             req_data = json.loads(body.decode("utf-8"))
         except Exception as e:
@@ -130,7 +242,6 @@ class AgyHandler(BaseHTTPRequestHandler):
         req_id = f"chatcmpl-agy-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
-        # Execute agy CLI with stream-json output
         cmd = [
             "agy",
             "-p", prompt,
@@ -164,17 +275,10 @@ class AgyHandler(BaseHTTPRequestHandler):
             total_input_tokens = 0
             total_output_tokens = 0
 
-            # Initial role chunk
             initial_chunk = {
-                "id": req_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant"},
-                    "finish_reason": None,
-                }],
+                "id": req_id, "object": "chat.completion.chunk",
+                "created": created, "model": model,
+                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
             }
             self.wfile.write(f"data: {json.dumps(initial_chunk)}\n\n".encode("utf-8"))
             self.wfile.flush()
@@ -186,7 +290,6 @@ class AgyHandler(BaseHTTPRequestHandler):
                         break
                     time.sleep(0.01)
                     continue
-
                 line = line.strip()
                 if not line:
                     continue
@@ -201,24 +304,16 @@ class AgyHandler(BaseHTTPRequestHandler):
                     delta = step.get("text_delta")
                     if delta:
                         chunk = {
-                            "id": req_id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": model,
-                            "choices": [{
-                                "index": 0,
-                                "delta": {"content": delta},
-                                "finish_reason": None,
-                            }],
+                            "id": req_id, "object": "chat.completion.chunk",
+                            "created": created, "model": model,
+                            "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
                         }
                         self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode("utf-8"))
                         self.wfile.flush()
-
                     usage = step.get("usage")
                     if usage:
                         total_input_tokens = usage.get("input_tokens", total_input_tokens)
                         total_output_tokens = usage.get("output_tokens", total_output_tokens)
-
                 elif event_type == "result":
                     result = event.get("result", {})
                     usage = result.get("usage")
@@ -228,17 +323,10 @@ class AgyHandler(BaseHTTPRequestHandler):
 
             proc.wait()
 
-            # Final stop chunk
             stop_chunk = {
-                "id": req_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": model,
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": "stop",
-                }],
+                "id": req_id, "object": "chat.completion.chunk",
+                "created": created, "model": model,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                 "usage": {
                     "prompt_tokens": total_input_tokens,
                     "completion_tokens": total_output_tokens,
@@ -250,7 +338,6 @@ class AgyHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         else:
-            # Non-streaming mode: accumulate
             full_response = []
             total_input_tokens = 0
             total_output_tokens = 0
@@ -288,18 +375,9 @@ class AgyHandler(BaseHTTPRequestHandler):
             content = "".join(full_response)
 
             resp_payload = {
-                "id": req_id,
-                "object": "chat.completion",
-                "created": created,
-                "model": model,
-                "choices": [{
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": content,
-                    },
-                    "finish_reason": "stop",
-                }],
+                "id": req_id, "object": "chat.completion",
+                "created": created, "model": model,
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
                 "usage": {
                     "prompt_tokens": total_input_tokens,
                     "completion_tokens": total_output_tokens,
@@ -314,8 +392,13 @@ class AgyHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    mode = "load-balancer" if _pool_urls else "direct"
     server = HTTPServer(("0.0.0.0", PORT), AgyHandler)
-    sys.stdout.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] agy-daemon started on port {PORT} for account '{ACCOUNT_LABEL}'\n")
+    sys.stdout.write(
+        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] agy-daemon started on port {PORT} "
+        f"account='{ACCOUNT_LABEL}' mode={mode}"
+        + (f" pool={_pool_urls}" if _pool_urls else "") + "\n"
+    )
     sys.stdout.flush()
     try:
         server.serve_forever()

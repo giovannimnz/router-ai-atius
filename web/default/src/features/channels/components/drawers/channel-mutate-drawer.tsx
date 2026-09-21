@@ -1288,6 +1288,21 @@ export function ChannelMutateDrawer({
         { shouldValidate: true }
       )
     }
+
+    if (currentType === 60) {
+      const currentName = form.getValues('name')
+      if (!currentName || currentName === '') {
+        form.setValue('name', 'Google - Antigravity Pool')
+      }
+      const currentBaseUrlValue = form.getValues('base_url')
+      if (!currentBaseUrlValue || currentBaseUrlValue === '') {
+        form.setValue('base_url', 'http://127.0.0.1:18081')
+      }
+      const currentKey = form.getValues('key')
+      if (!currentKey || currentKey === '') {
+        form.setValue('key', 'agy-local-pool')
+      }
+    }
   }, [currentType, isEditing, form])
 
   useEffect(() => {

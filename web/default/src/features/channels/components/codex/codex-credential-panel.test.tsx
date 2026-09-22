@@ -87,6 +87,7 @@ describe('CodexCredentialPanel', () => {
     assert.equal(shouldWarnAboutBaseUrl(57, 'https://example.com/v1'), false)
     assert.equal(shouldWarnAboutBaseUrl(1, 'https://example.com/v1'), true)
     assert.equal(shouldWarnAboutBaseUrl(1, 'https://example.com'), false)
+    assert.equal(shouldWarnAboutBaseUrl(17, 'https://token-plan.maas.qwencloudapi.com/compatible-mode/v1'), false)
   })
 
   test('renders healthy sanitized metadata and distinct lifecycle actions', () => {

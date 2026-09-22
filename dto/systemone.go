@@ -80,8 +80,35 @@ func (r *SystemOneRequest) MarshalJSON() ([]byte, error) {
 	}
 	if len(r.RawQuestions) > 0 {
 		out.Questions = r.RawQuestions
+	} else if len(r.Questions) > 0 {
+		qMap := make(map[string]any, len(r.Questions))
+		for i, q := range r.Questions {
+			id := q.ID
+			if id == "" {
+				id = fmt.Sprintf("q%d", i+1)
+			}
+			instr := q.Instructions
+			if instr == "" {
+				instr = q.Question
+			}
+			qObj := map[string]any{
+				"type":         q.Type,
+				"instructions": instr,
+			}
+			if len(q.Options) > 0 {
+				crit := make(map[string]any, len(q.Options))
+				for _, opt := range q.Options {
+					crit[opt] = nil
+				}
+				qObj["criteria"] = crit
+			} else if len(q.Legend) > 0 {
+				qObj["criteria"] = q.Legend
+			}
+			qMap[id] = qObj
+		}
+		out.Questions = qMap
 	} else {
-		out.Questions = r.Questions
+		out.Questions = map[string]any{}
 	}
 	return common.Marshal(out)
 }

@@ -27,7 +27,7 @@ type Adaptor struct {
 }
 
 const aliAnthropicMessagesModelsEnv = "ALI_ANTHROPIC_MESSAGES_MODELS"
-const defaultAliAnthropicMessagesModels = "qwen,deepseek-v4,kimi,glm,minimax-m"
+const defaultAliAnthropicMessagesModels = "qwen,deepseek-v4,deepseek-r1,deepseek-v3,kimi,glm,minimax-m"
 
 /*
 	var syncModels = []string{
@@ -93,9 +93,13 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if baseUrl == "" {
 		baseUrl = "https://dashscope.aliyuncs.com"
 	}
+	baseUrl = strings.TrimSuffix(baseUrl, "/chat/completions")
+	baseUrl = strings.TrimSuffix(baseUrl, "/messages")
+	baseUrl = strings.TrimSuffix(baseUrl, "/embeddings")
 	baseUrl = strings.TrimSuffix(baseUrl, "/compatible-mode/v1")
 	baseUrl = strings.TrimSuffix(baseUrl, "/compatible-mode")
 	baseUrl = strings.TrimSuffix(baseUrl, "/apps/anthropic/v1")
+	baseUrl = strings.TrimSuffix(baseUrl, "/apps/anthropic")
 	baseUrl = strings.TrimSuffix(baseUrl, "/v1")
 
 	var fullRequestURL string

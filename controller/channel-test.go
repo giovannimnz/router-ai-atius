@@ -768,13 +768,15 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 		case constant.EndpointTypeSystemOne:
 			// 返回 SystemOneRequest
 			return &dto.SystemOneRequest{
-				Model: model,
-				State: "Test system state.",
+				Model:        model,
+				State:        "Test system state.",
+				RawQuestions: json.RawMessage(`{"q1":{"type":"noul","instructions":"Is the system healthy?"}}`),
 				Questions: []dto.SystemOneQuestion{
 					{
-						ID:       "q1",
-						Question: "Is the system healthy?",
-						Type:     "noul",
+						ID:           "q1",
+						Question:     "Is the system healthy?",
+						Instructions: "Is the system healthy?",
+						Type:         "noul",
 					},
 				},
 			}

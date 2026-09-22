@@ -386,14 +386,19 @@ export async function handleUpdateChannelBalance(
       queryClient?.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
       onSuccess?.(balance)
     } else {
-      toast.error(response.message || i18next.t('Failed to update balance'))
+      const errorMsg =
+        response.message === '尚未实现'
+          ? i18next.t('Automatic balance query is not supported for this channel type')
+          : (response.message || i18next.t('Failed to update balance'))
+      toast.error(errorMsg)
     }
   } catch (_error: unknown) {
-    toast.error(
-      _error instanceof Error
-        ? _error.message
-        : i18next.t('Failed to update balance')
-    )
+    const rawMsg = _error instanceof Error ? _error.message : ''
+    const displayMsg =
+      rawMsg === '尚未实现'
+        ? i18next.t('Automatic balance query is not supported for this channel type')
+        : (rawMsg || i18next.t('Failed to update balance'))
+    toast.error(displayMsg)
   }
 }
 

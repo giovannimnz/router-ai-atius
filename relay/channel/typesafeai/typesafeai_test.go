@@ -19,7 +19,7 @@ import (
 
 func TestTypeSafeAIAdaptorMetadata(t *testing.T) {
 	adaptor := &typesafeai.Adaptor{}
-	assert.Equal(t, "TypeSafe AI", adaptor.GetChannelName())
+	assert.Equal(t, "TypeSafe", adaptor.GetChannelName())
 	models := adaptor.GetModelList()
 	require.NotEmpty(t, models)
 	assert.Contains(t, models, "jev-latest")

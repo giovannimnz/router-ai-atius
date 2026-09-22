@@ -292,6 +292,13 @@ function WeightCell({ channel }: { channel: Channel }) {
 const MAX_INLINE_BALANCE_CHARS = 8
 const SENSITIVE_MASK = '••••'
 
+export function isUnlimitedChannel(channel?: Channel | null): boolean {
+  if (!channel) return false
+  if (channel.type === 59 || channel.type === 60) return true
+  const name = (channel.name || '').toLowerCase()
+  return name.includes('atius local') || name === 'antigravity'
+}
+
 /**
  * Balance cell component with click to update
  */
@@ -307,6 +314,7 @@ function BalanceCell({ channel }: { channel: Channel }) {
   const [codexUsageOpen, setCodexUsageOpen] = useState(false)
   const [codexUsageResponse, setCodexUsageResponse] =
     useState<CodexUsageDialogData | null>(null)
+  const isUnlimited = isUnlimitedChannel(channel)
   const currencyLabel = getCurrencyLabel()
   const tokenSuffix = currencyLabel === 'Tokens' ? ' Tokens' : ''
   const withSuffix = (value: string) =>
@@ -393,6 +401,11 @@ function BalanceCell({ channel }: { channel: Channel }) {
       return
     }
 
+    if (isUnlimited) {
+      toast.info(t('This channel is an internal service with unlimited quota.'))
+      return
+    }
+
     setIsUpdating(true)
     if (channel.type === 57) {
       try {
@@ -420,16 +433,22 @@ function BalanceCell({ channel }: { channel: Channel }) {
     remainingBadgeLabel = t('Updating...')
   } else if (sensitiveVisible && channel.type === 57) {
     remainingBadgeLabel = t('Account Info')
+  } else if (sensitiveVisible && isUnlimited) {
+    remainingBadgeLabel = t('Unlimited')
   }
   let remainingTooltipLabel = remainingLabel
   if (!sensitiveVisible) {
     remainingTooltipLabel = maskedRemainingLabel
   } else if (channel.type === 57) {
     remainingTooltipLabel = t('Click to view Codex usage')
+  } else if (isUnlimited) {
+    remainingTooltipLabel = t('Internal local service with unlimited quota')
   }
   let remainingBadgeVariant: StatusBadgeProps['variant'] = variant
   if (channel.type === 57) {
     remainingBadgeVariant = 'info'
+  } else if (isUnlimited) {
+    remainingBadgeVariant = 'success'
   } else if (isUpdating) {
     remainingBadgeVariant = 'neutral'
   }
@@ -470,7 +489,7 @@ function BalanceCell({ channel }: { channel: Channel }) {
           />
           <TooltipContent>
             <p>{remainingTooltipLabel}</p>
-            {channel.type !== 57 && <p>{t('Click to update balance')}</p>}
+            {channel.type !== 57 && !isUnlimited && <p>{t('Click to update balance')}</p>}
           </TooltipContent>
         </Tooltip>
       </div>

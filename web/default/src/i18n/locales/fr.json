@@ -5116,6 +5116,9 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Automatic balance query is not supported for this channel type": "La requête automatique de solde n'est pas prise en charge pour ce type de canal",
+    "Internal local service with unlimited quota": "Service local interne avec quota illimité",
+    "This channel is an internal service with unlimited quota.": "Ce canal est un service interne avec un quota illimité."
   }
 }

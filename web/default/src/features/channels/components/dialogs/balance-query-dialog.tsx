@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw, DollarSign } from 'lucide-react'
+import { Loader2, RefreshCw, DollarSign, CheckCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -29,6 +29,7 @@ import { formatTimestampToDate } from '@/lib/format'
 
 import { getCodexUsage, updateChannelBalance } from '../../api'
 import { channelsQueryKeys } from '../../lib'
+import { isUnlimitedChannel } from '../channels-columns'
 import { useChannels } from '../channels-provider'
 import {
   CodexUsageDialog,
@@ -85,7 +86,13 @@ export function BalanceQueryDialog({
 
   if (!currentRow) return null
 
+  const isUnlimited = isUnlimitedChannel(currentRow)
+
   const handleQueryBalance = async () => {
+    if (isUnlimited) {
+      toast.info(t('This channel is an internal service with unlimited quota.'))
+      return
+    }
     setIsQuerying(true)
     try {
       const response = await updateChannelBalance(currentRow.id)
@@ -109,12 +116,19 @@ export function BalanceQueryDialog({
           queryKey: channelsQueryKeys.lists(),
         })
       } else {
-        toast.error(response.message || t('Failed to query balance'))
+        const errorMsg =
+          response.message === '尚未实现'
+            ? t('Automatic balance query is not supported for this channel type')
+            : (response.message || t('Failed to query balance'))
+        toast.error(errorMsg)
       }
     } catch (error: unknown) {
-      toast.error(
-        error instanceof Error ? error.message : t('Failed to query balance')
-      )
+      const rawMsg = error instanceof Error ? error.message : ''
+      const displayMsg =
+        rawMsg === '尚未实现'
+          ? t('Automatic balance query is not supported for this channel type')
+          : (rawMsg || t('Failed to query balance'))
+      toast.error(displayMsg)
     } finally {
       setIsQuerying(false)
     }
@@ -183,27 +197,43 @@ export function BalanceQueryDialog({
             <DollarSign className='h-4 w-4' />
             <span>{t('Current Balance')}</span>
           </div>
-          <div className='text-2xl font-bold'>
-            {balance !== null
+          <div
+            className={`text-2xl font-bold ${
+              isUnlimited ? 'text-emerald-600 dark:text-emerald-400' : ''
+            }`}
+          >
+            {isUnlimited
+              ? t('Unlimited')
+              : balance !== null
               ? formatBalance(balance)
               : formatBalance(currentRow.balance)}
           </div>
           <div className='text-muted-foreground mt-2 text-xs'>
-            {t('Last updated:')}{' '}
-            {formatDate(balanceUpdatedTime ?? currentRow.balance_updated_time)}
+            {isUnlimited
+              ? t('Internal local service with unlimited quota')
+              : `${t('Last updated:')} ${formatDate(
+                  balanceUpdatedTime ?? currentRow.balance_updated_time
+                )}`}
           </div>
         </div>
 
         {/* Balance Update Button */}
-        <Button
-          className='w-full'
-          onClick={handleQueryBalance}
-          disabled={isQuerying}
-        >
-          {isQuerying && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-          {!isQuerying && <RefreshCw className='mr-2 h-4 w-4' />}
-          {isQuerying ? t('Querying...') : t('Update Balance')}
-        </Button>
+        {isUnlimited ? (
+          <Button className='w-full' disabled variant='secondary'>
+            <CheckCircle className='mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400' />
+            {t('Unlimited Quota')}
+          </Button>
+        ) : (
+          <Button
+            className='w-full'
+            onClick={handleQueryBalance}
+            disabled={isQuerying}
+          >
+            {isQuerying && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+            {!isQuerying && <RefreshCw className='mr-2 h-4 w-4' />}
+            {isQuerying ? t('Querying...') : t('Update Balance')}
+          </Button>
+        )}
       </div>
     </Dialog>
   )

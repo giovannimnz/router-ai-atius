@@ -65,4 +65,27 @@ func TestAliGetRequestURL(t *testing.T) {
 	url, err = adaptor.GetRequestURL(info)
 	require.NoError(t, err)
 	assert.Equal(t, "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings", url)
+
+	// QwenCloud Token Plan OpenAI endpoint
+	info.RelayFormat = types.RelayFormatOpenAI
+	info.RelayMode = relayconstant.RelayModeChatCompletions
+	info.ChannelMeta.ChannelBaseUrl = "https://token-plan.maas.qwencloudapi.com/compatible-mode/v1"
+	url, err = adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://token-plan.maas.qwencloudapi.com/compatible-mode/v1/chat/completions", url)
+
+	// QwenCloud Token Plan Anthropic endpoint
+	info.RelayFormat = types.RelayFormatClaude
+	info.ChannelMeta.UpstreamModelName = "deepseek-r1"
+	info.ChannelMeta.ChannelBaseUrl = "https://token-plan.maas.qwencloudapi.com/apps/anthropic"
+	url, err = adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://token-plan.maas.qwencloudapi.com/apps/anthropic/v1/messages", url)
+
+	// QwenCloud Pay-as-you-go endpoint
+	info.RelayFormat = types.RelayFormatOpenAI
+	info.ChannelMeta.ChannelBaseUrl = "https://maas.qwencloudapi.com"
+	url, err = adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://maas.qwencloudapi.com/compatible-mode/v1/chat/completions", url)
 }

@@ -5116,6 +5116,9 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Automatic balance query is not supported for this channel type": "Автоматический запрос баланса не поддерживается для этого типа канала",
+    "Internal local service with unlimited quota": "Локальный внутренний сервис с неограниченной квотой",
+    "This channel is an internal service with unlimited quota.": "Этот канал является внутренним сервисом с неограниченной квотой."
   }
 }

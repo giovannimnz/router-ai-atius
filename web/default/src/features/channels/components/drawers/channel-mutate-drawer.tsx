@@ -3044,6 +3044,109 @@ export function ChannelMutateDrawer({
                                           'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
                                         )}
                                       </FormDescription>
+                                      {currentType === 17 && (
+                                        <div className='mt-2 flex flex-wrap gap-1.5'>
+                                          <span className='mr-1 self-center text-xs text-muted-foreground'>
+                                            {t('Presets')}:
+                                          </span>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://token-plan.maas.qwencloudapi.com/compatible-mode/v1',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            QwenCloud Token Plan (OpenAI)
+                                          </Badge>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://token-plan.maas.qwencloudapi.com/apps/anthropic',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            QwenCloud Token Plan (Anthropic)
+                                          </Badge>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://maas.qwencloudapi.com/compatible-mode/v1',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            QwenCloud Pay-as-you-go
+                                          </Badge>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://dashscope.aliyuncs.com',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            DashScope (China)
+                                          </Badge>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://dashscope-intl.aliyuncs.com',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            DashScope (Intl)
+                                          </Badge>
+                                          <Badge
+                                            variant='outline'
+                                            className='cursor-pointer text-xs hover:bg-accent'
+                                            onClick={() =>
+                                              form.setValue(
+                                                'base_url',
+                                                'https://token-plan.ap-southeast-1.maas.aliyuncs.com',
+                                                {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                }
+                                              )
+                                            }
+                                          >
+                                            DashScope Token Plan (SE Asia)
+                                          </Badge>
+                                        </div>
+                                      )}
                                       <FormMessage />
                                     </FormItem>
                                   )}

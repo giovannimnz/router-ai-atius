@@ -90,9 +90,10 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     defaultBaseUrl: 'https://dashscope.aliyuncs.com',
     hints: {
       baseUrl:
-        'Default (China): https://dashscope.aliyuncs.com | International: https://dashscope-intl.aliyuncs.com | Coding Plan: https://token-plan.ap-southeast-1.maas.aliyuncs.com',
-      key: 'DashScope API Key (sk-...)',
-      models: 'qwen-turbo, qwen-plus, qwen-max, qwen3.8-flash, qwq-32b',
+        'QwenCloud Token Plan (OpenAI): https://token-plan.maas.qwencloudapi.com/compatible-mode/v1 | Anthropic: https://token-plan.maas.qwencloudapi.com/apps/anthropic | Pay-as-you-go: https://maas.qwencloudapi.com/compatible-mode/v1 | DashScope (China): https://dashscope.aliyuncs.com | International: https://dashscope-intl.aliyuncs.com | Coding Plan (SE Asia): https://token-plan.ap-southeast-1.maas.aliyuncs.com',
+      key: 'DashScope / QwenCloud API Key (sk-... or sk-sp-... for Token Plan)',
+      models:
+        'qwen-plus, qwen-max, qwen-turbo, qwen3.8-flash, qwq-32b, qwen2.5-coder-32b-instruct, qwen2.5-72b-instruct, deepseek-r1, deepseek-v3',
     },
   },
   24: {

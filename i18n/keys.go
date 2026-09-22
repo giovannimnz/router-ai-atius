@@ -177,9 +177,12 @@ const (
 	MsgChannelGetKeyFailed       = "channel.get_key_failed"
 	MsgChannelGetOllamaFailed    = "channel.get_ollama_failed"
 	MsgChannelQueryFailed        = "channel.query_failed"
-	MsgChannelNoValidUpstream    = "channel.no_valid_upstream"
-	MsgChannelUpstreamSaturated  = "channel.upstream_saturated"
-	MsgChannelGetAvailableFailed = "channel.get_available_failed"
+	MsgChannelNoValidUpstream     = "channel.no_valid_upstream"
+	MsgChannelUpstreamSaturated   = "channel.upstream_saturated"
+	MsgChannelGetAvailableFailed  = "channel.get_available_failed"
+	MsgChannelBalanceNotSupported = "channel.balance_not_supported"
+	MsgChannelMultiKeyNoBalance   = "channel.multi_key_no_balance"
+	MsgChannelUnlimitedBalance    = "channel.unlimited_balance"
 )
 
 // Model related messages

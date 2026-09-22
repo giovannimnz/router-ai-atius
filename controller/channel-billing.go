@@ -11,6 +11,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -358,6 +359,8 @@ func updateChannelMoonshotBalance(channel *model.Channel) (float64, error) {
 	return availableBalanceUsd, nil
 }
 
+var ErrChannelBalanceNotSupported = errors.New("channel balance query is not supported for this channel type")
+
 func updateChannelBalance(channel *model.Channel) (float64, error) {
 	baseURL := constant.ChannelBaseURLs[channel.Type]
 	if channel.GetBaseURL() == "" {
@@ -368,8 +371,10 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 		if channel.GetBaseURL() != "" {
 			baseURL = channel.GetBaseURL()
 		}
-	case constant.ChannelTypeAzure:
-		return 0, errors.New("尚未实现")
+	case constant.ChannelTypeAtiusLocalEmbeddings, constant.ChannelTypeAntigravity:
+		return 0, nil
+	case constant.ChannelTypeAzure, constant.ChannelTypeTypesafeAI, constant.ChannelTypeAli:
+		return 0, ErrChannelBalanceNotSupported
 	case constant.ChannelTypeCustom:
 		baseURL = channel.GetBaseURL()
 	//case common.ChannelTypeOpenAISB:
@@ -389,7 +394,7 @@ func updateChannelBalance(channel *model.Channel) (float64, error) {
 	case constant.ChannelTypeMoonshot:
 		return updateChannelMoonshotBalance(channel)
 	default:
-		return 0, errors.New("尚未实现")
+		return 0, ErrChannelBalanceNotSupported
 	}
 	url := fmt.Sprintf("%s/v1/dashboard/billing/subscription", baseURL)
 
@@ -434,15 +439,24 @@ func UpdateChannelBalance(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if channel.ChannelInfo.IsMultiKey {
+	if channel.Type == constant.ChannelTypeAtiusLocalEmbeddings || channel.Type == constant.ChannelTypeAntigravity {
 		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "多密钥渠道不支持余额查询",
+			"success": true,
+			"message": i18n.T(c, i18n.MsgChannelUnlimitedBalance),
+			"balance": channel.Balance,
 		})
+		return
+	}
+	if channel.ChannelInfo.IsMultiKey {
+		common.ApiErrorI18n(c, i18n.MsgChannelMultiKeyNoBalance)
 		return
 	}
 	balance, err := updateChannelBalance(channel)
 	if err != nil {
+		if errors.Is(err, ErrChannelBalanceNotSupported) || err.Error() == "尚未实现" {
+			common.ApiErrorI18n(c, i18n.MsgChannelBalanceNotSupported)
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
@@ -464,6 +478,9 @@ func updateAllChannelsBalance() error {
 		}
 		if channel.ChannelInfo.IsMultiKey {
 			continue // skip multi-key channels
+		}
+		if channel.Type == constant.ChannelTypeAtiusLocalEmbeddings || channel.Type == constant.ChannelTypeAntigravity {
+			continue // skip local internal channels with unlimited quota
 		}
 		// TODO: support Azure
 		//if channel.Type != common.ChannelTypeOpenAI && channel.Type != common.ChannelTypeCustom {

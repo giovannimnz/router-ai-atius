@@ -72,6 +72,9 @@ export function shouldWarnAboutBaseUrl(
   channelType: number,
   baseUrl: string | undefined,
 ) {
+  if (channelType === 17 && baseUrl?.endsWith('/compatible-mode/v1')) {
+    return false;
+  }
   return !isCodexChannelType(channelType) && Boolean(baseUrl?.endsWith('/v1'));
 }
 

@@ -4705,7 +4705,7 @@
     "Unknown": "Không rõ",
     "Unknown version": "Phiên bản không xác định",
     "Unlimited": "Không giới hạn",
-    "Unlimited Quota": "Hạn mức không giới hạn",
+    "Unlimited Quota": "Hạn ngạch không giới hạn",
     "Unsaved changes": "Thay đổi chưa được lưu",
     "Unset price": "Chưa đặt giá",
     "Until": "Cho đến",
@@ -5116,6 +5116,9 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Automatic balance query is not supported for this channel type": "Truy vấn số dư tự động không được hỗ trợ cho loại kênh này",
+    "Internal local service with unlimited quota": "Dịch vụ nội bộ cục bộ với hạn ngạch không giới hạn",
+    "This channel is an internal service with unlimited quota.": "Kênh này là dịch vụ nội bộ với hạn ngạch không giới hạn."
   }
 }

@@ -4705,7 +4705,7 @@
     "Unknown": "未知",
     "Unknown version": "未知版本",
     "Unlimited": "无限制",
-    "Unlimited Quota": "无限配额",
+    "Unlimited Quota": "无限制配额",
     "Unsaved changes": "未保存的更改",
     "Unset price": "未设置价格",
     "Until": "至",
@@ -5116,6 +5116,9 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Automatic balance query is not supported for this channel type": "该渠道类型暂不支持自动查询余额",
+    "Internal local service with unlimited quota": "本地内部服务，配额无限制",
+    "This channel is an internal service with unlimited quota.": "该渠道为本地内部服务，配额无限制。"
   }
 }

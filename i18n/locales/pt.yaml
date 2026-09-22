@@ -159,6 +159,9 @@ channel.upstream_saturated: Carga upstream do grupo atual está saturada, por fa
   tente novamente mais tarde
 channel.get_available_failed: Falha ao obter canais disponíveis para modelo {{.Model}}
   no grupo {{.Group}}
+channel.balance_not_supported: A consulta automática de saldo não é suportada para este tipo de canal
+channel.multi_key_no_balance: Canais com múltiplas chaves não suportam consulta de saldo
+channel.unlimited_balance: Canal interno com cota ilimitada
 model.name_empty: Nome do modelo não pode estar vazio
 model.name_exists: Nome do modelo já existe
 model.id_missing: ID do modelo está faltando

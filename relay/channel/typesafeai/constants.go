@@ -6,4 +6,4 @@ var ModelList = []string{
 	"jev-preview",
 }
 
-const ChannelName = "TypeSafe AI"
+const ChannelName = "TypeSafe"

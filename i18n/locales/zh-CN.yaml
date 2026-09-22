@@ -159,6 +159,9 @@ channel.query_failed: "查询渠道失败"
 channel.no_valid_upstream: "无有效上游渠道"
 channel.upstream_saturated: "当前分组上游负载已饱和，请稍后再试"
 channel.get_available_failed: "获取分组 {{.Group}} 下模型 {{.Model}} 的可用渠道失败"
+channel.balance_not_supported: "该渠道类型暂不支持自动查询余额"
+channel.multi_key_no_balance: "多密钥渠道不支持余额查询"
+channel.unlimited_balance: "内部渠道，配额无限制"
 
 # Model messages
 model.name_empty: "模型名称不能为空"

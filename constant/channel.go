@@ -58,6 +58,7 @@ const (
 	ChannelTypeAdvancedCustom       = 58
 	ChannelTypeAtiusLocalEmbeddings = 59
 	ChannelTypeAntigravity          = 60
+	ChannelTypeTypesafeAI           = 61
 	ChannelTypeDummy                // this one is only for count, do not add any channel after this
 
 )
@@ -132,6 +133,8 @@ var ChannelBaseURLs = []string{
 	"https://chatgpt.com",                       //57
 	"",                                          //58
 	"http://10.21.1.21:31115",                   //59
+	"http://127.0.0.1:18081",                   //60
+	"https://api.typesafe.ai",                  //61
 }
 
 var ChannelTypeNames = map[int]string{
@@ -152,7 +155,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeAnthropic:            "Anthropic",
 	ChannelTypeBaidu:                "Baidu",
 	ChannelTypeZhipu:                "Zhipu",
-	ChannelTypeAli:                  "Ali",
+	ChannelTypeAli:                  "Alibaba Cloud",
 	ChannelTypeXunfei:               "Xunfei",
 	ChannelType360:                  "360",
 	ChannelTypeOpenRouter:           "OpenRouter",
@@ -191,7 +194,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeCodex:                "ChatGPT - Codex",
 	ChannelTypeAdvancedCustom:       "Advanced Custom",
 	ChannelTypeAtiusLocalEmbeddings: AtiusLocalChannelName,
-	ChannelTypeAntigravity:          "Google - Antigravity",
+	ChannelTypeAntigravity:          "Antigravity",
+	ChannelTypeTypesafeAI:           "TypeSafe",
 }
 
 func IsAdvancedCustomChannelType(channelType int) bool {

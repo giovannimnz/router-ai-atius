@@ -39,7 +39,7 @@ const baseMetadata: CodexCredentialMetadata = {
   channel_name: 'OpenAI - Codex',
   authenticated: true,
   has_refresh_token: true,
-  expires_at: '2026-07-17T11:04:04Z',
+  expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   last_refresh: '2026-07-10T11:04:04Z',
   account_id: 'account-public-id',
   email: 'operator@example.com',

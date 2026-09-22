@@ -52,6 +52,12 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
 		return string(constant.EndpointTypeOpenAIResponse)
 	}
+	if channel != nil && channel.Type == constant.ChannelTypeTypesafeAI {
+		return string(constant.EndpointTypeSystemOne)
+	}
+	if strings.HasPrefix(strings.ToLower(modelName), "jev-") || strings.ToLower(modelName) == "jev" {
+		return string(constant.EndpointTypeSystemOne)
+	}
 	return normalized
 }
 
@@ -146,6 +152,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			requestPath = "/v1/responses"
 		}
 
+		// systemone models (TypeSafe AI Jev)
+		if strings.HasPrefix(strings.ToLower(testModel), "jev-") || strings.ToLower(testModel) == "jev" || channel.Type == constant.ChannelTypeTypesafeAI {
+			requestPath = "/v1/systemone"
+		}
+
 		// responses compaction models (must use /v1/responses/compact)
 		if strings.HasSuffix(testModel, ratio_setting.CompactModelSuffix) {
 			requestPath = "/v1/responses/compact"
@@ -204,6 +215,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			relayFormat = types.RelayFormatOpenAIImage
 		case constant.EndpointTypeEmbeddings:
 			relayFormat = types.RelayFormatEmbedding
+		case constant.EndpointTypeSystemOne:
+			relayFormat = types.RelayFormatSystemOne
 		default:
 			relayFormat = types.RelayFormatOpenAI
 		}
@@ -212,6 +225,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		relayFormat = types.RelayFormatOpenAI
 		if c.Request.URL.Path == "/v1/embeddings" {
 			relayFormat = types.RelayFormatEmbedding
+		}
+		if c.Request.URL.Path == "/v1/systemone" {
+			relayFormat = types.RelayFormatSystemOne
 		}
 		if c.Request.URL.Path == "/v1/images/generations" {
 			relayFormat = types.RelayFormatOpenAIImage
@@ -339,6 +355,21 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 				context:     c,
 				localErr:    errors.New("invalid rerank request type"),
 				newAPIError: types.NewError(errors.New("invalid rerank request type"), types.ErrorCodeConvertRequestFailed),
+			}
+		}
+	case relayconstant.RelayModeSystemOne:
+		// SystemOne 请求 - request 已经是正确的类型
+		if sysReq, ok := request.(*dto.SystemOneRequest); ok {
+			if sysAdaptor, ok := adaptor.(relay.SystemOneAdaptor); ok {
+				convertedRequest, err = sysAdaptor.ConvertSystemOneRequest(c, info, sysReq)
+			} else {
+				convertedRequest = sysReq
+			}
+		} else {
+			return testResult{
+				context:     c,
+				localErr:    errors.New("invalid systemone request type"),
+				newAPIError: types.NewError(errors.New("invalid systemone request type"), types.ErrorCodeConvertRequestFailed),
 			}
 		}
 	case relayconstant.RelayModeResponses:
@@ -734,6 +765,19 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				Documents: []any{"Deep Learning is a subset of machine learning.", "Machine learning is a field of artificial intelligence."},
 				TopN:      lo.ToPtr(2),
 			}
+		case constant.EndpointTypeSystemOne:
+			// 返回 SystemOneRequest
+			return &dto.SystemOneRequest{
+				Model: model,
+				State: "Test system state.",
+				Questions: []dto.SystemOneQuestion{
+					{
+						ID:       "q1",
+						Question: "Is the system healthy?",
+						Type:     "noul",
+					},
+				},
+			}
 		case constant.EndpointTypeOpenAIResponse:
 			// 返回 OpenAIResponsesRequest
 			return &dto.OpenAIResponsesRequest{
@@ -778,6 +822,20 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 			Query:     "What is Deep Learning?",
 			Documents: []any{"Deep Learning is a subset of machine learning.", "Machine learning is a field of artificial intelligence."},
 			TopN:      lo.ToPtr(2),
+		}
+	}
+
+	if strings.HasPrefix(strings.ToLower(model), "jev-") || strings.ToLower(model) == "jev" {
+		return &dto.SystemOneRequest{
+			Model: model,
+			State: "Test system state.",
+			Questions: []dto.SystemOneQuestion{
+				{
+					ID:       "q1",
+					Question: "Is the system healthy?",
+					Type:     "noul",
+				},
+			},
 		}
 	}
 

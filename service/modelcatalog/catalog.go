@@ -29,6 +29,8 @@ func EndpointTypeLabel(endpointType constant.EndpointType) string {
 		return "Reranker"
 	case constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAIResponseCompact:
 		return "OpenAI-Responses"
+	case constant.EndpointTypeSystemOne:
+		return "SystemOne"
 	default:
 		return string(endpointType)
 	}

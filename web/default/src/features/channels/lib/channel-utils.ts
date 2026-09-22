@@ -72,7 +72,7 @@ export function getChannelTypeIcon(type: number): string {
     46: 'Baidu', // Baidu V2
     16: 'Zhipu', // Zhipu
     26: 'Zhipu', // Zhipu V4
-    17: 'Qwen', // Ali
+    17: 'Qwen', // Alibaba Cloud
     18: 'Spark', // Xunfei
     23: 'Hunyuan', // Tencent
     19: 'Ai360', // 360
@@ -107,6 +107,8 @@ export function getChannelTypeIcon(type: number): string {
     // Tools & Platforms
     37: 'Dify', // Dify
     38: 'Jina', // Jina
+    60: 'Antigravity', // Antigravity
+    61: 'TypeSafe', // TypeSafe AI
     22: 'FastGPT', // FastGPT
     47: 'Xinference', // Xinference
     53: 'OpenAI', // Submodel

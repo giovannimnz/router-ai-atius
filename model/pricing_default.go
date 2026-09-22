@@ -35,10 +35,12 @@ var defaultVendorRules = map[string]string{
 	"kling":    "快手",
 	"jimeng":   "即梦",
 	"vidu":     "Vidu",
+	"jev":      "TypeSafe AI",
 }
 
 // 供应商默认图标映射
 var defaultVendorIcons = map[string]string{
+	"TypeSafe AI": "TypeSafe",
 	"OpenAI":     "OpenAI",
 	"Anthropic":  "Claude.Color",
 	"Google":     "Gemini.Color",

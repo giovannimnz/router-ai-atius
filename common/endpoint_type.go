@@ -13,10 +13,15 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 	if strings.Contains(lowerModelName, "embedding") || strings.HasPrefix(lowerModelName, "embo-") {
 		return []constant.EndpointType{constant.EndpointTypeEmbeddings}
 	}
+	if strings.HasPrefix(lowerModelName, "jev-") || lowerModelName == "jev" {
+		return []constant.EndpointType{constant.EndpointTypeSystemOne}
+	}
 	if channelType == constant.ChannelTypeAtiusLocalEmbeddings && modelName == constant.AtiusLocalRerankerModel {
 		return []constant.EndpointType{constant.EndpointTypeJinaRerank}
 	}
 	switch channelType {
+	case constant.ChannelTypeTypesafeAI:
+		endpointTypes = []constant.EndpointType{constant.EndpointTypeSystemOne}
 	case constant.ChannelTypeJina:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeReranker}
 	//case constant.ChannelTypeMidjourney, constant.ChannelTypeMidjourneyPlus:
@@ -61,7 +66,11 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 	case constant.ChannelTypeXai:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIResponse}
 	case constant.ChannelTypeAntigravity:
-		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
+		endpointTypes = []constant.EndpointType{
+			constant.EndpointTypeOpenAI,
+			constant.EndpointTypeGemini,
+			constant.EndpointTypeAnthropic,
+		}
 	case constant.ChannelTypeSora:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAIVideo}
 	default:

@@ -45,6 +45,8 @@ func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIErro
 		err = relay.AudioHelper(c, info)
 	case relayconstant.RelayModeRerank:
 		err = relay.RerankHelper(c, info)
+	case relayconstant.RelayModeSystemOne:
+		err = relay.SystemOneHelper(c, info)
 	case relayconstant.RelayModeEmbeddings:
 		err = relay.EmbeddingHelper(c, info)
 	case relayconstant.RelayModeResponses, relayconstant.RelayModeResponsesCompact:
@@ -284,6 +286,8 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 	case *dto.ImageRequest:
 		// Pricing for image requests depends on ImagePriceRatio; safe to compute even when CountToken is disabled.
 		return r.GetTokenCountMeta()
+	case *dto.SystemOneRequest:
+		meta.MaxTokens = 0
 	default:
 		// Best-effort: leave CombineText empty to avoid large allocations.
 	}

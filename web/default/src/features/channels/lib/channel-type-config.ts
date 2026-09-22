@@ -83,6 +83,18 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'claude-3-opus,claude-3-sonnet,claude-3-haiku',
     },
   },
+  17: {
+    id: 17,
+    name: CHANNEL_TYPES[17],
+    icon: 'Qwen',
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com',
+    hints: {
+      baseUrl:
+        'Default (China): https://dashscope.aliyuncs.com | International: https://dashscope-intl.aliyuncs.com | Coding Plan: https://token-plan.ap-southeast-1.maas.aliyuncs.com',
+      key: 'DashScope API Key (sk-...)',
+      models: 'qwen-turbo, qwen-plus, qwen-max, qwen3.8-flash, qwq-32b',
+    },
+  },
   24: {
     id: 24,
     name: CHANNEL_TYPES[24],
@@ -153,6 +165,28 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       baseUrl: 'TEI embeddings endpoint on horistic-srv',
       key: 'No upstream authentication required',
       models: 'embedding-gte-v1,reranker-gte-v1',
+    },
+  },
+  60: {
+    id: 60,
+    name: CHANNEL_TYPES[60],
+    icon: 'Antigravity',
+    defaultBaseUrl: 'http://10.11.1.11:18088',
+    hints: {
+      baseUrl: 'Antigravity pool base URL',
+      key: 'Antigravity pool token',
+      models: 'gemini-3.8-flash-high,gemini-3.8-flash-medium,gemini-3.8-flash-low,...',
+    },
+  },
+  61: {
+    id: 61,
+    name: CHANNEL_TYPES[61],
+    icon: 'TypeSafe',
+    defaultBaseUrl: 'https://api.typesafe.ai',
+    hints: {
+      key: 'TypeSafe API Key',
+      models: 'jev-latest,jev-1.13.0,jev-preview',
+      baseUrl: 'Default: https://api.typesafe.ai',
     },
   },
 }

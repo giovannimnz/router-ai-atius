@@ -43,6 +43,7 @@ import (
 	taskvertex "github.com/QuantumNous/new-api/relay/channel/task/vertex"
 	taskVidu "github.com/QuantumNous/new-api/relay/channel/task/vidu"
 	"github.com/QuantumNous/new-api/relay/channel/tencent"
+	"github.com/QuantumNous/new-api/relay/channel/typesafeai"
 	"github.com/QuantumNous/new-api/relay/channel/vertex"
 	"github.com/QuantumNous/new-api/relay/channel/volcengine"
 	"github.com/QuantumNous/new-api/relay/channel/xai"
@@ -126,6 +127,8 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &advancedcustom.Adaptor{}
 	case constant.APITypeAntigravity:
 		return &antigravity.Adaptor{}
+	case constant.APITypeTypesafeAI:
+		return &typesafeai.Adaptor{}
 	}
 	return nil
 }

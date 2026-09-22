@@ -26,6 +26,10 @@ const (
 
 var defaultModelRatio = map[string]float64{
 	//"midjourney":                50,
+	"jev-1.13.0":                                0.021, // TypeSafe AI Jev: $0.042 / 1M tokens (base $2.00/1M = 1.0)
+	"jev-latest":                                0.021,
+	"jev-preview":                               0.021,
+	"jev-*":                                     0.021,
 	"gpt-4-gizmo-*":                             15,
 	"gpt-4o-gizmo-*":                            2.5,
 	"gpt-4-all":                                 15,
@@ -247,6 +251,7 @@ var defaultModelRatio = map[string]float64{
 	"kimi-*": 0.20, // ~$0.40 / 1M input tokens
 	// Qwen3: $0.325 / 1M input, $1.95 / 1M output
 	"qwen3-*": 0.1625, // $0.325 / 1M input tokens
+	"qwen3.*": 0.1625, // $0.325 / 1M input tokens
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat":   0.2 / 1000 * USD,
 	"llama-3-sonar-small-32k-online": 0.2 / 1000 * USD,
@@ -737,6 +742,9 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 	}
 	if strings.HasPrefix(name, "o1") || strings.HasPrefix(name, "o3") {
 		return 4, true
+	}
+	if strings.HasPrefix(name, "jev") {
+		return 0, true
 	}
 	if name == "chatgpt-4o-latest" {
 		return 3, true

@@ -89,40 +89,49 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	baseUrl := strings.TrimRight(info.ChannelBaseUrl, "/")
+	if baseUrl == "" {
+		baseUrl = "https://dashscope.aliyuncs.com"
+	}
+	baseUrl = strings.TrimSuffix(baseUrl, "/compatible-mode/v1")
+	baseUrl = strings.TrimSuffix(baseUrl, "/compatible-mode")
+	baseUrl = strings.TrimSuffix(baseUrl, "/apps/anthropic/v1")
+	baseUrl = strings.TrimSuffix(baseUrl, "/v1")
+
 	var fullRequestURL string
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
 		if supportsAliAnthropicMessages(info.UpstreamModelName) {
-			fullRequestURL = fmt.Sprintf("%s/apps/anthropic/v1/messages", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/apps/anthropic/v1/messages", baseUrl)
 		} else {
-			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/chat/completions", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/chat/completions", baseUrl)
 		}
 	default:
 		switch info.RelayMode {
 		case constant.RelayModeEmbeddings:
-			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/embeddings", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/embeddings", baseUrl)
 		case constant.RelayModeRerank:
-			fullRequestURL = fmt.Sprintf("%s/api/v1/services/rerank/text-rerank/text-rerank", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/api/v1/services/rerank/text-rerank/text-rerank", baseUrl)
 		case constant.RelayModeResponses:
-			fullRequestURL = fmt.Sprintf("%s/api/v2/apps/protocols/compatible-mode/v1/responses", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/api/v2/apps/protocols/compatible-mode/v1/responses", baseUrl)
 		case constant.RelayModeImagesGenerations:
 			if isSyncImageModel(info.OriginModelName) {
-				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/multimodal-generation/generation", info.ChannelBaseUrl)
+				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/multimodal-generation/generation", baseUrl)
 			} else {
-				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/text2image/image-synthesis", info.ChannelBaseUrl)
+				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/text2image/image-synthesis", baseUrl)
 			}
 		case constant.RelayModeImagesEdits:
 			if isOldWanModel(info.OriginModelName) {
-				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/image2image/image-synthesis", info.ChannelBaseUrl)
+				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/image2image/image-synthesis", baseUrl)
 			} else if isWanModel(info.OriginModelName) {
-				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/image-generation/generation", info.ChannelBaseUrl)
+				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/image-generation/generation", baseUrl)
 			} else {
-				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/multimodal-generation/generation", info.ChannelBaseUrl)
+				fullRequestURL = fmt.Sprintf("%s/api/v1/services/aigc/multimodal-generation/generation", baseUrl)
 			}
 		case constant.RelayModeCompletions:
-			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/completions", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/completions", baseUrl)
 		default:
-			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/chat/completions", info.ChannelBaseUrl)
+			fullRequestURL = fmt.Sprintf("%s/compatible-mode/v1/chat/completions", baseUrl)
 		}
 	}
 

@@ -28,5 +28,5 @@ func TestAntigravityChannelTypeUsesAntigravityAPIType(t *testing.T) {
 }
 
 func TestAntigravityChannelTypeUsesCanonicalProductionName(t *testing.T) {
-	assert.Equal(t, "Google - Antigravity", constant.GetChannelTypeName(constant.ChannelTypeAntigravity))
+	assert.Equal(t, "Antigravity", constant.GetChannelTypeName(constant.ChannelTypeAntigravity))
 }

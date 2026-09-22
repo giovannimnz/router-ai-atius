@@ -35,7 +35,7 @@ describe('Atius Local channel preset', () => {
   })
 
   test('keeps the production Antigravity channel name canonical', () => {
-    assert.equal(CHANNEL_TYPES[60], 'Google - Antigravity')
+    assert.equal(CHANNEL_TYPES[60], 'Antigravity')
   })
 
   test('contains the validated embeddings and reranker routes', () => {

@@ -32,6 +32,7 @@ const OBFUSCATED_KEYS = [
 const BRAND_AND_LITERAL_KEYS = new Set([
   'AI Proxy',
   'AIGC2D',
+  'Alibaba Cloud (DashScope)',
   'Alipay',
   'Anthropic',
   'API URL',
@@ -86,6 +87,7 @@ const BRAND_AND_LITERAL_KEYS = new Set([
   'SunoAPI',
   'Telegram',
   'Tencent',
+  'TypeSafe AI',
   'TTFT P50',
   'TTFT P95',
   'TTFT P99',

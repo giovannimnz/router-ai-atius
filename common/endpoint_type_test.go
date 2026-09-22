@@ -79,3 +79,17 @@ func TestGetDefaultEndpointInfoAcceptsLegacyRerankAlias(t *testing.T) {
 	assert.Equal(t, EndpointInfo{Path: "/v1/rerank", Method: "POST"}, canonical)
 	assert.Equal(t, canonical, legacy)
 }
+
+func TestGetEndpointTypesByChannelTypeAntigravityIsMultiProtocol(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t,
+		[]constant.EndpointType{
+			constant.EndpointTypeOpenAI,
+			constant.EndpointTypeGemini,
+			constant.EndpointTypeAnthropic,
+		},
+		GetEndpointTypesByChannelType(constant.ChannelTypeAntigravity, "gemini-2.5-flash-high"),
+	)
+}
+

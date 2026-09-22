@@ -39,7 +39,7 @@ export const CHANNEL_TYPES = {
   14: 'Anthropic',
   15: 'Baidu',
   16: 'Zhipu',
-  17: 'Ali',
+  17: 'Alibaba Cloud',
   18: 'Xunfei',
   19: '360',
   20: 'OpenRouter',
@@ -78,11 +78,12 @@ export const CHANNEL_TYPES = {
   57: 'ChatGPT - Codex',
   58: 'Advanced Custom',
   59: 'Atius Local',
-  60: 'Google - Antigravity',
+  60: 'Antigravity',
+  61: 'TypeSafe',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 33, 24, 43, 3, 41, 48, 60, 59, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
+  1, 14, 33, 24, 43, 3, 41, 48, 60, 61, 59, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
   46, 23, 18, 45, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44, 2, 5,
   36, 50, 51, 52, 53, 54, 55, 56,
 ]

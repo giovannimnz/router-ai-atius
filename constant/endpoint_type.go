@@ -14,6 +14,7 @@ const (
 	EndpointTypeImageGeneration EndpointType = "image-generation"
 	EndpointTypeEmbeddings      EndpointType = "embeddings"
 	EndpointTypeOpenAIVideo     EndpointType = "openai-video"
+	EndpointTypeSystemOne       EndpointType = "systemone"
 	//EndpointTypeMidjourney     EndpointType = "midjourney-proxy"
 	//EndpointTypeSuno           EndpointType = "suno-proxy"
 	//EndpointTypeKling          EndpointType = "kling"

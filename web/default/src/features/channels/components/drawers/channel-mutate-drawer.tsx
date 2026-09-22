@@ -1292,7 +1292,7 @@ export function ChannelMutateDrawer({
     if (currentType === 60) {
       const currentName = form.getValues('name')
       if (!currentName || currentName === '') {
-        form.setValue('name', 'Google - Antigravity Pool')
+        form.setValue('name', 'Antigravity')
       }
       const currentBaseUrlValue = form.getValues('base_url')
       if (!currentBaseUrlValue || currentBaseUrlValue === '') {
@@ -1301,6 +1301,17 @@ export function ChannelMutateDrawer({
       const currentKey = form.getValues('key')
       if (!currentKey || currentKey === '') {
         form.setValue('key', 'agy-local-pool')
+      }
+    }
+
+    if (currentType === 61) {
+      const currentName = form.getValues('name')
+      if (!currentName || currentName === '') {
+        form.setValue('name', 'TypeSafe')
+      }
+      const currentBaseUrlValue = form.getValues('base_url')
+      if (!currentBaseUrlValue || currentBaseUrlValue === '') {
+        form.setValue('base_url', 'https://api.typesafe.ai')
       }
     }
   }, [currentType, isEditing, form])

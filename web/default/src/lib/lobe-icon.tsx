@@ -29,6 +29,10 @@ import * as LobeIcons from '@lobehub/icons'
 
 import { AtiusLogo } from '@/components/atius-logo'
 import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+import { AntigravityLogo } from '@/components/antigravity-logo'
+import { isAntigravityIcon } from '@/components/antigravity-logo-key'
+import { TypeSafeLogo } from '@/components/typesafe-logo'
+import { isTypeSafeIcon } from '@/components/typesafe-logo-key'
 
 /**
  * Parse a property value from string to appropriate type
@@ -104,6 +108,14 @@ export function getLobeIcon(
 
   if (isAtiusLocalIcon(trimmedName)) {
     return <AtiusLogo size={size} />
+  }
+
+  if (isAntigravityIcon(trimmedName)) {
+    return <AntigravityLogo size={size} />
+  }
+
+  if (isTypeSafeIcon(trimmedName)) {
+    return <TypeSafeLogo size={size} />
   }
 
   // Parse component path and chained properties

@@ -24,10 +24,23 @@ import uuid
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
 
 PORT = int(os.environ.get("AGY_DAEMON_PORT", "8080"))
 ACCOUNT_LABEL = os.environ.get("AGY_ACCOUNT_LABEL", "default")
 DEFAULT_MODEL = "gemini-3.8-flash"
+
+# Limite seguro de concorrência do pool (padrão 6 caminhos simultâneos)
+MAX_CONCURRENT_REQUESTS = int(os.environ.get("AGY_MAX_CONCURRENCY", "6"))
+_concurrency_semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+_active_requests_lock = threading.Lock()
+_active_requests = 0
 
 SUPPORTED_MODELS = [
     "gemini-3.8-flash",
@@ -190,12 +203,16 @@ class AgyHandler(BaseHTTPRequestHandler):
                 body = json.dumps({
                     "status": "ok",
                     "mode": "load-balancer",
+                    "capacity_limit": MAX_CONCURRENT_REQUESTS,
+                    "active_requests": _active_requests,
                     "pool": statuses,
                 }).encode()
             else:
                 body = json.dumps({
                     "status": "ok",
                     "account": ACCOUNT_LABEL,
+                    "capacity_limit": MAX_CONCURRENT_REQUESTS,
+                    "active_requests": _active_requests,
                     "mode": "direct",
                 }).encode()
             self.send_response(200)
@@ -237,7 +254,23 @@ class AgyHandler(BaseHTTPRequestHandler):
             _proxy_to_pool(self, self.path, body, "POST")
             return
 
-        # Direct agy mode
+        # Direct agy mode: controle de capacidade com semáforo (limite seguro de 6 caminhos)
+        global _active_requests
+        acquired = _concurrency_semaphore.acquire(timeout=45)
+        if not acquired:
+            self.send_error(429, f"Agy instance busy: maximum concurrency reached ({MAX_CONCURRENT_REQUESTS})")
+            return
+        with _active_requests_lock:
+            _active_requests += 1
+
+        try:
+            self._handle_direct_post(body)
+        finally:
+            with _active_requests_lock:
+                _active_requests = max(0, _active_requests - 1)
+            _concurrency_semaphore.release()
+
+    def _handle_direct_post(self, body: bytes):
         try:
             req_data = json.loads(body.decode("utf-8"))
         except Exception as e:
@@ -426,7 +459,7 @@ class AgyHandler(BaseHTTPRequestHandler):
 
 def main():
     mode = "load-balancer" if _pool_urls else "direct"
-    server = HTTPServer(("0.0.0.0", PORT), AgyHandler)
+    server = ThreadedHTTPServer(("0.0.0.0", PORT), AgyHandler)
 
     def _sig_handler(signum, frame):
         sys.stdout.write(f"\nReceived signal {signum}, shutting down agy-daemon...\n")

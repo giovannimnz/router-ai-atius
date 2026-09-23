@@ -447,14 +447,26 @@ func UpdateChannelBalance(c *gin.Context) {
 		})
 		return
 	}
+	if channel.Type == constant.ChannelTypeTypesafeAI || channel.Type == constant.ChannelTypeAli {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": i18n.T(c, i18n.MsgChannelBalanceNotSupported),
+			"balance": channel.Balance,
+		})
+		return
+	}
 	if channel.ChannelInfo.IsMultiKey {
 		common.ApiErrorI18n(c, i18n.MsgChannelMultiKeyNoBalance)
 		return
 	}
 	balance, err := updateChannelBalance(channel)
 	if err != nil {
-		if errors.Is(err, ErrChannelBalanceNotSupported) || err.Error() == "尚未实现" {
-			common.ApiErrorI18n(c, i18n.MsgChannelBalanceNotSupported)
+		if errors.Is(err, ErrChannelBalanceNotSupported) || strings.Contains(err.Error(), "尚未实现") {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": i18n.T(c, i18n.MsgChannelBalanceNotSupported),
+				"balance": channel.Balance,
+			})
 			return
 		}
 		common.ApiError(c, err)

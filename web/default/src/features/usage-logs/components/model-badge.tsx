@@ -118,6 +118,15 @@ function resolveModelProvider(modelName: string): ModelProvider | null {
   if (hasAny(['command-', 'cohere-'])) {
     return { icon: 'Cohere.Color', label: 'Cohere' }
   }
+  if (hasAny(['antigravity', 'agy-'])) {
+    return { icon: 'Internal.antigravity-color', label: 'Antigravity' }
+  }
+  if (hasAny(['typesafe', 'jev-'])) {
+    return { icon: 'Internal.typesafe', label: 'TypeSafe' }
+  }
+  if (hasAny(['embedding-gte', 'reranker-gte', 'atius'])) {
+    return { icon: 'Internal.atius', label: 'Atius' }
+  }
 
   return null
 }

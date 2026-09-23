@@ -5119,6 +5119,11 @@
     "Zoom": "Zoom",
     "Automatic balance query is not supported for this channel type": "A consulta automática de saldo não é suportada para este tipo de canal",
     "Internal local service with unlimited quota": "Serviço local interno com cota ilimitada",
-    "This channel is an internal service with unlimited quota.": "Este canal é um serviço interno com cota ilimitada."
+    "This channel is an internal service with unlimited quota.": "Este canal é um serviço interno com cota ilimitada.",
+    "Este canal é um serviço interno com cota ilimitada": "Este canal é um serviço interno com cota ilimitada",
+    "Used Quota": "Saldo Consumido",
+    "Available Balance": "Saldo Disponível",
+    "Total consumed through this channel": "Total consumido através deste canal",
+    "A consulta automática de saldo não é suportada para este tipo de canal. Tanto o saldo consumido quanto o saldo disponível são acompanhados e exibidos aqui.": "A consulta automática de saldo não é suportada para este tipo de canal. Tanto o saldo consumido quanto o saldo disponível são acompanhados e exibidos aqui."
   }
 }

@@ -203,12 +203,12 @@ export function VendorMutateDialog({
                 <FormLabel>{t('Icon')}</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder={t('OpenAI, Anthropic, Google, etc.')}
+                    placeholder={t('OpenAI, Google, Internal.antigravity')}
                     {...field}
                   />
                 </FormControl>
                 <FormDescription>
-                  {t('@lobehub/icons key name')}
+                  {t('@lobehub/icons key name or internal (e.g. Internal.antigravity)')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

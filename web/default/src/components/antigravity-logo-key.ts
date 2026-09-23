@@ -16,10 +16,36 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export const ANTIGRAVITY_ICON_KEY = 'Antigravity'
+export const ANTIGRAVITY_ICON_KEY = 'Internal.antigravity'
+export const ANTIGRAVITY_COLOR_ICON_KEY = 'Internal.antigravity-color'
 
-export function isAntigravityIcon(iconKey: string | null | undefined) {
+export function isAntigravityColorIcon(iconKey: string | null | undefined): boolean {
   if (!iconKey) return false
-  const base = iconKey.trim().split('.')[0]
-  return base === ANTIGRAVITY_ICON_KEY || base.toLowerCase() === 'antigravity'
+  const trimmed = iconKey.trim().toLowerCase()
+  if (
+    trimmed === 'internal.antigravity-color' ||
+    trimmed === 'internal.antigravity.color' ||
+    trimmed === 'internal.antigravity_color' ||
+    trimmed === 'antigravity-color' ||
+    trimmed.startsWith('antigravity.color')
+  ) {
+    return true
+  }
+  return false
 }
+
+export function isAntigravityIcon(iconKey: string | null | undefined): boolean {
+  if (!iconKey) return false
+  const trimmed = iconKey.trim().toLowerCase()
+  return trimmed.startsWith('internal.antigravity') || trimmed.startsWith('antigravity')
+}
+
+export function getInternalIconIdentifier(iconKey: string | null | undefined): string | null {
+  if (!iconKey) return null
+  const trimmed = iconKey.trim()
+  if (/^internal\./i.test(trimmed)) {
+    return trimmed.slice(9).trim().toLowerCase()
+  }
+  return null
+}
+

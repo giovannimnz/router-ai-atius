@@ -30,7 +30,12 @@ import * as LobeIcons from '@lobehub/icons'
 import { AtiusLogo } from '@/components/atius-logo'
 import { isAtiusLocalIcon } from '@/components/atius-logo-key'
 import { AntigravityLogo } from '@/components/antigravity-logo'
-import { isAntigravityIcon } from '@/components/antigravity-logo-key'
+import { AntigravityColorLogo } from '@/components/antigravity-color-logo'
+import {
+  isAntigravityIcon,
+  isAntigravityColorIcon,
+  getInternalIconIdentifier,
+} from '@/components/antigravity-logo-key'
 import { TypeSafeLogo } from '@/components/typesafe-logo'
 import { isTypeSafeIcon } from '@/components/typesafe-logo-key'
 
@@ -106,12 +111,36 @@ export function getLobeIcon(
     )
   }
 
-  if (isAtiusLocalIcon(trimmedName)) {
-    return <AtiusLogo size={size} />
+  const internalId = getInternalIconIdentifier(trimmedName)
+  if (internalId) {
+    if (
+      internalId === 'antigravity-color' ||
+      internalId === 'antigravity.color' ||
+      internalId === 'antigravity_color'
+    ) {
+      return <AntigravityColorLogo size={size} />
+    }
+    if (internalId === 'antigravity') {
+      return <AntigravityLogo size={size} />
+    }
+    if (internalId === 'atius') {
+      return <AtiusLogo size={size} />
+    }
+    if (internalId === 'typesafe') {
+      return <TypeSafeLogo size={size} />
+    }
+  }
+
+  if (isAntigravityColorIcon(trimmedName)) {
+    return <AntigravityColorLogo size={size} />
   }
 
   if (isAntigravityIcon(trimmedName)) {
     return <AntigravityLogo size={size} />
+  }
+
+  if (isAtiusLocalIcon(trimmedName)) {
+    return <AtiusLogo size={size} />
   }
 
   if (isTypeSafeIcon(trimmedName)) {

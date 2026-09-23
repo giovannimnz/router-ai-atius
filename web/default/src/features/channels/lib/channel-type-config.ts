@@ -171,12 +171,12 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
   60: {
     id: 60,
     name: CHANNEL_TYPES[60],
-    icon: 'Antigravity',
+    icon: 'Internal.antigravity',
     defaultBaseUrl: 'http://10.11.1.11:18088',
     hints: {
       baseUrl: 'Antigravity pool base URL',
       key: 'Antigravity pool token',
-      models: 'gemini-3.8-flash-high,gemini-3.8-flash-medium,gemini-3.8-flash-low,...',
+      models: 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.1-pro,claude-sonnet-4-6,claude-opus-4-6-thinking,gpt-oss-120b',
     },
   },
   61: {

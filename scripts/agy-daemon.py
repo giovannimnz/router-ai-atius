@@ -27,9 +27,17 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("AGY_DAEMON_PORT", "8080"))
 ACCOUNT_LABEL = os.environ.get("AGY_ACCOUNT_LABEL", "default")
-DEFAULT_MODEL = "gemini-3.8-flash-high"
+DEFAULT_MODEL = "gemini-3.8-flash"
 
 SUPPORTED_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.1-pro",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6-thinking",
+    "gpt-oss-120b",
+    # Backward-compatible explicit effort models:
     "gemini-3.8-flash-high",
     "gemini-3.8-flash-medium",
     "gemini-3.8-flash-low",
@@ -41,8 +49,6 @@ SUPPORTED_MODELS = [
     "gemini-3.6-flash-low",
     "gemini-3.1-pro-high",
     "gemini-3.1-pro-low",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6-thinking",
     "gpt-oss-120b-medium",
 ]
 
@@ -250,14 +256,28 @@ class AgyHandler(BaseHTTPRequestHandler):
         req_id = f"chatcmpl-agy-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
+        effort = str(req_data.get("reasoning_effort") or "high").lower().strip()
+        if model == "gemini-3.8-flash":
+            target_model = f"gemini-3.8-flash-{effort}"
+        elif model == "gemini-3.7-flash":
+            target_model = f"gemini-3.7-flash-{effort}"
+        elif model == "gemini-3.6-flash":
+            target_model = f"gemini-3.6-flash-{effort}"
+        elif model == "gemini-3.1-pro":
+            target_model = "gemini-3.1-pro-high" if effort in ("high", "medium") else "gemini-3.1-pro-low"
+        elif model == "gpt-oss-120b":
+            target_model = "gpt-oss-120b-medium"
+        else:
+            target_model = model
+
         cmd = [
             "agy",
             "-p", prompt,
             "--output-format", "stream-json",
             "--dangerously-skip-permissions",
         ]
-        if model in SUPPORTED_MODELS:
-            cmd.extend(["--model", model])
+        if target_model in SUPPORTED_MODELS:
+            cmd.extend(["--model", target_model])
 
         try:
             proc = subprocess.Popen(

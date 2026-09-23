@@ -42,9 +42,35 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if request == nil {
 		return nil, errors.New("antigravity channel: request is nil")
 	}
+	modelName := request.Model
 	if info != nil && info.UpstreamModelName != "" {
-		request.Model = info.UpstreamModelName
+		modelName = info.UpstreamModelName
 	}
+
+	effort := "high"
+	if request.ReasoningEffort != "" {
+		effort = strings.ToLower(strings.TrimSpace(request.ReasoningEffort))
+	}
+
+	switch modelName {
+	case "gemini-3.8-flash":
+		request.Model = fmt.Sprintf("gemini-3.8-flash-%s", effort)
+	case "gemini-3.7-flash":
+		request.Model = fmt.Sprintf("gemini-3.7-flash-%s", effort)
+	case "gemini-3.6-flash":
+		request.Model = fmt.Sprintf("gemini-3.6-flash-%s", effort)
+	case "gemini-3.1-pro":
+		if effort == "medium" || effort == "high" {
+			request.Model = "gemini-3.1-pro-high"
+		} else {
+			request.Model = "gemini-3.1-pro-low"
+		}
+	case "gpt-oss-120b":
+		request.Model = "gpt-oss-120b-medium"
+	default:
+		request.Model = modelName
+	}
+
 	return request, nil
 }
 

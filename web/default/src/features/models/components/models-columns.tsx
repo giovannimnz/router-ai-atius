@@ -33,6 +33,9 @@ import {
 } from '@/components/ui/tooltip'
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+import { isAntigravityIcon, isAntigravityColorIcon } from '@/components/antigravity-logo-key'
+import { isTypeSafeIcon } from '@/components/typesafe-logo-key'
 
 import {
   getModelStatusConfig,
@@ -45,7 +48,17 @@ import { DataTableRowActions } from './data-table-row-actions'
 import { DescriptionCell } from './description-cell'
 
 function getCompactModelIcon(iconKey: string) {
-  const baseIconKey = iconKey.split('.')[0]
+  const trimmed = (iconKey || '').trim()
+  if (
+    /^internal\./i.test(trimmed) ||
+    isAntigravityColorIcon(trimmed) ||
+    isAntigravityIcon(trimmed) ||
+    isAtiusLocalIcon(trimmed) ||
+    isTypeSafeIcon(trimmed)
+  ) {
+    return getLobeIcon(trimmed, 20)
+  }
+  const baseIconKey = trimmed.split('.')[0]
 
   return getLobeIcon(`${baseIconKey}.Avatar.type={'platform'}`, 20)
 }
@@ -109,11 +122,33 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       meta: { mobileHidden: true },
       cell: ({ row }) => {
         const model = row.original
-        const iconKey =
-          model.icon ||
-          vendorMap[model.vendor_id || 0]?.icon ||
-          model.model_name?.[0] ||
-          'N'
+        const vendor = vendorMap[model.vendor_id || 0]
+        const isAntigravityVendor =
+          vendor?.name?.toLowerCase() === 'antigravity' ||
+          (vendor?.icon ? isAntigravityIcon(vendor.icon) : false)
+
+        let iconKey = model.icon
+        if (!iconKey) {
+          if (isAntigravityVendor) {
+            iconKey = 'Internal.antigravity-color'
+          } else if (vendor?.icon) {
+            const vIcon = vendor.icon.trim()
+            if (/^internal\./i.test(vIcon)) {
+              iconKey = vIcon.toLowerCase().endsWith('-color') ? vIcon : `${vIcon}-color`
+            } else {
+              iconKey = vIcon
+            }
+          } else {
+            iconKey = model.model_name?.[0] || 'N'
+          }
+        } else if (
+          isAntigravityVendor &&
+          (iconKey.toLowerCase() === 'antigravity' ||
+            iconKey.toLowerCase() === 'internal.antigravity')
+        ) {
+          iconKey = 'Internal.antigravity-color'
+        }
+
         const icon = getCompactModelIcon(iconKey)
 
         return (

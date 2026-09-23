@@ -23,36 +23,16 @@ export function AntigravityLogo(props: { size?: number; className?: string }) {
 
   return (
     <svg
+      fill='currentColor'
+      fillRule='evenodd'
       viewBox='0 0 24 24'
-      className={cn('shrink-0 rounded-sm object-contain', props.className)}
-      style={{ width: size, height: size }}
-      fill='none'
+      className={cn('shrink-0 text-foreground object-contain', props.className)}
+      style={{ width: size, height: size, flex: 'none', lineHeight: 1 }}
       xmlns='http://www.w3.org/2000/svg'
       aria-hidden='true'
     >
-      <defs>
-        <linearGradient id='ag-grad-primary' x1='2' y1='2' x2='22' y2='22' gradientUnits='userSpaceOnUse'>
-          <stop offset='0%' stopColor='#4285F4' />
-          <stop offset='40%' stopColor='#9B72CB' />
-          <stop offset='80%' stopColor='#D96570' />
-          <stop offset='100%' stopColor='#F4B400' />
-        </linearGradient>
-      </defs>
-      {/* Central Antigravity Star / Inverted Gravity Prism */}
-      <path
-        d='M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4772 12 22C12 16.4772 16.4772 12 22 12C16.4772 12 12 7.52285 12 2Z'
-        fill='url(#ag-grad-primary)'
-      />
-      {/* Antigravity Orbit Ring */}
-      <circle
-        cx='12'
-        cy='12'
-        r='9.5'
-        stroke='url(#ag-grad-primary)'
-        strokeWidth='1.5'
-        strokeDasharray='4 2'
-        opacity='0.85'
-      />
+      <title>Antigravity</title>
+      <path d='M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z' />
     </svg>
   )
 }

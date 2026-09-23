@@ -46,7 +46,7 @@ const route = getRouteApi('/_authenticated/models/$section')
 
 const SECTION_META: Record<ModelsSectionId, { titleKey: string }> = {
   metadata: {
-    titleKey: 'Metadata',
+    titleKey: 'Models',
   },
   deployments: {
     titleKey: 'Deployments',

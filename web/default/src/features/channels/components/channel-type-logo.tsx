@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Server } from 'lucide-react'
 
+import { AntigravityColorLogo } from '@/components/antigravity-color-logo'
 import { AtiusLogo } from '@/components/atius-logo'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,10 @@ export function ChannelTypeLogo(props: {
 
   if (props.type === CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS) {
     return <AtiusLogo size={size} className={props.className} />
+  }
+
+  if (props.type === 60) {
+    return <AntigravityColorLogo size={size} className={props.className} />
   }
 
   const isKnownType = CHANNEL_TYPE_OPTIONS.some(

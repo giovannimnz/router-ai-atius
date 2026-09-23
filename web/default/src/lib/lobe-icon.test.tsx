@@ -42,8 +42,32 @@ describe('getLobeIcon Atius branding', () => {
     const icon = getLobeIcon('Antigravity', 20)
     const markup = renderToStaticMarkup(icon)
 
-    assert.match(markup, /ag-grad-primary/)
+    assert.match(markup, /fill="currentColor"/)
+    assert.match(markup, /text-foreground/)
     assert.doesNotMatch(markup, />A<\/div>/)
+  })
+
+  test('resolves Internal.antigravity to the monochromatic AntigravityLogo', () => {
+    const icon = getLobeIcon('Internal.antigravity', 20)
+    const markup = renderToStaticMarkup(icon)
+
+    assert.match(markup, /fill="currentColor"/)
+    assert.match(markup, /text-foreground/)
+    assert.doesNotMatch(markup, />I<\/div>/)
+  })
+
+  test('resolves Internal.antigravity-color and Antigravity.Color to AntigravityColorLogo', () => {
+    const iconColor = getLobeIcon('Internal.antigravity-color', 20)
+    const markupColor = renderToStaticMarkup(iconColor)
+
+    assert.match(markupColor, /ag-col-/)
+    assert.match(markupColor, /#3186FF/)
+    assert.match(markupColor, /#00B95C/)
+    assert.doesNotMatch(markupColor, />I<\/div>/)
+
+    const iconColor2 = getLobeIcon('Antigravity.Color', 20)
+    const markupColor2 = renderToStaticMarkup(iconColor2)
+    assert.match(markupColor2, /ag-col-/)
   })
 
   test('resolves TypeSafe to the canonical TypeSafeLogo', () => {

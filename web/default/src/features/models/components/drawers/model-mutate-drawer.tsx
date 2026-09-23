@@ -34,6 +34,7 @@ import {
   sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { JsonEditor } from '@/components/json-editor'
+import { isAntigravityIcon } from '@/components/antigravity-logo-key'
 import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
@@ -796,12 +797,12 @@ export function ModelMutateDrawer({
                     <FormLabel>{t('Icon')}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t('OpenAI, Anthropic, etc.')}
+                        placeholder={t('OpenAI, Claude, Internal.antigravity-color')}
                         {...field}
                       />
                     </FormControl>
                     <FormDescription className='text-xs'>
-                      {t('@lobehub/icons key')}
+                      {t('@lobehub/icons key (e.g. OpenAI, Claude) or internal (e.g. Internal.antigravity-color)')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -819,11 +820,35 @@ export function ModelMutateDrawer({
                         value: String(vendor.id),
                         label: vendor.name,
                       }))}
-                      onValueChange={(value) =>
-                        field.onChange(
-                          value ? Number.parseInt(value) : undefined
-                        )
-                      }
+                      onValueChange={(value) => {
+                        const newVendorId = value ? Number.parseInt(value) : undefined
+                        field.onChange(newVendorId)
+                        if (newVendorId) {
+                          const selectedVendor = vendors.find((v) => v.id === newVendorId)
+                          if (selectedVendor) {
+                            const vendorIcon = (selectedVendor.icon || '').trim()
+                            const isAgy =
+                              selectedVendor.name?.toLowerCase() === 'antigravity' ||
+                              isAntigravityIcon(vendorIcon)
+                            const currentIcon = form.getValues('icon')?.trim() || ''
+
+                            if (isAgy) {
+                              if (!currentIcon || isAntigravityIcon(currentIcon)) {
+                                form.setValue('icon', 'Internal.antigravity-color', {
+                                  shouldDirty: true,
+                                })
+                              }
+                            } else if (/^internal\./i.test(vendorIcon)) {
+                              const baseIcon = vendorIcon.toLowerCase().endsWith('-color')
+                                ? vendorIcon
+                                : `${vendorIcon}-color`
+                              if (!currentIcon || /^internal\./i.test(currentIcon)) {
+                                form.setValue('icon', baseIcon, { shouldDirty: true })
+                              }
+                            }
+                          }
+                        }
+                      }}
                       value={field.value ? String(field.value) : undefined}
                     >
                       <FormControl>

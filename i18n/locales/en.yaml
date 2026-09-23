@@ -160,7 +160,7 @@ channel.upstream_saturated: "Current group upstream load is saturated, please tr
 channel.get_available_failed: "Failed to get available channels for model {{.Model}} under group {{.Group}}"
 channel.balance_not_supported: "Automatic balance query is not supported for this channel type"
 channel.multi_key_no_balance: "Multi-key channels do not support balance query"
-channel.unlimited_balance: "Internal channel with unlimited quota"
+channel.unlimited_balance: "This channel is an internal service with unlimited quota"
 
 # Model messages
 model.name_empty: "Model name cannot be empty"

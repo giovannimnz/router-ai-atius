@@ -17,14 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw, DollarSign, CheckCircle } from 'lucide-react'
+import { Loader2, RefreshCw, DollarSign, CheckCircle, Activity, Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
-import { formatCurrencyFromUSD } from '@/lib/currency'
+import { formatCurrencyFromUSD, formatQuotaWithCurrency } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { getCodexUsage, updateChannelBalance } from '../../api'
@@ -87,10 +87,11 @@ export function BalanceQueryDialog({
   if (!currentRow) return null
 
   const isUnlimited = isUnlimitedChannel(currentRow)
+  const isUnsupportedQuery = currentRow?.type === 17 || currentRow?.type === 61
 
   const handleQueryBalance = async () => {
     if (isUnlimited) {
-      toast.info(t('This channel is an internal service with unlimited quota.'))
+      toast.info(t('Este canal é um serviço interno com cota ilimitada'))
       return
     }
     setIsQuerying(true)
@@ -102,7 +103,11 @@ export function BalanceQueryDialog({
 
         setBalance(newBalance)
         setBalanceUpdatedTime(now)
-        toast.success(t('Balance updated successfully'))
+        if (response.message) {
+          toast.info(response.message)
+        } else {
+          toast.success(t('Balance updated successfully'))
+        }
 
         // Update currentRow immediately with new balance and timestamp
         setCurrentRow({
@@ -191,37 +196,71 @@ export function BalanceQueryDialog({
       }
     >
       <div className='space-y-4 py-4'>
-        {/* Current Balance Display */}
-        <div className='bg-muted/50 rounded-lg border p-4'>
-          <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
-            <DollarSign className='h-4 w-4' />
-            <span>{t('Current Balance')}</span>
+        {/* Usage and Balance Grid */}
+        <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+          {/* Used Quota */}
+          <div className='bg-muted/50 rounded-lg border p-4'>
+            <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
+              <Activity className='h-4 w-4 text-blue-500' />
+              <span>{t('Used Quota')}</span>
+            </div>
+            <div className='text-2xl font-bold'>
+              {formatQuotaWithCurrency(currentRow.used_quota || 0, {
+                digitsLarge: 2,
+                digitsSmall: 4,
+                abbreviate: false,
+                showSymbol: true,
+              })}
+            </div>
+            <div className='text-muted-foreground mt-2 text-xs'>
+              {t('Total consumed through this channel')}
+            </div>
           </div>
-          <div
-            className={`text-2xl font-bold ${
-              isUnlimited ? 'text-emerald-600 dark:text-emerald-400' : ''
-            }`}
-          >
-            {isUnlimited
-              ? t('Unlimited')
-              : balance !== null
-              ? formatBalance(balance)
-              : formatBalance(currentRow.balance)}
-          </div>
-          <div className='text-muted-foreground mt-2 text-xs'>
-            {isUnlimited
-              ? t('Internal local service with unlimited quota')
-              : `${t('Last updated:')} ${formatDate(
-                  balanceUpdatedTime ?? currentRow.balance_updated_time
-                )}`}
+
+          {/* Available Balance */}
+          <div className='bg-muted/50 rounded-lg border p-4'>
+            <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
+              <DollarSign className='h-4 w-4 text-emerald-500' />
+              <span>{t('Available Balance')}</span>
+            </div>
+            <div
+              className={`text-2xl font-bold ${
+                isUnlimited ? 'text-emerald-600 dark:text-emerald-400' : ''
+              }`}
+            >
+              {isUnlimited
+                ? t('Unlimited')
+                : balance !== null
+                ? formatBalance(balance)
+                : formatBalance(currentRow.balance)}
+            </div>
+            <div className='text-muted-foreground mt-2 text-xs'>
+              {isUnlimited
+                ? t('Este canal é um serviço interno com cota ilimitada')
+                : `${t('Last updated:')} ${formatDate(
+                    balanceUpdatedTime ?? currentRow.balance_updated_time
+                  )}`}
+            </div>
           </div>
         </div>
+
+        {/* Notice for channels with unsupported automatic query */}
+        {isUnsupportedQuery && (
+          <div className='flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400'>
+            <Info className='mt-0.5 h-4 w-4 shrink-0' />
+            <div>
+              {t(
+                'A consulta automática de saldo não é suportada para este tipo de canal. Tanto o saldo consumido quanto o saldo disponível são acompanhados e exibidos aqui.'
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Balance Update Button */}
         {isUnlimited ? (
           <Button className='w-full' disabled variant='secondary'>
             <CheckCircle className='mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400' />
-            {t('Unlimited Quota')}
+            {t('Este canal é um serviço interno com cota ilimitada')}
           </Button>
         ) : (
           <Button

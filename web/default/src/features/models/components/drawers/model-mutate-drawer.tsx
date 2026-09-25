@@ -35,6 +35,7 @@ import {
 } from '@/components/drawer-layout'
 import { JsonEditor } from '@/components/json-editor'
 import { isAntigravityIcon } from '@/components/antigravity-logo-key'
+import { isAtiusColorIcon, isAtiusLocalIcon } from '@/components/atius-logo-key'
 import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
@@ -830,11 +831,25 @@ export function ModelMutateDrawer({
                             const isAgy =
                               selectedVendor.name?.toLowerCase() === 'antigravity' ||
                               isAntigravityIcon(vendorIcon)
+                            const isAtius =
+                              selectedVendor.name?.toLowerCase().includes('atius') ||
+                              isAtiusLocalIcon(vendorIcon) ||
+                              isAtiusColorIcon(vendorIcon)
                             const currentIcon = form.getValues('icon')?.trim() || ''
 
                             if (isAgy) {
                               if (!currentIcon || isAntigravityIcon(currentIcon)) {
                                 form.setValue('icon', 'Internal.antigravity-color', {
+                                  shouldDirty: true,
+                                })
+                              }
+                            } else if (isAtius) {
+                              if (
+                                !currentIcon ||
+                                isAtiusLocalIcon(currentIcon) ||
+                                isAtiusColorIcon(currentIcon)
+                              ) {
+                                form.setValue('icon', 'Internal.atius-color', {
                                   shouldDirty: true,
                                 })
                               }

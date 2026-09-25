@@ -179,9 +179,9 @@ show_status() {
 }
 
 run_build() {
-  log_info "Executando typecheck e build sob CPU Guardrail (20% CPU)..."
-  "$ROOT_DIR/scripts/podman-admin.sh" profile-run -- bash -lc "cd '$ROOT_DIR/web/default' && bun run typecheck"
-  log_success "Typecheck concluído com sucesso!"
+  log_info "Executando typecheck e testes sob CPU Guardrail (20% CPU)..."
+  "$ROOT_DIR/scripts/podman-admin.sh" profile-run -- bash -lc "cd '$ROOT_DIR/web/default' && bun run typecheck && bun test"
+  log_success "Typecheck e testes concluídos com sucesso!"
 }
 
 # Processamento de argumentos

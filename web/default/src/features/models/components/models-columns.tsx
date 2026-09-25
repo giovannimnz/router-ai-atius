@@ -53,6 +53,7 @@ function getCompactModelIcon(iconKey: string) {
     /^internal\./i.test(trimmed) ||
     isAntigravityColorIcon(trimmed) ||
     isAntigravityIcon(trimmed) ||
+    isAtiusColorIcon(trimmed) ||
     isAtiusLocalIcon(trimmed) ||
     isTypeSafeIcon(trimmed)
   ) {
@@ -126,11 +127,16 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const isAntigravityVendor =
           vendor?.name?.toLowerCase() === 'antigravity' ||
           (vendor?.icon ? isAntigravityIcon(vendor.icon) : false)
+        const isAtiusVendor =
+          vendor?.name?.toLowerCase().includes('atius') ||
+          (vendor?.icon ? isAtiusLocalIcon(vendor.icon) || isAtiusColorIcon(vendor.icon) : false)
 
         let iconKey = model.icon
         if (!iconKey) {
           if (isAntigravityVendor) {
             iconKey = 'Internal.antigravity-color'
+          } else if (isAtiusVendor) {
+            iconKey = 'Internal.atius-color'
           } else if (vendor?.icon) {
             const vIcon = vendor.icon.trim()
             if (/^internal\./i.test(vIcon)) {
@@ -147,6 +153,13 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
             iconKey.toLowerCase() === 'internal.antigravity')
         ) {
           iconKey = 'Internal.antigravity-color'
+        } else if (
+          isAtiusVendor &&
+          (iconKey.toLowerCase() === 'atius' ||
+            iconKey.toLowerCase() === 'atiuslocal' ||
+            iconKey.toLowerCase() === 'internal.atius')
+        ) {
+          iconKey = 'Internal.atius-color'
         }
 
         const icon = getCompactModelIcon(iconKey)
@@ -300,6 +313,8 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           isAtiusLocalIcon(vendorIconKey)
         ) {
           vendorIconKey = 'Internal.atius'
+        } else if (vendorIconKey) {
+          vendorIconKey = vendorIconKey.replace(/\.Color$/i, '')
         }
 
         return (

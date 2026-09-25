@@ -24,15 +24,13 @@ import { CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS } from '../lib'
 import { ChannelTypeLogo } from './channel-type-logo'
 
 describe('ChannelTypeLogo Atius branding', () => {
-  test('renders the canonical monochromatic logo for Atius Local channel', () => {
+  test('renders the canonical color logo for Atius Local channel', () => {
     const markup = renderToStaticMarkup(
       <ChannelTypeLogo type={CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS} size={18} />
     )
 
-    assert.match(markup, /fill="#000000"/)
-    assert.match(markup, /fill="#FFFFFF"/)
-    assert.match(markup, /fill="#D1D5DB"/)
-    assert.doesNotMatch(markup, /fill="#0f3b25"/)
-    assert.doesNotMatch(markup, /fill="#d2aa2a"/)
+    assert.match(markup, /fill="#0f3b25"/)
+    assert.match(markup, /fill="#d2aa2a"/)
+    assert.doesNotMatch(markup, /fill="#000000"/)
   })
 })

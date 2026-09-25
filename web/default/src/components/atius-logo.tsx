@@ -23,21 +23,39 @@ export function AtiusLogo(props: { size?: number; className?: string }) {
 
   return (
     <svg
+      xmlns='http://www.w3.org/2000/svg'
       viewBox='0 0 512 512'
-      className={cn(
-        'text-background shrink-0 rounded-sm object-contain',
-        props.className
-      )}
-      style={{ width: size, height: size }}
-      aria-hidden='true'
+      className={cn('shrink-0 rounded-[22%] object-contain', props.className)}
+      style={{ width: size, height: size, flex: 'none', lineHeight: 1 }}
+      fill='none'
+      role='img'
+      aria-labelledby='atius-logo-title atius-logo-desc'
     >
-      <rect width='512' height='512' fill='currentColor' />
-      <path d='M52 450 256 49l204 401H360L256 219 152 450Z' fill='#0f3b25' />
+      <title id='atius-logo-title'>Atius</title>
+      <desc id='atius-logo-desc'>White letter A with a light gray letter C on adaptive dark background.</desc>
+      <rect width='512' height='512' rx='112' fill='#000000' />
+      <rect
+        width='496'
+        height='496'
+        x='8'
+        y='8'
+        rx='104'
+        stroke='rgba(255,255,255,0.12)'
+        strokeWidth='8'
+      />
+      <path d='M52 450 256 49l204 401H360L256 219 152 450Z' fill='#FFFFFF' />
       <path
         d='M296 300c-17-25-45-40-76-40-49 0-89 40-89 90s40 90 89 90c31 0 59-15 76-40h-52c-7 4-15 6-24 6-31 0-56-25-56-56s25-56 56-56c9 0 17 2 24 6Z'
-        fill='#d2aa2a'
+        fill='none'
+        stroke='#000000'
+        strokeWidth='24'
+        strokeLinejoin='round'
       />
-      <path d='M190 396h131v7H190Z' fill='#d2aa2a' />
+      <path
+        d='M296 300c-17-25-45-40-76-40-49 0-89 40-89 90s40 90 89 90c31 0 59-15 76-40h-52c-7 4-15 6-24 6-31 0-56-25-56-56s25-56 56-56c9 0 17 2 24 6Z'
+        fill='#D1D5DB'
+      />
+      <path d='M190 396h131v7H190Z' fill='#D1D5DB' />
     </svg>
   )
 }

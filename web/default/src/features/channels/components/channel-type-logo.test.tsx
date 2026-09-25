@@ -24,15 +24,15 @@ import { CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS } from '../lib'
 import { ChannelTypeLogo } from './channel-type-logo'
 
 describe('ChannelTypeLogo Atius branding', () => {
-  test('keeps the background theme-aware and preserves brand colors', () => {
+  test('renders the canonical monochromatic logo for Atius Local channel', () => {
     const markup = renderToStaticMarkup(
       <ChannelTypeLogo type={CHANNEL_TYPE_ATIUS_LOCAL_EMBEDDINGS} size={18} />
     )
 
-    assert.match(markup, /class="text-background /)
-    assert.match(markup, /fill="currentColor"/)
-    assert.doesNotMatch(markup, /fill="#fff"/)
-    assert.match(markup, /fill="#0f3b25"/)
-    assert.match(markup, /fill="#d2aa2a"/)
+    assert.match(markup, /fill="#000000"/)
+    assert.match(markup, /fill="#FFFFFF"/)
+    assert.match(markup, /fill="#D1D5DB"/)
+    assert.doesNotMatch(markup, /fill="#0f3b25"/)
+    assert.doesNotMatch(markup, /fill="#d2aa2a"/)
   })
 })

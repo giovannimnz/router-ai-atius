@@ -34,7 +34,7 @@ import {
   getDynamicPricingSummary,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
+import { isTokenBasedModel, getPricingIconKey } from '../lib/model-helpers'
 import {
   formatPrice,
   formatRequestPrice,
@@ -76,7 +76,10 @@ export function usePricingColumns(
       ),
       cell: ({ row }) => {
         const model = row.original
-        const modelIconKey = model.icon || model.vendor_icon
+        const modelIconKey = getPricingIconKey(
+          model.icon || model.vendor_icon,
+          model.vendor_name
+        )
         const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 14) : null
 
         return (
@@ -326,8 +329,9 @@ export function usePricingColumns(
         if (!model.vendor_name) {
           return <span className='text-muted-foreground/50 text-xs'>—</span>
         }
-        const vendorIcon = model.vendor_icon
-          ? getLobeIcon(model.vendor_icon, 12)
+        const vendorIconKey = getPricingIconKey(model.vendor_icon, model.vendor_name)
+        const vendorIcon = vendorIconKey
+          ? getLobeIcon(vendorIconKey, 12)
           : null
         return (
           <BadgeCell className='gap-1.5'>

@@ -25,16 +25,16 @@ import { ATIUS_LOCAL_ICON_KEY } from './atius-logo-key'
 import { ProviderBadge } from './provider-badge'
 
 describe('ProviderBadge Atius branding', () => {
-  test('renders the canonical theme-aware logo for Atius Local', () => {
+  test('renders the canonical monochromatic logo for Atius Local', () => {
     const markup = renderToStaticMarkup(
       <ProviderBadge iconKey={ATIUS_LOCAL_ICON_KEY} label='Atius Local' />
     )
 
-    assert.match(markup, /class="text-background /)
-    assert.match(markup, /fill="currentColor"/)
-    assert.doesNotMatch(markup, /fill="#fff"/)
-    assert.match(markup, /fill="#0f3b25"/)
-    assert.match(markup, /fill="#d2aa2a"/)
+    assert.match(markup, /fill="#000000"/)
+    assert.match(markup, /fill="#FFFFFF"/)
+    assert.match(markup, /fill="#D1D5DB"/)
+    assert.doesNotMatch(markup, /fill="#0f3b25"/)
+    assert.doesNotMatch(markup, /fill="#d2aa2a"/)
     assert.match(markup, />Atius Local</)
   })
 })

@@ -26,24 +26,34 @@ import { ATIUS_LOCAL_ICON_KEY } from '@/components/atius-logo-key'
 import { getLobeIcon } from './lobe-icon'
 
 describe('getLobeIcon Atius branding', () => {
-  test('resolves the compact model descriptor to the canonical logo', () => {
+  test('resolves the compact model descriptor to the canonical monochromatic AtiusLogo', () => {
     const icon = getLobeIcon(
       `${ATIUS_LOCAL_ICON_KEY}.Avatar.type={'platform'}`,
       20
     )
     const markup = renderToStaticMarkup(icon)
 
-    assert.match(markup, /class="text-background /)
-    assert.match(markup, /fill="currentColor"/)
+    assert.match(markup, /fill="#000000"/)
+    assert.match(markup, /fill="#FFFFFF"/)
+    assert.match(markup, /fill="#D1D5DB"/)
     assert.doesNotMatch(markup, />A<\/div>/)
   })
 
-  test('resolves Antigravity to the canonical AntigravityLogo', () => {
+  test('resolves Internal.atius-color to AtiusColorLogo', () => {
+    const icon = getLobeIcon('Internal.atius-color', 20)
+    const markup = renderToStaticMarkup(icon)
+
+    assert.match(markup, /fill="#0f3b25"/)
+    assert.match(markup, /fill="#d2aa2a"/)
+    assert.doesNotMatch(markup, />I<\/div>/)
+  })
+
+  test('resolves Antigravity to the canonical monochromatic AntigravityLogo', () => {
     const icon = getLobeIcon('Antigravity', 20)
     const markup = renderToStaticMarkup(icon)
 
-    assert.match(markup, /fill="currentColor"/)
-    assert.match(markup, /text-foreground/)
+    assert.match(markup, /fill="#000000"/)
+    assert.match(markup, /fill="#FFFFFF"/)
     assert.doesNotMatch(markup, />A<\/div>/)
   })
 
@@ -51,8 +61,8 @@ describe('getLobeIcon Atius branding', () => {
     const icon = getLobeIcon('Internal.antigravity', 20)
     const markup = renderToStaticMarkup(icon)
 
-    assert.match(markup, /fill="currentColor"/)
-    assert.match(markup, /text-foreground/)
+    assert.match(markup, /fill="#000000"/)
+    assert.match(markup, /fill="#FFFFFF"/)
     assert.doesNotMatch(markup, />I<\/div>/)
   })
 

@@ -17,7 +17,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 export const ATIUS_LOCAL_ICON_KEY = 'AtiusLocal'
+export const ATIUS_ICON_KEY = 'Internal.atius'
+export const ATIUS_COLOR_ICON_KEY = 'Internal.atius-color'
 
-export function isAtiusLocalIcon(iconKey: string | null | undefined) {
-  return iconKey?.split('.')[0] === ATIUS_LOCAL_ICON_KEY
+export function isAtiusColorIcon(iconKey: string | null | undefined): boolean {
+  if (!iconKey) return false
+  const trimmed = iconKey.trim().toLowerCase()
+  return (
+    trimmed === 'internal.atius-color' ||
+    trimmed === 'internal.atius.color' ||
+    trimmed === 'internal.atius_color' ||
+    trimmed === 'atius-color' ||
+    trimmed === 'atiuslocal.color' ||
+    trimmed === 'atiuslocal-color' ||
+    trimmed.startsWith('atiuslocal.color')
+  )
+}
+
+export function isAtiusLocalIcon(iconKey: string | null | undefined): boolean {
+  if (!iconKey) return false
+  const trimmed = iconKey.trim().toLowerCase()
+  return (
+    trimmed.startsWith('atiuslocal') ||
+    trimmed === 'atius' ||
+    trimmed.startsWith('internal.atius')
+  )
 }

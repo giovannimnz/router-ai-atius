@@ -28,7 +28,8 @@ For commercial licensing, please contact support@quantumnous.com
 import * as LobeIcons from '@lobehub/icons'
 
 import { AtiusLogo } from '@/components/atius-logo'
-import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+import { AtiusColorLogo } from '@/components/atius-color-logo'
+import { isAtiusLocalIcon, isAtiusColorIcon } from '@/components/atius-logo-key'
 import { AntigravityLogo } from '@/components/antigravity-logo'
 import { AntigravityColorLogo } from '@/components/antigravity-color-logo'
 import {
@@ -123,6 +124,13 @@ export function getLobeIcon(
     if (internalId === 'antigravity') {
       return <AntigravityLogo size={size} />
     }
+    if (
+      internalId === 'atius-color' ||
+      internalId === 'atius.color' ||
+      internalId === 'atius_color'
+    ) {
+      return <AtiusColorLogo size={size} />
+    }
     if (internalId === 'atius') {
       return <AtiusLogo size={size} />
     }
@@ -137,6 +145,10 @@ export function getLobeIcon(
 
   if (isAntigravityIcon(trimmedName)) {
     return <AntigravityLogo size={size} />
+  }
+
+  if (isAtiusColorIcon(trimmedName)) {
+    return <AtiusColorLogo size={size} />
   }
 
   if (isAtiusLocalIcon(trimmedName)) {

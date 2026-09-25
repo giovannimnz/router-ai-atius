@@ -38,6 +38,7 @@ import {
   getQuotaTypeLabels,
 } from '../constants'
 import { parseTags } from '../lib/filters'
+import { getPricingIconKey } from '../lib/model-helpers'
 import type { PricingModel, PricingVendor } from '../types'
 
 type FilterOption = {
@@ -175,7 +176,10 @@ export function PricingSidebar(props: PricingSidebarProps) {
           props.models,
           (model) => model.vendor_name === vendor.name
         ),
-        icon: vendor.icon ? getLobeIcon(vendor.icon, 14) : undefined,
+        icon: (() => {
+          const iconKey = getPricingIconKey(vendor.icon, vendor.name)
+          return iconKey ? getLobeIcon(iconKey, 14) : undefined
+        })(),
       }))
       .filter((vendor) => vendor.count > 0),
   ]

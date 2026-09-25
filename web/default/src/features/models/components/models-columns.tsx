@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/tooltip'
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
-import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+import { isAtiusLocalIcon, isAtiusColorIcon } from '@/components/atius-logo-key'
 import { isAntigravityIcon, isAntigravityColorIcon } from '@/components/antigravity-logo-key'
 import { isTypeSafeIcon } from '@/components/typesafe-logo-key'
 
@@ -287,9 +287,24 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 
+        // Fornecedor column must ALWAYS use monochromatic icon
+        let vendorIconKey = vendor.icon
+        if (
+          isAntigravityColorIcon(vendorIconKey) ||
+          vendor.name?.toLowerCase() === 'antigravity'
+        ) {
+          vendorIconKey = 'Internal.antigravity'
+        } else if (
+          isAtiusColorIcon(vendorIconKey) ||
+          vendor.name?.toLowerCase().includes('atius') ||
+          isAtiusLocalIcon(vendorIconKey)
+        ) {
+          vendorIconKey = 'Internal.atius'
+        }
+
         return (
           <BadgeCell>
-            <ProviderBadge iconKey={vendor.icon} label={vendor.name} />
+            <ProviderBadge iconKey={vendorIconKey} label={vendor.name} />
           </BadgeCell>
         )
       },

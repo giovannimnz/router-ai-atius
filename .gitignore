@@ -76,3 +76,5 @@ web/default/AGENTS.md.bak*
 .wayland-core/
 .wayland/
 # --- end Wayland ---
+*.code-workspace
+.planning/graphs/graph.html

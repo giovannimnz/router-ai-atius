@@ -39,9 +39,14 @@ bin/clianything --backend host providers --all
 1. **LobeHub Standard (`@lobehub/icons`)**:
    - Ícones externos de terceiros usam PascalCase: `Qwen`, `OpenAI`, `DeepSeek`, `Google`, `TypeSafe`, `AtiusLocal`.
 2. **Esquema Interno (`Internal.<name>`)**:
-   - Fornecedor Antigravity: `Internal.antigravity` (renderiza `web/default/src/components/antigravity-logo.tsx`, SVG monocromático com `fill="currentColor"`, adaptável dinamicamente ao tema claro/escuro do sistema).
-   - Modelos de IA do Fornecedor Antigravity: `Internal.antigravity-color` (renderiza `web/default/src/components/antigravity-color-logo.tsx`, SVG colorido oficial isolado com `useId()` dinâmico).
+   - Fornecedor Antigravity: `Internal.antigravity` (renderiza `web/default/src/components/antigravity-logo.tsx`, SVG monocromático oficial com fundo `#000000`, borda sutil e símbolo branco `#FFFFFF`).
+   - Modelos de IA do Fornecedor Antigravity: `Internal.antigravity-color` (renderiza `web/default/src/components/antigravity-color-logo.tsx`, SVG colorido oficial com gradientes e `useId()` dinâmico).
+   - Fornecedor Atius Local: `Internal.atius` (renderiza `web/default/src/components/atius-logo.tsx`, SVG monocromático com fundo `#000000`, borda sutil, letra A branca `#FFFFFF` e letra C cinza `#D1D5DB`).
+   - Modelos de IA do Fornecedor Atius Local: `Internal.atius-color` (renderiza `web/default/src/components/atius-color-logo.tsx`, SVG colorido oficial com verde `#0f3b25` e dourado `#d2aa2a`).
    - Canal Antigravity (Tipo 60): Renderiza `AntigravityColorLogo` por padrão.
+   - Canal Atius Local (Tipo 59): Renderiza `AtiusColorLogo` por padrão.
+   - Regra Obrigatória de Monocromático: A coluna "Fornecedor" em `/models` e todas as referências de fornecedor em `/pricing` (cards, colunas, sidebar e detalhes) DEVEM sempre exibir os ícones monocromáticos (`Internal.antigravity` e `Internal.atius`). Os ícones coloridos são reservados exclusivamente para os modelos individuais de IA.
+   - Sincronização e utilitários: O script `scripts/sync-vendor-icons.sh` sincroniza os SVGs canônicos a partir de `/home/ubuntu/Imagens/` para `web/default/public/images/` e `web/default/dist/images/`.
    - Mutação via UI: Ao selecionar fornecedor com prefixo `Internal.<nome>`, a interface auto-preenche os modelos vinculados com `Internal.<nome>-color`.
 
 ### Agrupamento de Modelos por Esforço de Raciocínio (Reasoning Effort)

@@ -16,12 +16,39 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { isAntigravityIcon } from '@/components/antigravity-logo-key'
+import { isAtiusLocalIcon } from '@/components/atius-logo-key'
+
 import { EXCLUDED_GROUPS, QUOTA_TYPE_VALUES } from '../constants'
 import type { PricingModel } from '../types'
 
 // ----------------------------------------------------------------------------
 // Model Helper Utilities
 // ----------------------------------------------------------------------------
+
+/**
+ * Get pricing model/vendor icon key, enforcing monochromatic icons for Antigravity and Atius
+ */
+export function getPricingIconKey(
+  iconKey?: string | null,
+  vendorName?: string | null
+): string | null {
+  const isAgy =
+    vendorName?.toLowerCase() === 'antigravity' ||
+    (iconKey ? isAntigravityIcon(iconKey) : false)
+  if (isAgy) {
+    return 'Internal.antigravity'
+  }
+
+  const isAtius =
+    vendorName?.toLowerCase().includes('atius') ||
+    (iconKey ? isAtiusLocalIcon(iconKey) : false)
+  if (isAtius) {
+    return 'Internal.atius'
+  }
+
+  return iconKey || null
+}
 
 /**
  * Get available groups for a model
